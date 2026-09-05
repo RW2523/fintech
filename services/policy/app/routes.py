@@ -8,9 +8,20 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.affordability import AffordabilityInputs, compute
+from app.autonomy import AutonomyInputs
+from app.autonomy import route as route_case
 from app.evaluate import evaluate_case
-from app.models import AffordabilityRequest, EvaluateRequest
+from app.factors import FactorScore, score_family
+from app.models import (
+    AffordabilityRequest,
+    EvaluateRequest,
+    FactorScoreRequest,
+    RouteRequest,
+    SynthesizeRequest,
+)
 from app.packs import PackError, PolicyPack, available_packs, load_pack
+from app.synthesize import SynthesisInputs
+from app.synthesize import synthesize as run_synthesis
 from cio_common.errors import NotFound, ValidationFailed
 
 router = APIRouter(prefix="/policy", tags=["policy"])
@@ -100,4 +111,105 @@ async def affordability(body: AffordabilityRequest) -> dict[str, Any]:
         "inputs_digest": result.inputs_digest,
         "policy_version": pack.policy_version,
         "overrides_applied": sorted(body.overrides),
+    }
+
+
+@router.post("/factors/score", summary="Score one Decision Factor family")
+async def factors_score(body: FactorScoreRequest) -> dict[str, Any]:
+    """Backs the family scoring tools (docs/05 §4)."""
+    pack = _pack(body.product_code, None)
+    if body.family not in pack.dff["weights"]:
+        raise ValidationFailed(
+            f"{pack.product} does not weight the {body.family} family", families=sorted(pack.dff["weights"])
+        )
+    try:
+        score = score_family(body.family, body.inputs)
+    except TypeError as exc:
+        raise ValidationFailed(f"inputs do not match the {body.family} scoring function: {exc}") from exc
+
+    return {
+        **FactorScore(
+            family=score.family,
+            score=score.score,
+            calc_id=score.calc_id,
+            tool=score.tool,
+            inputs_digest=score.inputs_digest,
+            evidence_refs=tuple(body.evidence_refs),
+            level=score.level,
+        ).as_contract(),
+        "weight": pack.dff["weights"][body.family],
+    }
+
+
+@router.post("/synthesize", summary="Turn gates, factors and opinions into a DecisionRecord")
+async def synthesize(body: SynthesizeRequest) -> dict[str, Any]:
+    """The deterministic hierarchy (docs/05 §5). No model is consulted."""
+    pack = _pack(body.product_code, body.policy_version)
+    factors = tuple(
+        FactorScore(
+            family=f["family"],
+            score=int(f["score"]),
+            calc_id=f["calc_id"],
+            tool=f.get("tool", ""),
+            inputs_digest=f.get("inputs_digest", "0" * 64),
+            evidence_refs=tuple(f.get("evidence_refs", [])),
+            level=f.get("level"),
+        )
+        for f in body.factor_scores
+    )
+    return run_synthesis(
+        SynthesisInputs(
+            snapshot_id=body.snapshot_id,
+            case_type=body.case_type,
+            tier=body.tier,
+            product_code=pack.product,
+            requested_amount=float(body.requested_amount),
+            policy_result=body.policy_result,
+            factors=factors,
+            opinions=tuple(body.opinions),
+            dff=pack.dff,
+            autonomy=pack.autonomy,
+            model_versions=body.model_versions,
+            committee_run_id=body.committee_run_id,
+            model_health=body.model_health,
+            kill_switch_active=body.kill_switch_active,
+            member_watchlist=body.member_watchlist,
+            active_hardship_arrangement=body.active_hardship_arrangement,
+            budgets=body.budgets,
+        )
+    )
+
+
+@router.post("/route", summary="Evaluate the Autonomy Dial for a record")
+async def evaluate_route(body: RouteRequest) -> dict[str, Any]:
+    """Every condition that failed is named, so an auditor can see why."""
+    pack = _pack(body.product_code, body.policy_version)
+    record = body.decision_record
+    decision = route_case(
+        pack.autonomy,
+        AutonomyInputs(
+            recommendation=record["recommendation"],
+            confidence=record.get("confidence"),
+            disagreement=record.get("disagreement"),
+            challenger_open=bool(record.get("challenger_open")),
+            required_authority=record["required_authority"],
+            requested_amount=float(body.requested_amount),
+            case_type=record["case_type"],
+            snapshot_id=record["snapshot_id"],
+            hard_gate_exceptions=sum(1 for g in record.get("hard_gates", []) if g["result"] == "FAIL"),
+            max_open_integrity_severity=body.max_open_integrity_severity,
+            member_watchlist=body.member_watchlist,
+            active_hardship_arrangement=body.active_hardship_arrangement,
+            model_health=body.model_health,
+            kill_switch_active=body.kill_switch_active,
+        ),
+        pack.dff,
+    )
+    return {
+        "route": decision.route,
+        "route_reasons": decision.reasons,
+        "sampled": decision.sampled,
+        "failed_conditions": decision.failed_conditions,
+        "autonomy_version": pack.autonomy_version,
+        "setting": pack.autonomy["setting"],
     }

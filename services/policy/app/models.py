@@ -103,3 +103,47 @@ class AffordabilityRequest(Strict):
     overrides: dict[str, Any] = Field(
         default_factory=dict, description="Only the Challenger's requested substitutions (docs/06 §5.2)."
     )
+
+
+class FactorScoreRequest(Strict):
+    """Score one Decision Factor family from its tool inputs (docs/05 §4)."""
+
+    product_code: str = "PF-STD"
+    family: str = Field(pattern="^(CAPACITY|CONDUCT|COMMITMENT|CONDITIONS|INTEGRITY)$")
+    inputs: dict[str, Any]
+    evidence_refs: list[str] = Field(default_factory=list)
+
+
+class SynthesizeRequest(Strict):
+    """Everything the Synthesizer reads (docs/05 §5)."""
+
+    product_code: str = "PF-STD"
+    policy_version: str | None = None
+    snapshot_id: str
+    case_type: str = "ORIGINATION"
+    tier: str = "STANDARD"
+    requested_amount: Decimal = Field(ge=0)
+    policy_result: dict[str, Any]
+    factor_scores: list[dict[str, Any]] = Field(default_factory=list)
+    opinions: list[dict[str, Any]] = Field(default_factory=list)
+    model_versions: dict[str, str] = Field(default_factory=dict)
+    committee_run_id: str | None = None
+    model_health: str = Field(default="GREEN", pattern="^(GREEN|AMBER|RED)$")
+    kill_switch_active: bool = False
+    member_watchlist: bool = False
+    active_hardship_arrangement: bool = False
+    budgets: dict[str, Any] = Field(default_factory=dict)
+
+
+class RouteRequest(Strict):
+    """Evaluate the Autonomy Dial against a finished record (docs/05 §6)."""
+
+    product_code: str = "PF-STD"
+    policy_version: str | None = None
+    decision_record: dict[str, Any]
+    requested_amount: Decimal = Field(ge=0)
+    model_health: str = Field(default="GREEN", pattern="^(GREEN|AMBER|RED)$")
+    kill_switch_active: bool = False
+    member_watchlist: bool = False
+    active_hardship_arrangement: bool = False
+    max_open_integrity_severity: str = Field(default="LOW", pattern="^(LOW|MEDIUM|HIGH|CRITICAL)$")
