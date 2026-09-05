@@ -1,0 +1,26 @@
+{
+  "uid": "cio-service-health",
+  "title": "Service health",
+  "tags": ["cio"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Scrape targets up",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "cio-prom" },
+      "targets": [{ "expr": "sum(up{job=\"cio-services\"})", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Target availability",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "cio-prom" },
+      "targets": [{ "expr": "up{job=\"cio-services\"}", "legendFormat": "{{instance}}", "refId": "A" }]
+    }
+  ]
+}

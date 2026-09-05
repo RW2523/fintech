@@ -1,0 +1,558 @@
+# Credit Intelligence OS — Compact profile (docs/02 §5, docs/13 §6)
+#
+# Profiles: core · services · web · observability · ai-local · ai-remote
+#   make up            -> core + services + observability + web
+#   make up-ai-local   -> ... + vllm, vllm_vision on the GB10
+#   make up-ai-remote  -> ... + hosted provider behind the gateway (no GPU containers)
+#
+# Every infra container has a healthcheck. Data lives in named volumes.
+
+name: ${COMPOSE_PROJECT_NAME:-cio}
+
+x-service-defaults: &service-defaults
+  build:
+    context: ./images/service-placeholder
+  restart: unless-stopped
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+  environment: &service-env
+    CIO_ENV: ${CIO_ENV:-demo}
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cio}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-cio}
+    REDIS_URL: redis://redis:6379/0
+    MINIO_ENDPOINT: minio:9000
+    MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cio}
+    MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-too}
+    TEMPORAL_ADDRESS: temporal:7233
+    JWT_SECRET: ${JWT_SECRET:-change-me}
+    TOKEN_SECRET: ${TOKEN_SECRET:-change-me-as-well}
+    INTERNAL_KEY: ${INTERNAL_KEY:-change-me-internal}
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    OTEL_TRACES_EXPORTER: otlp
+  profiles: [services]
+  networks: [cio]
+
+services:
+  # ==========================================================================
+  # core infrastructure
+  # ==========================================================================
+  postgres:
+    image: ${PG_IMAGE:-pgvector/pgvector:pg16}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-cio}
+    command: >
+      postgres -c shared_buffers=2GB -c max_connections=300
+               -c work_mem=32MB -c maintenance_work_mem=512MB
+    ports: ["${BIND_ADDR:-0.0.0.0}:${POSTGRES_PORT:-5432}:5432"]
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cio} -d ${POSTGRES_DB:-cio}"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+    profiles: [core]
+    networks: [cio]
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports: ["${BIND_ADDR:-0.0.0.0}:${REDIS_PORT:-6379}:6379"]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    profiles: [core]
+    networks: [cio]
+
+  minio:
+    image: ${MINIO_IMAGE:-minio/minio:latest}
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-too}
+    ports:
+      - "${BIND_ADDR:-0.0.0.0}:${MINIO_API_PORT:-9000}:9000"
+      - "${BIND_ADDR:-0.0.0.0}:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes: [minio_data:/data]
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
+    profiles: [core]
+    networks: [cio]
+
+  minio-init:
+    image: ${MC_IMAGE:-minio/mc:latest}
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set cio http://minio:9000 ${MINIO_ROOT_USER:-cio} ${MINIO_ROOT_PASSWORD:-change-me-too} &&
+      for b in documents document-pages audit-worm ml-artifacts harness-reports; do
+        mc mb --ignore-existing cio/$$b;
+      done &&
+      mc anonymous set none cio/documents &&
+      echo 'buckets ready'"
+    restart: "no"
+    profiles: [core]
+    networks: [cio]
+
+  temporal:
+    image: ${TEMPORAL_IMAGE:-temporalio/auto-setup:1.25.2}
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-cio}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_SEEDS: postgres
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+      SKIP_DEFAULT_NAMESPACE_CREATION: "false"
+      DEFAULT_NAMESPACE: cio
+      DEFAULT_NAMESPACE_RETENTION: 72h
+    ports: ["${BIND_ADDR:-0.0.0.0}:7233:7233"]
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "temporal:7233"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 45s
+    profiles: [core]
+    networks: [cio]
+
+  temporal-ui:
+    image: ${TEMPORAL_UI_IMAGE:-temporalio/ui:2.31.2}
+    restart: unless-stopped
+    depends_on:
+      temporal: { condition: service_healthy }
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:${TEMPORAL_UI_PORT:-8233}
+      TEMPORAL_DEFAULT_NAMESPACE: cio
+    ports: ["${BIND_ADDR:-0.0.0.0}:${TEMPORAL_UI_PORT:-8233}:8080"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8080 >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    profiles: [core]
+    networks: [cio]
+
+  # ==========================================================================
+  # observability (docs/13 §5)
+  # ==========================================================================
+  otel-collector:
+    image: ${OTELCOL_IMAGE:-otel/opentelemetry-collector-contrib:0.115.1}
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ../infra/observability/config/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    # The collector image is distroless: no shell and no HTTP client, so it
+    # cannot probe itself. Its health_check extension is published on 13133 and
+    # verified from the host by scripts/verify_phase.sh instead.
+    ports:
+      - "${BIND_ADDR:-0.0.0.0}:${OTELCOL_HEALTH_PORT:-13133}:13133"
+    profiles: [observability]
+    networks: [cio]
+
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.0.1}
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    volumes:
+      - ../infra/observability/config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom_data:/prometheus
+    ports: ["${BIND_ADDR:-0.0.0.0}:${PROMETHEUS_PORT:-9090}:9090"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:9090/-/healthy >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    profiles: [observability]
+    networks: [cio]
+
+  loki:
+    image: ${LOKI_IMAGE:-grafana/loki:3.3.2}
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ../infra/observability/config/loki.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/loki
+    ports: ["${BIND_ADDR:-0.0.0.0}:${LOKI_PORT:-3100}:3100"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3100/ready >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    profiles: [observability]
+    networks: [cio]
+
+  tempo:
+    image: ${TEMPO_IMAGE:-grafana/tempo:2.6.1}
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    volumes:
+      - ../infra/observability/config/tempo.yaml:/etc/tempo/config.yaml:ro
+      - tempo_data:/var/tempo
+    ports: ["${BIND_ADDR:-0.0.0.0}:${TEMPO_PORT:-3200}:3200"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3200/ready >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    profiles: [observability]
+    networks: [cio]
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:11.4.0}
+    restart: unless-stopped
+    depends_on:
+      prometheus: { condition: service_healthy }
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ../infra/observability/config/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ../infra/observability/config/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ../infra/observability/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports: ["${BIND_ADDR:-0.0.0.0}:${GRAFANA_PORT:-3000}:3000"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+    profiles: [observability]
+    networks: [cio]
+
+  # ==========================================================================
+  # domain services (placeholder image until T-008)
+  # ==========================================================================
+  gateway:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: gateway
+      SERVICE_PORT: "8000"
+    ports: ["${BIND_ADDR:-0.0.0.0}:${GATEWAY_PORT:-8000}:8000"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  application:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: application
+      SERVICE_PORT: "8001"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  document:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: document
+      SERVICE_PORT: "8002"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  member_intelligence:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: member_intelligence
+      SERVICE_PORT: "8003"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8003/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  policy:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: policy
+      SERVICE_PORT: "8004"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8004/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  feature:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: feature
+      SERVICE_PORT: "8005"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8005/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  risk:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: risk
+      SERVICE_PORT: "8006"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8006/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  fraud:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: fraud
+      SERVICE_PORT: "8007"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8007/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  lmi:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: lmi
+      SERVICE_PORT: "8008"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8008/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  committee:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: committee
+      SERVICE_PORT: "8009"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8009/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  core_stub:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: core_stub
+      SERVICE_PORT: "8010"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8010/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  agent_runtime:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: agent_runtime
+      SERVICE_PORT: "8011"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8011/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  decision:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: decision
+      SERVICE_PORT: "8012"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8012/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  execution:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: execution
+      SERVICE_PORT: "8013"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8013/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  notification:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: notification
+      SERVICE_PORT: "8014"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8014/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  audit:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: audit
+      SERVICE_PORT: "8015"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8015/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  governance:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: governance
+      SERVICE_PORT: "8016"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8016/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  llm_gateway:
+    <<: *service-defaults
+    environment:
+      <<: *service-env
+      SERVICE_NAME: llm_gateway
+      SERVICE_PORT: "8020"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8020/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ==========================================================================
+  # web
+  # ==========================================================================
+  web:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ../apps/web/dist:/usr/share/nginx/html:ro
+    ports: ["${BIND_ADDR:-0.0.0.0}:${WEB_PORT:-8080}:80"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    profiles: [web]
+    networks: [cio]
+
+  # ==========================================================================
+  # local LLM (docs/02 §4.2). GPU reservations live in compose.spark.yaml.
+  # ==========================================================================
+  vllm:
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:latest}
+    restart: unless-stopped
+    command: >
+      --model ${LLM_AGENT_MODEL}
+      --served-model-name agent
+      --gpu-memory-utilization ${VLLM_GPU_FRACTION:-0.55}
+      --max-model-len 32768
+      --max-num-seqs 8
+      --enable-prefix-caching
+      --port 8100
+    environment:
+      HF_HOME: /hf
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes: ["${HF_HOME:-/data/hf}:/hf"]
+    ports: ["${BIND_ADDR:-0.0.0.0}:${VLLM_PORT:-8100}:8100"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8100/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 300s
+    profiles: [ai-local]
+    networks: [cio]
+
+  vllm_vision:
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:latest}
+    restart: unless-stopped
+    command: >
+      --model ${LLM_VISION_MODEL}
+      --served-model-name vision
+      --gpu-memory-utilization ${VLLM_VISION_GPU_FRACTION:-0.20}
+      --max-model-len 16384
+      --max-num-seqs 2
+      --port 8101
+    environment:
+      HF_HOME: /hf
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes: ["${HF_HOME:-/data/hf}:/hf"]
+    ports: ["${BIND_ADDR:-0.0.0.0}:${VLLM_VISION_PORT:-8101}:8101"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8101/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 300s
+    profiles: [ai-local]
+    networks: [cio]
+
+volumes:
+  pg_data:
+  redis_data:
+  minio_data:
+  prom_data:
+  loki_data:
+  tempo_data:
+  grafana_data:
+
+networks:
+  cio:
+    driver: bridge

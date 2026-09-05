@@ -7,8 +7,11 @@ SHELL       := /bin/bash
 .DEFAULT_GOAL := help
 
 UV          ?= uv
-COMPOSE     ?= docker compose -f docker/compose.yaml
-COMPOSE_SPARK ?= $(COMPOSE) -f docker/compose.spark.yaml
+ENV_FILE    ?= docker/.env
+COMPOSE     ?= docker compose --env-file $(ENV_FILE) -f docker/compose.yaml
+COMPOSE_SPARK ?= docker compose --env-file $(ENV_FILE) -f docker/compose.yaml -f docker/compose.spark.yaml
+CORE_PROFILES := --profile core --profile services --profile observability
+WAIT_TIMEOUT ?= 300
 PHASE       ?=
 SERVICES    := $(notdir $(wildcard services/*))
 
@@ -36,28 +39,35 @@ env:  ## create .env from the example and check the DGX Spark environment
 	@if [ -x scripts/env_check.sh ]; then scripts/env_check.sh; else echo "  scripts/env_check.sh — T-002"; fi
 
 .PHONY: up
-up:  ## start core + observability + services (no AI)
-	@$(MAKE) todo TASK=T-003
+up: $(ENV_FILE)  ## start core + observability + services (no AI)
+	@$(COMPOSE) $(CORE_PROFILES) up -d --remove-orphans
+	@scripts/wait_healthy.sh $(WAIT_TIMEOUT)
 
 .PHONY: up-ai-local
-up-ai-local:  ## start with vLLM/ollama on the GB10
-	@$(MAKE) todo TASK=T-003
+up-ai-local: $(ENV_FILE)  ## start with vLLM/ollama on the GB10
+	@$(COMPOSE_SPARK) $(CORE_PROFILES) --profile ai-local up -d --remove-orphans
+	@scripts/wait_healthy.sh 900
 
 .PHONY: up-ai-remote
-up-ai-remote:  ## start with a hosted provider behind the gateway
-	@$(MAKE) todo TASK=T-003
+up-ai-remote: $(ENV_FILE)  ## start with a hosted provider behind the gateway
+	@$(COMPOSE) $(CORE_PROFILES) --profile ai-remote up -d --remove-orphans
+	@scripts/wait_healthy.sh $(WAIT_TIMEOUT)
 
 .PHONY: down
-down:  ## stop the stack
-	@$(MAKE) todo TASK=T-003
+down: $(ENV_FILE)  ## stop the stack (keeps volumes; use 'make down-hard' to wipe)
+	@$(COMPOSE) --profile core --profile services --profile observability --profile web --profile ai-local --profile ai-remote down --remove-orphans
+
+.PHONY: down-hard
+down-hard: $(ENV_FILE)  ## stop the stack and delete its data volumes
+	@$(COMPOSE) --profile core --profile services --profile observability --profile web --profile ai-local --profile ai-remote down --remove-orphans -v
 
 .PHONY: logs
-logs:  ## tail stack logs
-	@$(MAKE) todo TASK=T-003
+logs: $(ENV_FILE)  ## tail stack logs
+	@$(COMPOSE) $(CORE_PROFILES) logs -f --tail=100 $(S)
 
 .PHONY: ps
-ps:  ## show container health
-	@$(MAKE) todo TASK=T-003
+ps: $(ENV_FILE)  ## show container health
+	@$(COMPOSE) $(CORE_PROFILES) ps --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}'
 
 .PHONY: migrate
 migrate:  ## alembic upgrade head for every service
@@ -129,8 +139,7 @@ security:  ## tool denial, injection, token replay, secret and dependency scans
 .PHONY: verify
 verify:  ## run a phase's acceptance suite, e.g. make verify PHASE=P0
 	@if [ -z "$(PHASE)" ]; then echo "usage: make verify PHASE=P0"; exit 2; fi
-	@if [ -x scripts/verify_phase.sh ]; then scripts/verify_phase.sh "$(PHASE)"; \
-	 else echo "  scripts/verify_phase.sh — T-003"; exit 1; fi
+	@scripts/verify_phase.sh "$(PHASE)"
 
 .PHONY: demo
 demo:  ## reset -> harness -> print the run-book URLs
@@ -138,3 +147,10 @@ demo:  ## reset -> harness -> print the run-book URLs
 
 .PHONY: ci
 ci: lint typecheck test  ## what CI runs
+
+# ---------------------------------------------------------------------------
+# generated files
+# ---------------------------------------------------------------------------
+$(ENV_FILE): docker/.env.example
+	@cp -n docker/.env.example $(ENV_FILE) && echo "created $(ENV_FILE) from the example — review it" || true
+	@touch $(ENV_FILE)

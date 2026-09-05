@@ -1,0 +1,33 @@
+# DGX Spark overrides (docs/02 §4.2): GPU reservations and the NVMe HF cache.
+# Used by: docker compose -f compose.yaml -f compose.spark.yaml ...
+
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+services:
+  vllm:
+    <<: *gpu
+    ipc: host
+    shm_size: "8gb"
+    volumes: ["${HF_HOME:-/data/hf}:/hf"]
+
+  vllm_vision:
+    <<: *gpu
+    ipc: host
+    shm_size: "4gb"
+    volumes: ["${HF_HOME:-/data/hf}:/hf"]
+
+  # embeddings and the reranker run in-process in llm_gateway on the GPU (docs/02 §4.1)
+  llm_gateway:
+    <<: *gpu
+    environment:
+      EMBED_MODEL: ${EMBED_MODEL:-BAAI/bge-m3}
+      RERANK_MODEL: ${RERANK_MODEL:-BAAI/bge-reranker-v2-m3}
+      HF_HOME: /hf
+    volumes: ["${HF_HOME:-/data/hf}:/hf"]
