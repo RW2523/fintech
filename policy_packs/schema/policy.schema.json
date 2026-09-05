@@ -1,0 +1,677 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/policy_packs/policy/1.0",
+  "title": "PolicyPack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "product",
+    "name",
+    "version",
+    "effective_from",
+    "currency",
+    "product_terms",
+    "eligibility",
+    "documents",
+    "affordability",
+    "exposure",
+    "authority",
+    "routing",
+    "tier_selection"
+  ],
+  "properties": {
+    "schema": {
+      "const": "policy/1.0"
+    },
+    "product": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z-]+$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]{4}\\.[0-9]{2}\\.[0-9]+$"
+    },
+    "effective_from": {
+      "type": "string",
+      "format": "date"
+    },
+    "currency": {
+      "type": "string"
+    },
+    "product_terms": {
+      "type": "object",
+      "required": [
+        "min_amount",
+        "max_amount",
+        "min_tenor",
+        "max_tenor",
+        "instalment_formula",
+        "purposes_allowed"
+      ],
+      "properties": {
+        "min_amount": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "max_amount": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "min_tenor": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_tenor": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "profit_rate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "markup_rate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "structure": {
+          "type": "string"
+        },
+        "min_share_units": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "instalment_formula": {
+          "type": "string"
+        },
+        "purposes_allowed": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "eligibility": {
+      "type": "object",
+      "required": [
+        "rules"
+      ],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "rule",
+              "on_fail",
+              "reason_code",
+              "reads"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}-[0-9]{2}$"
+              },
+              "rule": {
+                "type": "string",
+                "minLength": 1
+              },
+              "on_fail": {
+                "oneOf": [
+                  {
+                    "enum": [
+                      "INELIGIBLE",
+                      "BLOCK_NORMAL_PATH",
+                      "MORE_INFORMATION_REQUIRED",
+                      "POLICY_EXCEPTION_OR_DECLINE",
+                      "COMPLIANCE_REVIEW"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^FLAG:[A-Z_]+$"
+                  }
+                ]
+              },
+              "reason_code": {
+                "type": "string",
+                "pattern": "^(ELG|DOC|CAP|CON|COM|INT|CND|EXP|AUT|SHR|LMI|OVR)-[0-9]{2}$"
+              },
+              "reads": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "shariah": {
+      "type": "object",
+      "required": [
+        "rules"
+      ],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "rule",
+              "on_fail",
+              "reason_code",
+              "reads"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}-[0-9]{2}$"
+              },
+              "rule": {
+                "type": "string",
+                "minLength": 1
+              },
+              "on_fail": {
+                "oneOf": [
+                  {
+                    "enum": [
+                      "INELIGIBLE",
+                      "BLOCK_NORMAL_PATH",
+                      "MORE_INFORMATION_REQUIRED",
+                      "POLICY_EXCEPTION_OR_DECLINE",
+                      "COMPLIANCE_REVIEW"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^FLAG:[A-Z_]+$"
+                  }
+                ]
+              },
+              "reason_code": {
+                "type": "string",
+                "pattern": "^(ELG|DOC|CAP|CON|COM|INT|CND|EXP|AUT|SHR|LMI|OVR)-[0-9]{2}$"
+              },
+              "reads": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "documents": {
+      "type": "object",
+      "required": [
+        "required",
+        "critical_fields",
+        "min_critical_confidence",
+        "rules"
+      ],
+      "properties": {
+        "required": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "optional": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "critical_fields": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "min_critical_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "rule",
+              "on_fail",
+              "reason_code",
+              "reads"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}-[0-9]{2}$"
+              },
+              "rule": {
+                "type": "string",
+                "minLength": 1
+              },
+              "on_fail": {
+                "oneOf": [
+                  {
+                    "enum": [
+                      "INELIGIBLE",
+                      "BLOCK_NORMAL_PATH",
+                      "MORE_INFORMATION_REQUIRED",
+                      "POLICY_EXCEPTION_OR_DECLINE",
+                      "COMPLIANCE_REVIEW"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^FLAG:[A-Z_]+$"
+                  }
+                ]
+              },
+              "reason_code": {
+                "type": "string",
+                "pattern": "^(ELG|DOC|CAP|CON|COM|INT|CND|EXP|AUT|SHR|LMI|OVR)-[0-9]{2}$"
+              },
+              "reads": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "affordability": {
+      "type": "object",
+      "required": [
+        "income_basis",
+        "dsr",
+        "dsr_limit",
+        "residual_income_min",
+        "stress",
+        "rules"
+      ],
+      "properties": {
+        "income_basis": {
+          "type": "string"
+        },
+        "dsr": {
+          "type": "string"
+        },
+        "dsr_limit": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "residual_income_min": {
+          "type": "number",
+          "minimum": 0
+        },
+        "stress": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "case"
+            ],
+            "properties": {
+              "case": {
+                "type": "string"
+              },
+              "income_factor": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "commitments_factor": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "profit_rate_delta": {
+                "type": "number"
+              },
+              "markup_rate_delta": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "rule",
+              "on_fail",
+              "reason_code",
+              "reads"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}-[0-9]{2}$"
+              },
+              "rule": {
+                "type": "string",
+                "minLength": 1
+              },
+              "on_fail": {
+                "oneOf": [
+                  {
+                    "enum": [
+                      "INELIGIBLE",
+                      "BLOCK_NORMAL_PATH",
+                      "MORE_INFORMATION_REQUIRED",
+                      "POLICY_EXCEPTION_OR_DECLINE",
+                      "COMPLIANCE_REVIEW"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^FLAG:[A-Z_]+$"
+                  }
+                ]
+              },
+              "reason_code": {
+                "type": "string",
+                "pattern": "^(ELG|DOC|CAP|CON|COM|INT|CND|EXP|AUT|SHR|LMI|OVR)-[0-9]{2}$"
+              },
+              "reads": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "exposure": {
+      "type": "object",
+      "required": [
+        "limit_by_grade",
+        "rules"
+      ],
+      "properties": {
+        "limit_by_grade": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[A-E]$"
+          },
+          "additionalProperties": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "rule",
+              "on_fail",
+              "reason_code",
+              "reads"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}-[0-9]{2}$"
+              },
+              "rule": {
+                "type": "string",
+                "minLength": 1
+              },
+              "on_fail": {
+                "oneOf": [
+                  {
+                    "enum": [
+                      "INELIGIBLE",
+                      "BLOCK_NORMAL_PATH",
+                      "MORE_INFORMATION_REQUIRED",
+                      "POLICY_EXCEPTION_OR_DECLINE",
+                      "COMPLIANCE_REVIEW"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^FLAG:[A-Z_]+$"
+                  }
+                ]
+              },
+              "reason_code": {
+                "type": "string",
+                "pattern": "^(ELG|DOC|CAP|CON|COM|INT|CND|EXP|AUT|SHR|LMI|OVR)-[0-9]{2}$"
+              },
+              "reads": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "required": [
+        "bands",
+        "exception_approver"
+      ],
+      "properties": {
+        "bands": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "max_amount",
+              "role"
+            ],
+            "properties": {
+              "max_amount": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "role": {
+                "enum": [
+                  "CREDIT_OFFICER",
+                  "SENIOR_OFFICER",
+                  "CREDIT_COMMITTEE",
+                  "COLLECTIONS",
+                  "MANAGER",
+                  "COMPLIANCE",
+                  "HEAD_OF_CREDIT",
+                  "HEAD_OF_RISK",
+                  "MEMBER",
+                  "SYSTEM"
+                ]
+              }
+            }
+          }
+        },
+        "exception_approver": {
+          "enum": [
+            "CREDIT_OFFICER",
+            "SENIOR_OFFICER",
+            "CREDIT_COMMITTEE",
+            "COLLECTIONS",
+            "MANAGER",
+            "COMPLIANCE",
+            "HEAD_OF_CREDIT",
+            "HEAD_OF_RISK",
+            "MEMBER",
+            "SYSTEM"
+          ]
+        }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "required": [
+        "rules"
+      ],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "when",
+              "route"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^RT-[0-9]{2}$"
+              },
+              "when": {
+                "type": "string"
+              },
+              "route": {
+                "enum": [
+                  "COMPLIANCE_REVIEW",
+                  "ENHANCED_ASSESSMENT",
+                  "SENIOR_REVIEW",
+                  "ESCALATE"
+                ]
+              },
+              "on_fail": {
+                "enum": [
+                  "INELIGIBLE",
+                  "BLOCK_NORMAL_PATH",
+                  "MORE_INFORMATION_REQUIRED",
+                  "POLICY_EXCEPTION_OR_DECLINE",
+                  "COMPLIANCE_REVIEW"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "tier_selection": {
+      "type": "object",
+      "required": [
+        "fast_path_max_amount",
+        "fast_path_requires",
+        "extended_triggers"
+      ],
+      "properties": {
+        "fast_path_max_amount": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "fast_path_requires": {
+          "type": "object"
+        },
+        "extended_triggers": {
+          "type": "object"
+        }
+      }
+    },
+    "reminders": {
+      "type": "object",
+      "required": [
+        "cadence"
+      ],
+      "properties": {
+        "cadence": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "priority_if": {
+          "type": "string"
+        }
+      }
+    },
+    "collections": {
+      "type": "object",
+      "required": [
+        "tiers",
+        "restructure_options",
+        "restructure_authority"
+      ],
+      "properties": {
+        "tiers": {
+          "type": "object"
+        },
+        "restructure_options": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "restructure_authority": {
+          "enum": [
+            "CREDIT_OFFICER",
+            "SENIOR_OFFICER",
+            "CREDIT_COMMITTEE",
+            "COLLECTIONS",
+            "MANAGER",
+            "COMPLIANCE",
+            "HEAD_OF_CREDIT",
+            "HEAD_OF_RISK",
+            "MEMBER",
+            "SYSTEM"
+          ]
+        },
+        "cap_per_officer": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

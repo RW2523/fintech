@@ -1,0 +1,52 @@
+# Autonomy Dial for PF-STD (docs/05 §6).
+# The Board sets `setting`. Every condition below must hold before a case may
+# route AUTONOMOUS; any one failing sends it to a human.
+schema: autonomy/1.0
+product: PF-STD
+version: 2026.09.1
+
+setting: ASSIST   # ADVISE | ASSIST | ACT_WITH_APPROVAL | AUTONOMOUS_WITHIN_LIMITS
+
+bands:
+  - { max_amount: 10000, autonomous_eligible: true }
+  - { max_amount: 20000, autonomous_eligible: true }
+  - { max_amount: null, autonomous_eligible: false }
+
+autonomous_conditions:
+  recommendation_in: [APPROVE]
+  min_confidence: 0.90
+  max_disagreement: 0.25
+  challenger_open: false
+  hard_gate_exceptions: 0
+  integrity_findings_open_max_severity: LOW
+  member_watchlist: false
+  active_hardship_arrangement: false
+  model_health: GREEN
+  case_type_in: [ORIGINATION]
+
+sampling:
+  rate: 0.10
+  reviewer_role: SENIOR_OFFICER
+  sla_hours: 24
+
+kill_switch:
+  owners: [HEAD_OF_CREDIT, HEAD_OF_RISK]
+  effect: { revert_to: ADVISE }
+
+action_levels:
+  L0:
+    requires: AUTO
+    allowed_types: [MONITOR]
+  L1:
+    requires: AUTO_IF_POLICY
+    allowed_types: [REQUEST_DOCUMENT, SEND_REMINDER, CREATE_NOTE, CREATE_TASK]
+  L2:
+    requires: OFFICER
+    allowed_types: [ESCALATE, ASSIGN_REVIEWER, PROPOSE_VERIFICATION, OFFICER_OUTREACH, HARDSHIP_REVIEW]
+  L3:
+    requires: PER_SETTING
+    allowed_types: [APPROVE_FINANCING, DECLINE_FINANCING, RESTRUCTURE, LIMIT_CHANGE]
+
+# EARLY_WARNING cases may never execute an L3 action (docs/05 §6).
+prohibited_for_case_type:
+  EARLY_WARNING: [L3]

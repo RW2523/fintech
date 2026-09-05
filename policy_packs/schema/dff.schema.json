@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/policy_packs/dff/1.0",
+  "title": "DecisionFactorFramework",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "product",
+    "version",
+    "weights",
+    "thresholds",
+    "min_evidence_coverage",
+    "scoring",
+    "decisive_rule",
+    "reliability_weights"
+  ],
+  "properties": {
+    "schema": {
+      "const": "dff/1.0"
+    },
+    "product": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]{4}\\.[0-9]{2}\\.[0-9]+$"
+    },
+    "weights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "CAPACITY",
+        "CONDUCT",
+        "COMMITMENT",
+        "CONDITIONS",
+        "INTEGRITY"
+      ],
+      "properties": {
+        "CAPACITY": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "CONDUCT": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "COMMITMENT": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "CONDITIONS": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "INTEGRITY": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approve",
+        "decline"
+      ],
+      "properties": {
+        "approve": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "decline": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "min_evidence_coverage": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "hard_gate_families": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "integrity_critical_is_gate": {
+      "type": "boolean"
+    },
+    "scoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "CAPACITY",
+        "CONDUCT",
+        "COMMITMENT",
+        "CONDITIONS",
+        "INTEGRITY"
+      ],
+      "properties": {
+        "CAPACITY": {
+          "type": "object",
+          "required": [
+            "tool",
+            "formula"
+          ],
+          "properties": {
+            "tool": {
+              "type": "string"
+            },
+            "formula": {
+              "type": "string"
+            },
+            "severity_points": {
+              "type": "object"
+            }
+          }
+        },
+        "CONDUCT": {
+          "type": "object",
+          "required": [
+            "tool",
+            "formula"
+          ],
+          "properties": {
+            "tool": {
+              "type": "string"
+            },
+            "formula": {
+              "type": "string"
+            },
+            "severity_points": {
+              "type": "object"
+            }
+          }
+        },
+        "COMMITMENT": {
+          "type": "object",
+          "required": [
+            "tool",
+            "formula"
+          ],
+          "properties": {
+            "tool": {
+              "type": "string"
+            },
+            "formula": {
+              "type": "string"
+            },
+            "severity_points": {
+              "type": "object"
+            }
+          }
+        },
+        "CONDITIONS": {
+          "type": "object",
+          "required": [
+            "tool",
+            "formula"
+          ],
+          "properties": {
+            "tool": {
+              "type": "string"
+            },
+            "formula": {
+              "type": "string"
+            },
+            "severity_points": {
+              "type": "object"
+            }
+          }
+        },
+        "INTEGRITY": {
+          "type": "object",
+          "required": [
+            "tool",
+            "formula"
+          ],
+          "properties": {
+            "tool": {
+              "type": "string"
+            },
+            "formula": {
+              "type": "string"
+            },
+            "severity_points": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "decisive_rule": {
+      "type": "string"
+    },
+    "reliability_weights": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "disagreement_thresholds": {
+      "type": "object",
+      "required": [
+        "officer_review",
+        "enhanced_assessment"
+      ],
+      "properties": {
+        "officer_review": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "enhanced_assessment": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  }
+}

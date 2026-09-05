@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/policy_packs/autonomy/1.0",
+  "title": "AutonomyDial",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "product",
+    "version",
+    "setting",
+    "bands",
+    "autonomous_conditions",
+    "sampling",
+    "kill_switch",
+    "action_levels"
+  ],
+  "properties": {
+    "schema": {
+      "const": "autonomy/1.0"
+    },
+    "product": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]{4}\\.[0-9]{2}\\.[0-9]+$"
+    },
+    "setting": {
+      "enum": [
+        "ADVISE",
+        "ASSIST",
+        "ACT_WITH_APPROVAL",
+        "AUTONOMOUS_WITHIN_LIMITS"
+      ]
+    },
+    "bands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "max_amount",
+          "autonomous_eligible"
+        ],
+        "properties": {
+          "max_amount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0
+          },
+          "autonomous_eligible": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "autonomous_conditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recommendation_in",
+        "min_confidence",
+        "max_disagreement",
+        "challenger_open",
+        "hard_gate_exceptions",
+        "integrity_findings_open_max_severity",
+        "member_watchlist",
+        "active_hardship_arrangement",
+        "model_health",
+        "case_type_in"
+      ],
+      "properties": {
+        "recommendation_in": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "min_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "max_disagreement": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "challenger_open": {
+          "const": false
+        },
+        "hard_gate_exceptions": {
+          "const": 0
+        },
+        "integrity_findings_open_max_severity": {
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+          ]
+        },
+        "member_watchlist": {
+          "const": false
+        },
+        "active_hardship_arrangement": {
+          "const": false
+        },
+        "model_health": {
+          "enum": [
+            "GREEN"
+          ]
+        },
+        "case_type_in": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rate",
+        "reviewer_role",
+        "sla_hours"
+      ],
+      "properties": {
+        "rate": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "reviewer_role": {
+          "enum": [
+            "CREDIT_OFFICER",
+            "SENIOR_OFFICER",
+            "CREDIT_COMMITTEE",
+            "COLLECTIONS",
+            "MANAGER",
+            "COMPLIANCE",
+            "HEAD_OF_CREDIT",
+            "HEAD_OF_RISK",
+            "MEMBER",
+            "SYSTEM"
+          ]
+        },
+        "sla_hours": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "kill_switch": {
+      "type": "object",
+      "required": [
+        "owners",
+        "effect"
+      ],
+      "properties": {
+        "owners": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "enum": [
+              "CREDIT_OFFICER",
+              "SENIOR_OFFICER",
+              "CREDIT_COMMITTEE",
+              "COLLECTIONS",
+              "MANAGER",
+              "COMPLIANCE",
+              "HEAD_OF_CREDIT",
+              "HEAD_OF_RISK",
+              "MEMBER",
+              "SYSTEM"
+            ]
+          }
+        },
+        "effect": {
+          "type": "object"
+        }
+      }
+    },
+    "action_levels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "L0",
+        "L1",
+        "L2",
+        "L3"
+      ],
+      "properties": {
+        "L0": {
+          "type": "object",
+          "required": [
+            "requires"
+          ],
+          "properties": {
+            "requires": {
+              "type": "string"
+            },
+            "allowed_types": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "L1": {
+          "type": "object",
+          "required": [
+            "requires"
+          ],
+          "properties": {
+            "requires": {
+              "type": "string"
+            },
+            "allowed_types": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "L2": {
+          "type": "object",
+          "required": [
+            "requires"
+          ],
+          "properties": {
+            "requires": {
+              "type": "string"
+            },
+            "allowed_types": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "L3": {
+          "type": "object",
+          "required": [
+            "requires"
+          ],
+          "properties": {
+            "requires": {
+              "type": "string"
+            },
+            "allowed_types": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "prohibited_for_case_type": {
+      "type": "object"
+    }
+  }
+}
