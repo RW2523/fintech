@@ -52,7 +52,7 @@ instead of starting a second one.
 | T-013 | done | 2026-09-05 | Sandbox replay with `app_policy` tables (policy_version, calc, kill_switch, sandbox_run, replay_case). 17 sandbox tests, 253 policy tests total. Replay applies a candidate patch to a copy, re-runs gates, factor scoring and synthesis over stored cases, and reports baseline vs candidate approval/decline/review rates, autonomous share, approved exposure, projected 12-month delinquency, four segment breakdowns and per-case diffs naming the decisive family on each side. Calls no model. The S6 weight change moves cases; a no-op candidate moves none. Acceptance measured: 50 stored cases replay through the API in well under the 10s budget. |
 | T-014 | done | 2026-09-05 | Append-only hash-chained ledger, human decisions with authority enforced at call time, and single-use approval tokens. 50 tests. A database trigger refuses UPDATE and DELETE on `ledger.entry`, so the guarantee does not depend on application code; the tamper tests disable it deliberately to prove verification goes red on an altered payload, a rewritten link and a removed row. Appends take an advisory lock so the chain has one order under concurrency. Note: the token signature deliberately excludes `used_at`, because a signature that moved when the token was consumed would be no tamper check at all. |
 | T-015 | done | 2026-09-05 | application-service with the CaseSnapshot freeze. 24 tests. Submit gathers every version stamp (member projection, document bundle hash, policy/dff/autonomy from policy-service, model versions from each service's `/version`), writes an immutable snapshot and emits `application.submitted` through the outbox. A second submit writes version 2 rather than editing version 1, so the earlier decision stays reconstructable; a database trigger refuses UPDATE and DELETE on `case_snapshot`. A service that cannot answer `/version` is stamped `0.0.0-unavailable` rather than failing the freeze, per the fail-safe rule. |
-| T-016 | todo | | |
+| T-016 | done | 2026-09-05 | `UnderwriteCase` Temporal workflow with activities freeze, evaluate_policy, score_models, run_committee, decide, record_decision, record_human_decision, issue_token, plus the `human_decision` signal and `state`/`decision` queries. 12 tests on the time-skipping test server. A blocked case (ELG-02) is recorded and routed to a human without ever reaching the models or the Council. Committee and model steps are marked placeholders that force model_health RED and the STANDARD tier, so a partial run cannot be mistaken for a complete one. The SLA escalates but never decides: `wait_condition` raises on timeout, the workflow marks itself escalated and keeps waiting for a person. Workflow id is derived from the snapshot, so a repeated start is refused. |
 | T-020 | todo | | |
 | T-021 | todo | | |
 | T-022 | todo | | |
@@ -118,6 +118,32 @@ instead of starting a second one.
 Against `docs/14` P0 criteria: `make up` healthy, codegen round-trips,
 outbox/auth/hash tests green, core stub migrated and serving. The smoke
 population lands in T-020 (P2), which is where the synthetic generator arrives.
+
+### P1 — verified 2026-09-05
+
+`scripts/verify_phase.sh P1` — 13 pass, 0 fail.
+
+| Step | Result |
+|---|---|
+| make lint | PASS |
+| make typecheck | PASS |
+| policy packs (32 tests) | PASS |
+| rule language (41 tests) | PASS |
+| gates + affordability (77 tests) | PASS |
+| synthesizer + dial (78 tests) | PASS |
+| sandbox replay (17 tests) | PASS |
+| ledger + tokens (50 tests) | PASS |
+| snapshot freeze (24 tests) | PASS |
+| underwriting workflow (12 tests) | PASS |
+| migrations applied (18 services) | PASS |
+| ledger append-only trigger present | PASS |
+| snapshot immutability trigger present | PASS |
+
+Against `docs/14` P1 criteria: packs validated, evaluate/synthesize/route
+table-tested, ledger append-only and verified, submit produces a snapshot and
+a blocked application ends with a ledger DecisionRecord routed per policy.
+
+Whole suite at the end of P1: **629 tests**, all passing.
 
 ## Blocked
 (none)

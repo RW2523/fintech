@@ -41,7 +41,30 @@ case "$PHASE" in
     step "otel collector"     bash -c 'source docker/.env; curl -fsS "http://localhost:${OTELCOL_HEALTH_PORT:-13133}/" >/dev/null'
     step "every service /health" scripts/check_services.sh
     ;;
-  P1|P2|P3|P4|P5|P6|P7|P8)
+  P1)
+    # docs/14 P1: packs validated; evaluate/synthesize/route table tests; ledger
+    # append-only and verified; submit -> snapshot -> workflow -> policy stop.
+    step "make lint"            make lint
+    step "make typecheck"       make typecheck
+    step "policy packs"         bash -c 'cd services/policy && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests/test_packs.py -q'
+    step "rule language"        bash -c 'cd services/policy && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests/test_expr.py -q'
+    step "gates + affordability" bash -c 'cd services/policy && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests/test_evaluate.py tests/test_affordability.py -q'
+    step "synthesizer + dial"   bash -c 'cd services/policy && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests/test_synthesize.py -q'
+    step "sandbox replay"       bash -c 'cd services/policy && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests/test_sandbox.py -q'
+    step "ledger + tokens"      bash -c 'cd services/decision && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "snapshot freeze"      bash -c 'cd services/application && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "underwriting workflow" uv run pytest workflows -q
+    step "migrations applied"   make migrate
+    step "ledger append-only"   bash -c '\
+      docker compose --env-file docker/.env -f docker/compose.yaml exec -T postgres \
+        psql -U "${POSTGRES_USER:-cio}" -d "${POSTGRES_DB:-cio}" -tAc \
+        "select count(*) from pg_trigger where tgname = '"'"'ledger_no_update'"'"'" | grep -q 1'
+    step "snapshots immutable"  bash -c '\
+      docker compose --env-file docker/.env -f docker/compose.yaml exec -T postgres \
+        psql -U "${POSTGRES_USER:-cio}" -d "${POSTGRES_DB:-cio}" -tAc \
+        "select count(*) from pg_trigger where tgname = '"'"'snapshot_immutable'"'"'" | grep -q 1'
+    ;;
+  P2|P3|P4|P5|P6|P7|P8)
     echo "  phase ${PHASE} verification not implemented yet" >&2
     exit 1
     ;;
