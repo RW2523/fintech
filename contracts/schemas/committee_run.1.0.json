@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/schemas/committee_run/1.0",
+  "title": "CommitteeRun",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "run_id",
+    "snapshot_id",
+    "case_type",
+    "tier",
+    "state",
+    "rounds",
+    "repair_loops",
+    "budgets",
+    "decision_record_id",
+    "started_at",
+    "ended_at"
+  ],
+  "properties": {
+    "schema": {
+      "const": "committee_run/1.0"
+    },
+    "run_id": {
+      "$ref": "common.1.0.json#/$defs/RunId"
+    },
+    "snapshot_id": {
+      "$ref": "common.1.0.json#/$defs/SnapshotId"
+    },
+    "case_type": {
+      "type": "string",
+      "enum": [
+        "ORIGINATION",
+        "SERVICING",
+        "EARLY_WARNING",
+        "COLLECTIONS"
+      ]
+    },
+    "tier": {
+      "$ref": "common.1.0.json#/$defs/Tier"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "CREATED",
+        "ASSESS",
+        "CHALLENGE",
+        "REPAIR",
+        "REVISE",
+        "SYNTHESIZE",
+        "DONE",
+        "TIMED_OUT",
+        "FAILED"
+      ]
+    },
+    "rounds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "round",
+          "started_at",
+          "ended_at",
+          "opinions",
+          "tokens",
+          "seconds"
+        ],
+        "properties": {
+          "round": {
+            "$ref": "common.1.0.json#/$defs/Round"
+          },
+          "started_at": {
+            "$ref": "common.1.0.json#/$defs/Timestamp"
+          },
+          "ended_at": {
+            "oneOf": [
+              {
+                "$ref": "common.1.0.json#/$defs/Timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "opinions": {
+            "type": "array",
+            "items": {
+              "$ref": "common.1.0.json#/$defs/OpinionId"
+            }
+          },
+          "tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "seconds": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "title": "CommitteeRound"
+      }
+    },
+    "repair_loops": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "budgets": {
+      "type": "object"
+    },
+    "decision_record_id": {
+      "oneOf": [
+        {
+          "$ref": "common.1.0.json#/$defs/DecisionRecordId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "started_at": {
+      "$ref": "common.1.0.json#/$defs/Timestamp"
+    },
+    "ended_at": {
+      "oneOf": [
+        {
+          "$ref": "common.1.0.json#/$defs/Timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

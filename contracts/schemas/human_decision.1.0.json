@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/schemas/human_decision/1.0",
+  "title": "HumanDecision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "human_decision_id",
+    "decision_record_id",
+    "case_id",
+    "actor_id",
+    "authority_role",
+    "final_action",
+    "conditions",
+    "override",
+    "evidence_acknowledged",
+    "decided_at",
+    "hash",
+    "prev_hash"
+  ],
+  "properties": {
+    "schema": {
+      "const": "human_decision/1.0"
+    },
+    "human_decision_id": {
+      "$ref": "common.1.0.json#/$defs/HumanDecisionId"
+    },
+    "decision_record_id": {
+      "$ref": "common.1.0.json#/$defs/DecisionRecordId"
+    },
+    "case_id": {
+      "$ref": "common.1.0.json#/$defs/CaseId"
+    },
+    "actor_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authority_role": {
+      "type": "string",
+      "enum": [
+        "CREDIT_OFFICER",
+        "SENIOR_OFFICER",
+        "CREDIT_COMMITTEE",
+        "COLLECTIONS",
+        "MANAGER",
+        "COMPLIANCE",
+        "HEAD_OF_CREDIT",
+        "HEAD_OF_RISK",
+        "MEMBER",
+        "SYSTEM"
+      ]
+    },
+    "final_action": {
+      "type": "string",
+      "enum": [
+        "APPROVE",
+        "DECLINE",
+        "REQUEST_INFO",
+        "ESCALATE",
+        "DEFER",
+        "APPROVE_WITH_CONDITIONS"
+      ]
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "override": {
+      "type": "boolean"
+    },
+    "override_reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "text"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^OVR-(0[1-9]|1[0-2])$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 20
+        }
+      }
+    },
+    "evidence_acknowledged": {
+      "type": "array",
+      "items": {
+        "$ref": "common.1.0.json#/$defs/EvidenceId"
+      }
+    },
+    "decided_at": {
+      "$ref": "common.1.0.json#/$defs/Timestamp"
+    },
+    "hash": {
+      "$ref": "common.1.0.json#/$defs/Sha256"
+    },
+    "prev_hash": {
+      "$ref": "common.1.0.json#/$defs/Sha256"
+    }
+  },
+  "allOf": [
+    {
+      "description": "override_reason is required exactly when override is true.",
+      "if": {
+        "properties": {
+          "override": {
+            "const": true
+          }
+        },
+        "required": [
+          "override"
+        ]
+      },
+      "then": {
+        "required": [
+          "override_reason"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "override_reason"
+          ]
+        }
+      }
+    },
+    {
+      "description": "OVR-12 (other) needs at least 60 characters of explanation.",
+      "if": {
+        "properties": {
+          "override_reason": {
+            "properties": {
+              "code": {
+                "const": "OVR-12"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "override_reason"
+        ]
+      },
+      "then": {
+        "properties": {
+          "override_reason": {
+            "properties": {
+              "text": {
+                "minLength": 60
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

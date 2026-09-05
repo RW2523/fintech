@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/schemas/action_proposal/1.0",
+  "title": "ActionProposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "action_id",
+    "level",
+    "type",
+    "parameters",
+    "rationale",
+    "requires",
+    "proposed_by",
+    "state"
+  ],
+  "properties": {
+    "schema": {
+      "const": "action_proposal/1.0"
+    },
+    "action_id": {
+      "$ref": "common.1.0.json#/$defs/ActionId"
+    },
+    "level": {
+      "type": "string",
+      "enum": [
+        "L0",
+        "L1",
+        "L2",
+        "L3"
+      ]
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "REQUEST_DOCUMENT",
+        "SEND_REMINDER",
+        "CREATE_NOTE",
+        "CREATE_TASK",
+        "ESCALATE",
+        "ASSIGN_REVIEWER",
+        "PROPOSE_VERIFICATION",
+        "OFFICER_OUTREACH",
+        "HARDSHIP_REVIEW",
+        "APPROVE_FINANCING",
+        "DECLINE_FINANCING",
+        "RESTRUCTURE",
+        "LIMIT_CHANGE",
+        "MONITOR"
+      ]
+    },
+    "parameters": {
+      "type": "object"
+    },
+    "rationale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "evidence_refs"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "common.1.0.json#/$defs/EvidenceId"
+          }
+        }
+      }
+    },
+    "requires": {
+      "type": "string",
+      "enum": [
+        "AUTO",
+        "AUTO_IF_POLICY",
+        "OFFICER",
+        "SENIOR",
+        "COMMITTEE",
+        "PROHIBITED"
+      ]
+    },
+    "proposed_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "agent_id or the literal 'policy'."
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "PROPOSED",
+        "APPROVED",
+        "EXECUTED",
+        "REJECTED",
+        "EXPIRED"
+      ]
+    }
+  }
+}

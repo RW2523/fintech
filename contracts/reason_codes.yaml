@@ -1,0 +1,111 @@
+# Approved reason-code vocabulary (docs/03 §11).
+# `officer` is the wording shown to staff; `member` is the wording that may reach
+# a member. Adding or changing a code requires an ADR (CLAUDE.md §2.2).
+schema: reason_codes/1.0
+version: 2026.09.1
+
+groups:
+  ELG:
+    name: Eligibility
+    codes:
+      ELG-01: { officer: "Membership inactive",                    member: "Your membership is not currently active." }
+      ELG-02: { officer: "Tenure below minimum",                   member: "Membership has not yet reached the minimum period for this product." }
+      ELG-03: { officer: "Identity not verified",                  member: "We could not verify your identity from the documents provided." }
+      ELG-04: { officer: "Age or eligibility rule not met",        member: "This product is not available on the requested terms." }
+      ELG-05: { officer: "Product not available to member class",  member: "This product is not available for your membership category." }
+  DOC:
+    name: Documents
+    codes:
+      DOC-01: { officer: "Required document missing",              member: "A required document is missing." }
+      DOC-02: { officer: "Document unreadable",                    member: "One of your documents could not be read clearly." }
+      DOC-03: { officer: "Document expired",                       member: "One of your documents has expired." }
+      DOC-04: { officer: "Low-confidence critical field",          member: "We need to confirm a detail on one of your documents." }
+  CAP:
+    name: Capacity
+    codes:
+      CAP-01: { officer: "Commitment ratio within policy",         member: "Your repayment commitments are within our limits." }
+      CAP-02: { officer: "Commitment ratio above limit",           member: "The repayments would exceed the share of income we can approve." }
+      CAP-03: { officer: "Thin headroom under stress",             member: "There is little margin if your circumstances change." }
+      CAP-04: { officer: "Income not verified",                    member: "We could not verify your income." }
+      CAP-05: { officer: "Income stable",                          member: "Your income appears stable." }
+      CAP-06: { officer: "Income variable",                        member: "Your income varies between periods." }
+  CON:
+    name: Conduct
+    codes:
+      CON-01: { officer: "Strong on-time history",                 member: "Your repayment history is strong." }
+      CON-02: { officer: "Recent arrears",                         member: "There were late repayments recently." }
+      CON-03: { officer: "Prior restructure",                      member: "A previous facility was restructured." }
+      CON-04: { officer: "Recent new facility",                    member: "A new facility was opened recently." }
+      CON-05: { officer: "Limited history",                        member: "There is limited repayment history so far." }
+      CON-06: { officer: "Bureau adverse",                         member: "External credit information shows adverse records." }
+  COM:
+    name: Commitment
+    codes:
+      COM-01: { officer: "Long tenure",                            member: "You have been a member for a long time." }
+      COM-02: { officer: "Consistent savings",                     member: "Your savings pattern is consistent." }
+      COM-03: { officer: "Share capital above minimum",            member: "Your share capital is above the minimum." }
+      COM-04: { officer: "Savings paused",                         member: "Savings deposits have paused recently." }
+      COM-05: { officer: "Prior hardship arrangement",             member: "A previous support arrangement is on record." }
+      COM-06: { officer: "New member",                             member: "You joined the cooperative recently." }
+  INT:
+    name: Integrity
+    codes:
+      INT-01: { officer: "Document metadata inconsistency",        member: "We need to check a document." }
+      INT-02: { officer: "Image reused",                           member: "We need to check a document." }
+      INT-03: { officer: "Income variance across sources",         member: "Your reported income differs between sources." }
+      INT-04: { officer: "Duplicate application",                  member: "A similar application is already on file." }
+      INT-05: { officer: "Guarantor network finding",              member: "We need to review the guarantee arrangements." }
+      INT-06: { officer: "Contact change before application",      member: "Your contact details changed recently." }
+      INT-07: { officer: "Template mismatch",                      member: "We need to check a document." }
+      INT-08: { officer: "Identity mismatch (critical)",           member: "We could not match the identity details provided." }
+  CND:
+    name: Conditions
+    codes:
+      CND-01: { officer: "Employer concentration high",            member: "" }
+      CND-02: { officer: "Sector stress",                          member: "" }
+      CND-03: { officer: "Portfolio within tolerance",             member: "" }
+  EXP:
+    name: Exposure
+    codes:
+      EXP-01: { officer: "Exposure within limit",                  member: "Your total borrowing is within our limits." }
+      EXP-02: { officer: "Exposure above limit",                   member: "This would take your total borrowing above our limit." }
+  AUT:
+    name: Authority
+    codes:
+      AUT-01: { officer: "Within officer authority",               member: "" }
+      AUT-02: { officer: "Senior authority required",              member: "" }
+      AUT-03: { officer: "Committee authority required",           member: "" }
+  SHR:
+    name: Shariah
+    codes:
+      SHR-01: { officer: "Purpose permitted",                      member: "The purpose is permitted under this product." }
+      SHR-02: { officer: "Purpose not permitted",                  member: "The stated purpose is not permitted under this product." }
+      SHR-03: { officer: "Structure compliant",                    member: "The financing structure is compliant." }
+  LMI:
+    name: Longitudinal member intelligence
+    codes:
+      LMI-01: { officer: "Payment timing drift",                   member: "" }
+      LMI-02: { officer: "Deduction interrupted",                  member: "" }
+      LMI-03: { officer: "Savings decline",                        member: "" }
+      LMI-04: { officer: "Corroborated by second family",          member: "" }
+      LMI-05: { officer: "Outage explains signal",                 member: "" }
+      LMI-06: { officer: "Arrangement active",                     member: "" }
+      LMI-07: { officer: "Recovery observed",                      member: "" }
+      LMI-08: { officer: "Forecast elevated",                      member: "" }
+      LMI-09: { officer: "Forecast uncertain",                     member: "" }
+  OVR:
+    name: Override reasons
+    # Recorded on HumanDecision when a human departs from the recommendation.
+    codes:
+      OVR-01: { officer: "Additional evidence obtained",           member: "" }
+      OVR-02: { officer: "Policy exception approved",              member: "" }
+      OVR-03: { officer: "Known member circumstances",             member: "" }
+      OVR-04: { officer: "Data error suspected",                   member: "" }
+      OVR-05: { officer: "Model reservation",                      member: "" }
+      OVR-06: { officer: "Hardship consideration",                 member: "" }
+      OVR-07: { officer: "Fraud concern",                          member: "" }
+      OVR-08: { officer: "Documentation concern",                  member: "" }
+      OVR-09: { officer: "Relationship or commercial",             member: "" }
+      OVR-10: { officer: "Regulatory or compliance",               member: "" }
+      OVR-11: { officer: "Committee direction",                    member: "" }
+      OVR-12: { officer: "Other",                                  member: "", min_text_length: 60 }

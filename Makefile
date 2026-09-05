@@ -78,7 +78,11 @@ migrate:  ## alembic upgrade head for every service
 # ---------------------------------------------------------------------------
 .PHONY: codegen
 codegen:  ## contracts/schemas -> pydantic + typescript types
-	@$(MAKE) todo TASK=T-004
+	@$(UV) run python contracts/codegen/gen_python.py
+	@$(UV) run python contracts/codegen/gen_ts.py
+	@if [ -d apps/web/node_modules ]; then \
+	  ( cd apps/web && npx --no-install tsc --noEmit ) && echo "  apps/web typechecks"; \
+	else echo "  apps/web: run 'npm install' there to typecheck the generated contracts"; fi
 
 .PHONY: seed
 seed:  ## generate and load the synthetic population, documents and scenarios

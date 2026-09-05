@@ -1,0 +1,249 @@
+# Event catalogue (docs/03 §12).
+# Transport is the transactional outbox in `events.outbox` plus LISTEN/NOTIFY
+# (docs/04 §1). Consumers are idempotent and replayable.
+schema: events/1.0
+version: 2026.09.1
+
+envelope:
+  required: [event_id, name, version, key, trace_id, occurred_at, producer, payload]
+  optional: [case_id]
+  description: >
+    Every event is wrapped in this envelope before it is written to the outbox.
+    `key` is the partition key named per event below.
+
+events:
+  application.created.v1:
+    key: case_id
+    producer: application
+    consumers: [audit]
+    payload: "{application_id, member_id, product_code}"
+  application.submitted.v1:
+    key: case_id
+    producer: application
+    consumers: [workflow, audit]
+    payload: "{snapshot_id, product_code, member_id}"
+  document.uploaded.v1:
+    key: case_id
+    producer: document
+    consumers: [application, audit]
+    payload: "{document_id, type}"
+  document.classified.v1:
+    key: case_id
+    producer: document
+    consumers: [application]
+    payload: "{document_id, label, confidence}"
+  document.extracted.v1:
+    key: case_id
+    producer: document
+    consumers: [policy, fraud]
+    payload: "{document_id, fields_n, min_conf}"
+  document.exception_detected.v1:
+    key: case_id
+    producer: document
+    consumers: [fraud, application]
+    payload: "{document_id, code, severity}"
+  policy.evaluated.v1:
+    key: case_id
+    producer: policy
+    consumers: [committee, audit]
+    payload: "{snapshot_id, blockers, required_authority}"
+  features.snapshot_created.v1:
+    key: member_id
+    producer: feature
+    consumers: [risk, fraud, lmi]
+    payload: "{feature_snapshot_id, as_of}"
+  risk.scored.v1:
+    key: case_id
+    producer: risk
+    consumers: [committee]
+    payload: "{snapshot_id, model_run_id, grade}"
+  fraud.assessed.v1:
+    key: case_id
+    producer: fraud
+    consumers: [committee]
+    payload: "{snapshot_id, level, integrity_score}"
+  committee.started.v1:
+    key: case_id
+    producer: committee
+    consumers: [audit]
+    payload: "{run_id, snapshot_id, tier}"
+  committee.opinion_published.v1:
+    key: case_id
+    producer: committee
+    consumers: [audit]
+    payload: "{run_id, opinion_id, agent_id, stance}"
+  committee.recommendation_created.v1:
+    key: case_id
+    producer: committee
+    consumers: [application, notification, decision]
+    payload: "{run_id, decision_record_id, route}"
+  committee.timed_out.v1:
+    key: case_id
+    producer: committee
+    consumers: [audit, governance]
+    payload: "{run_id, seconds_used}"
+  human.decision_recorded.v1:
+    key: case_id
+    producer: decision
+    consumers: [execution, audit, governance]
+    payload: "{human_decision_id, final_action, override}"
+  action.proposed.v1:
+    key: case_id
+    producer: committee
+    consumers: [decision]
+    payload: "{action_id, type, level, requires}"
+  action.approved.v1:
+    key: case_id
+    producer: decision
+    consumers: [execution]
+    payload: "{action_id, token_id}"
+  action.executed.v1:
+    key: case_id
+    producer: execution
+    consumers: [audit, member_intelligence]
+    payload: "{action_id, core_refs}"
+  action.failed.v1:
+    key: case_id
+    producer: execution
+    consumers: [audit, governance]
+    payload: "{action_id, error_code}"
+  core.financing_activated.v1:
+    key: member_id
+    producer: core_stub
+    consumers: [notification, member_intelligence]
+    payload: "{account_id, member_id, instalment}"
+  payment.due.v1:
+    key: account_id
+    producer: core_stub
+    consumers: [feature, notification]
+    payload: "{schedule_id, due_date, amount_due}"
+  payment.received.v1:
+    key: account_id
+    producer: core_stub
+    consumers: [feature, notification, lmi]
+    payload: "{schedule_id, paid_at, amount_paid}"
+  payment.late.v1:
+    key: account_id
+    producer: core_stub
+    consumers: [feature, lmi, notification]
+    payload: "{schedule_id, days_late}"
+  payment.partial.v1:
+    key: account_id
+    producer: core_stub
+    consumers: [feature, lmi]
+    payload: "{schedule_id, amount_paid}"
+  payment.reversed.v1:
+    key: account_id
+    producer: core_stub
+    consumers: [feature, lmi]
+    payload: "{payment_id}"
+  deduction.received.v1:
+    key: member_id
+    producer: core_stub
+    consumers: [feature, lmi]
+    payload: "{employer_id, cycle, received_amount}"
+  deduction.missed.v1:
+    key: member_id
+    producer: core_stub
+    consumers: [feature, lmi, notification]
+    payload: "{employer_id, cycle, expected_amount}"
+  member.baseline_updated.v1:
+    key: member_id
+    producer: feature
+    consumers: [lmi]
+    payload: "{signal, median, mad, n}"
+  behaviour.change_point_detected.v1:
+    key: member_id
+    producer: lmi
+    consumers: [committee, notification]
+    payload: "{signal, cp_date, method, stats}"
+  forecast.generated.v1:
+    key: member_id
+    producer: lmi
+    consumers: [committee]
+    payload: "{forecast_id, horizons}"
+  member.state_changed.v1:
+    key: member_id
+    producer: lmi
+    consumers: [notification, committee, governance]
+    payload: "{from, to, reason}"
+  early_warning.case_created.v1:
+    key: member_id
+    producer: lmi
+    consumers: [workflow]
+    payload: "{case_id, alert_id, account_id}"
+  early_warning.case_closed.v1:
+    key: member_id
+    producer: lmi
+    consumers: [governance]
+    payload: "{case_id, outcome}"
+  intervention.proposed.v1:
+    key: case_id
+    producer: committee
+    consumers: [decision]
+    payload: "{action_id, type, level}"
+  intervention.approved.v1:
+    key: case_id
+    producer: decision
+    consumers: [notification]
+    payload: "{action_id, token_id}"
+  intervention.completed.v1:
+    key: case_id
+    producer: notification
+    consumers: [lmi, governance]
+    payload: "{action_id, outcome}"
+  outreach.sent.v1:
+    key: member_id
+    producer: notification
+    consumers: [member_intelligence]
+    payload: "{message_id, template_id, channel}"
+  outreach.response_logged.v1:
+    key: member_id
+    producer: notification
+    consumers: [feature, member_intelligence]
+    payload: "{message_id, outcome}"
+  member.hardship_signal.v1:
+    key: member_id
+    producer: agent_runtime
+    consumers: [notification, lmi]
+    payload: "{source, note_ref}"
+  outcome.recorded.v1:
+    key: account_id
+    producer: core_stub
+    consumers: [governance, feature]
+    payload: "{account_id, month, labels}"
+  model.deployed.v1:
+    key: model
+    producer: governance
+    consumers: [governance]
+    payload: "{model, version, card_url}"
+  model.monitor_alert.v1:
+    key: model
+    producer: governance
+    consumers: [policy, committee]
+    payload: "{model, metric, status}"
+  autonomy.setting_changed.v1:
+    key: product_code
+    producer: governance
+    consumers: [policy, audit]
+    payload: "{product_code, setting, approvers}"
+  kill_switch.activated.v1:
+    key: product_code
+    producer: governance
+    consumers: [policy, committee, audit]
+    payload: "{product_code, reason, actor}"
+  kill_switch.cleared.v1:
+    key: product_code
+    producer: governance
+    consumers: [policy, committee, audit]
+    payload: "{product_code, approvers}"
+  ledger.appended.v1:
+    key: case_id
+    producer: decision
+    consumers: [audit]
+    payload: "{entry_id, kind, hash}"
+  audit.exported.v1:
+    key: date
+    producer: audit
+    consumers: [governance]
+    payload: "{object_key, entries}"

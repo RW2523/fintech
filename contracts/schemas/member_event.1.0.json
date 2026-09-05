@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/schemas/member_event/1.0",
+  "title": "MemberEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "event_id",
+    "member_id",
+    "account_id",
+    "occurred_at",
+    "ingested_at",
+    "event_type",
+    "source_system",
+    "source_record_id",
+    "payload",
+    "data_quality",
+    "permitted_uses",
+    "evidence_refs"
+  ],
+  "properties": {
+    "schema": {
+      "const": "member_event/1.0"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "member_id": {
+      "type": "string",
+      "pattern": "^M-[0-9]{6}$"
+    },
+    "account_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "occurred_at": {
+      "$ref": "common.1.0.json#/$defs/Timestamp"
+    },
+    "ingested_at": {
+      "$ref": "common.1.0.json#/$defs/Timestamp"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "PAYMENT_DUE",
+        "PAYMENT_RECEIVED",
+        "PAYMENT_LATE",
+        "PAYMENT_PARTIAL",
+        "PAYMENT_REVERSED",
+        "DEDUCTION_RECEIVED",
+        "DEDUCTION_MISSED",
+        "SAVINGS_BALANCE",
+        "SHARE_CAPITAL",
+        "RESTRUCTURE",
+        "LIMIT_CHANGE",
+        "APPLICATION",
+        "DOCUMENT_VERIFIED",
+        "CONTACT_DELIVERED",
+        "CONTACTED",
+        "PROMISE_TO_PAY",
+        "HARDSHIP_REQUEST",
+        "ARRANGEMENT_ACTIVE",
+        "ARRANGEMENT_ENDED",
+        "OUTAGE_WINDOW",
+        "STATE_CHANGED",
+        "FORECAST_CREATED",
+        "HUMAN_DECISION",
+        "EMPLOYMENT_CHANGE"
+      ]
+    },
+    "source_system": {
+      "type": "string"
+    },
+    "source_record_id": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "object"
+    },
+    "data_quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "freshness_s",
+        "confidence",
+        "validation"
+      ],
+      "properties": {
+        "freshness_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "confidence": {
+          "$ref": "common.1.0.json#/$defs/Unit"
+        },
+        "validation": {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "WARN",
+            "FAIL"
+          ]
+        }
+      }
+    },
+    "permitted_uses": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "UNDERWRITING",
+          "SERVICING",
+          "COLLECTIONS",
+          "FRAUD",
+          "ANALYTICS"
+        ]
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "common.1.0.json#/$defs/EvidenceId"
+      }
+    }
+  }
+}

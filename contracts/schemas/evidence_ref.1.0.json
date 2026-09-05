@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/schemas/evidence_ref/1.0",
+  "title": "EvidenceRef",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "evidence_id",
+    "type",
+    "source_system",
+    "source_record_id",
+    "locator",
+    "confidence",
+    "captured_at",
+    "version",
+    "permitted_uses"
+  ],
+  "properties": {
+    "schema": {
+      "const": "evidence_ref/1.0"
+    },
+    "evidence_id": {
+      "$ref": "common.1.0.json#/$defs/EvidenceId"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "DOCUMENT_FIELD",
+        "CORE_FIELD",
+        "POLICY_RULE",
+        "MODEL_OUTPUT",
+        "ANALYTIC_RESULT",
+        "TIMELINE_EVENT",
+        "HUMAN_INPUT",
+        "RETRIEVED_CLAUSE"
+      ]
+    },
+    "source_system": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_record_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "locator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "At least one key must be present.",
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "bbox": {
+          "type": "array",
+          "items": {
+            "$ref": "common.1.0.json#/$defs/Unit"
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "[x0, y0, x1, y1] normalised to the page."
+        },
+        "field_path": {
+          "type": "string"
+        },
+        "event_id": {
+          "type": "string"
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "clause_id": {
+          "type": "string"
+        },
+        "model_run_id": {
+          "type": "string"
+        },
+        "calc_id": {
+          "type": "string"
+        }
+      }
+    },
+    "value": {
+      "description": "The value as observed."
+    },
+    "display": {
+      "type": "string"
+    },
+    "confidence": {
+      "$ref": "common.1.0.json#/$defs/Unit"
+    },
+    "captured_at": {
+      "$ref": "common.1.0.json#/$defs/Timestamp"
+    },
+    "version": {
+      "type": "string"
+    },
+    "permitted_uses": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "UNDERWRITING",
+          "SERVICING",
+          "COLLECTIONS",
+          "FRAUD",
+          "ANALYTICS"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/schemas/case_snapshot/1.0",
+  "title": "CaseSnapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "snapshot_id",
+    "case_id",
+    "case_type",
+    "member_id",
+    "product_code",
+    "member_snapshot_ver",
+    "document_bundle_ver",
+    "feature_snapshot_id",
+    "policy_version",
+    "dff_version",
+    "autonomy_version",
+    "model_versions",
+    "evidence_index_ver",
+    "created_at",
+    "created_by",
+    "hash"
+  ],
+  "properties": {
+    "schema": {
+      "const": "case_snapshot/1.0"
+    },
+    "snapshot_id": {
+      "$ref": "common.1.0.json#/$defs/SnapshotId"
+    },
+    "case_id": {
+      "$ref": "common.1.0.json#/$defs/CaseId"
+    },
+    "case_type": {
+      "type": "string",
+      "enum": [
+        "ORIGINATION",
+        "SERVICING",
+        "EARLY_WARNING",
+        "COLLECTIONS"
+      ]
+    },
+    "member_id": {
+      "type": "string",
+      "pattern": "^M-[0-9]{6}$"
+    },
+    "product_code": {
+      "type": "string",
+      "enum": [
+        "PF-STD",
+        "PF-SHARIAH"
+      ]
+    },
+    "requested_amount": {
+      "$ref": "common.1.0.json#/$defs/Money"
+    },
+    "tenor_months": {
+      "type": "integer",
+      "minimum": 6,
+      "maximum": 120
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "member_snapshot_ver": {
+      "type": "string",
+      "minLength": 1
+    },
+    "document_bundle_ver": {
+      "type": "string",
+      "minLength": 1
+    },
+    "feature_snapshot_id": {
+      "$ref": "common.1.0.json#/$defs/FeatureSnapshotId"
+    },
+    "policy_version": {
+      "type": "string",
+      "pattern": "^policy/[A-Z-]+/[0-9.]+$"
+    },
+    "dff_version": {
+      "type": "string",
+      "pattern": "^dff/[A-Z-]+/[0-9.]+$"
+    },
+    "autonomy_version": {
+      "type": "string",
+      "pattern": "^autonomy/[A-Z-]+/[0-9.]+$"
+    },
+    "model_versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "risk",
+        "fraud",
+        "delinquency",
+        "document_ai",
+        "embed"
+      ],
+      "properties": {
+        "risk": {
+          "type": "string"
+        },
+        "fraud": {
+          "type": "string"
+        },
+        "delinquency": {
+          "type": "string"
+        },
+        "document_ai": {
+          "type": "string"
+        },
+        "embed": {
+          "type": "string"
+        }
+      }
+    },
+    "evidence_index_ver": {
+      "type": "string"
+    },
+    "temporal_context_id": {
+      "$ref": "common.1.0.json#/$defs/TemporalContextId"
+    },
+    "created_at": {
+      "$ref": "common.1.0.json#/$defs/Timestamp"
+    },
+    "created_by": {
+      "$ref": "common.1.0.json#/$defs/ActorRef"
+    },
+    "hash": {
+      "$ref": "common.1.0.json#/$defs/Sha256"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "case_type": {
+            "const": "ORIGINATION"
+          }
+        },
+        "required": [
+          "case_type"
+        ]
+      },
+      "then": {
+        "required": [
+          "requested_amount",
+          "tenor_months"
+        ]
+      }
+    }
+  ]
+}

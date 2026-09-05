@@ -351,11 +351,15 @@ name = "cio-contracts"
 version = "0.1.0"
 source = { editable = "libs/cio_contracts" }
 dependencies = [
+    { name = "jsonschema" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.9" }]
+requires-dist = [
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "pydantic", specifier = ">=2.9" },
+]
 
 [[package]]
 name = "cio-ml"

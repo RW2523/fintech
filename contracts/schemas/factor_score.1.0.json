@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/schemas/factor_score/1.0",
+  "title": "FactorScore",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "family",
+    "score",
+    "calc_id",
+    "tool",
+    "inputs_digest",
+    "evidence_refs"
+  ],
+  "properties": {
+    "family": {
+      "type": "string",
+      "enum": [
+        "CAPACITY",
+        "CONDUCT",
+        "COMMITMENT",
+        "CONDITIONS",
+        "INTEGRITY"
+      ]
+    },
+    "score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "calc_id": {
+      "$ref": "common.1.0.json#/$defs/CalcId"
+    },
+    "tool": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputs_digest": {
+      "$ref": "common.1.0.json#/$defs/Sha256"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "common.1.0.json#/$defs/EvidenceId"
+      }
+    },
+    "level": {
+      "type": "string",
+      "enum": [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL"
+      ],
+      "description": "INTEGRITY only: worst open finding severity."
+    }
+  }
+}

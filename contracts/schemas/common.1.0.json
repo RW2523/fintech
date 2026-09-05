@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/schemas/common/1.0",
+  "title": "Common",
+  "description": "Shared primitive types for the backbone contracts.",
+  "$defs": {
+    "ActionId": {
+      "type": "string",
+      "pattern": "^act_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `act_` prefix."
+    },
+    "ActorRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "kind"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "USER",
+            "SYSTEM",
+            "WORKFLOW"
+          ]
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "CREDIT_OFFICER",
+            "SENIOR_OFFICER",
+            "CREDIT_COMMITTEE",
+            "COLLECTIONS",
+            "MANAGER",
+            "COMPLIANCE",
+            "HEAD_OF_CREDIT",
+            "HEAD_OF_RISK",
+            "MEMBER",
+            "SYSTEM"
+          ]
+        }
+      }
+    },
+    "AgentVersion": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$",
+      "description": "sha256(prompt+tools+config+route)[:16]."
+    },
+    "ApplicationId": {
+      "type": "string",
+      "pattern": "^app_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `app_` prefix."
+    },
+    "CalcId": {
+      "type": "string",
+      "pattern": "^calc_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `calc_` prefix."
+    },
+    "CaseId": {
+      "type": "string",
+      "pattern": "^case_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `case_` prefix."
+    },
+    "CaseType": {
+      "type": "string",
+      "enum": [
+        "ORIGINATION",
+        "SERVICING",
+        "EARLY_WARNING",
+        "COLLECTIONS"
+      ]
+    },
+    "DecisionRecordId": {
+      "type": "string",
+      "pattern": "^dr_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `dr_` prefix."
+    },
+    "DocumentId": {
+      "type": "string",
+      "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `doc_` prefix."
+    },
+    "EvidenceId": {
+      "type": "string",
+      "pattern": "^ev_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `ev_` prefix."
+    },
+    "FactorFamily": {
+      "type": "string",
+      "enum": [
+        "CAPACITY",
+        "CONDUCT",
+        "COMMITMENT",
+        "CONDITIONS",
+        "INTEGRITY"
+      ]
+    },
+    "FeatureSnapshotId": {
+      "type": "string",
+      "pattern": "^fs_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `fs_` prefix."
+    },
+    "HumanDecisionId": {
+      "type": "string",
+      "pattern": "^hd_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `hd_` prefix."
+    },
+    "ModelRunId": {
+      "type": "string",
+      "pattern": "^mr_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `mr_` prefix."
+    },
+    "Money": {
+      "type": "string",
+      "pattern": "^-?[0-9]+\\.[0-9]{2}$",
+      "description": "Decimal money as a string. Never a float (CLAUDE.md \u00a77)."
+    },
+    "OpinionId": {
+      "type": "string",
+      "pattern": "^op_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `op_` prefix."
+    },
+    "PermittedUse": {
+      "type": "string",
+      "enum": [
+        "UNDERWRITING",
+        "SERVICING",
+        "COLLECTIONS",
+        "FRAUD",
+        "ANALYTICS"
+      ]
+    },
+    "ReasonCode": {
+      "type": "string",
+      "pattern": "^(ELG|DOC|CAP|CON|COM|INT|CND|EXP|AUT|SHR|LMI|OVR)-[0-9]{2}$",
+      "description": "From contracts/reason_codes.yaml."
+    },
+    "Role": {
+      "type": "string",
+      "enum": [
+        "CREDIT_OFFICER",
+        "SENIOR_OFFICER",
+        "CREDIT_COMMITTEE",
+        "COLLECTIONS",
+        "MANAGER",
+        "COMPLIANCE",
+        "HEAD_OF_CREDIT",
+        "HEAD_OF_RISK",
+        "MEMBER",
+        "SYSTEM"
+      ]
+    },
+    "Round": {
+      "type": "string",
+      "enum": [
+        "ASSESS",
+        "REVISE",
+        "CHALLENGE",
+        "TEMPORAL"
+      ]
+    },
+    "RuleResult": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "EXCEPTION",
+        "NOT_APPLICABLE"
+      ]
+    },
+    "RunId": {
+      "type": "string",
+      "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `run_` prefix."
+    },
+    "Severity": {
+      "type": "string",
+      "enum": [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL"
+      ]
+    },
+    "Sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Lowercase hex SHA-256 digest."
+    },
+    "SnapshotId": {
+      "type": "string",
+      "pattern": "^snap_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `snap_` prefix."
+    },
+    "TemporalContextId": {
+      "type": "string",
+      "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `tc_` prefix."
+    },
+    "Tier": {
+      "type": "string",
+      "enum": [
+        "FAST",
+        "STANDARD",
+        "EXTENDED",
+        "POLICY_ONLY"
+      ]
+    },
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 UTC."
+    },
+    "TokenId": {
+      "type": "string",
+      "pattern": "^tok_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID with the `tok_` prefix."
+    },
+    "Unit": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  }
+}

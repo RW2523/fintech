@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/schemas/approval_token/1.0",
+  "title": "ApprovalToken",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "token_id",
+    "action_id",
+    "decision_record_id",
+    "human_decision_id",
+    "issued_to",
+    "scope",
+    "idempotency_key",
+    "issued_at",
+    "expires_at",
+    "used_at",
+    "signature"
+  ],
+  "properties": {
+    "schema": {
+      "const": "approval_token/1.0"
+    },
+    "token_id": {
+      "$ref": "common.1.0.json#/$defs/TokenId"
+    },
+    "action_id": {
+      "$ref": "common.1.0.json#/$defs/ActionId"
+    },
+    "decision_record_id": {
+      "$ref": "common.1.0.json#/$defs/DecisionRecordId"
+    },
+    "human_decision_id": {
+      "oneOf": [
+        {
+          "$ref": "common.1.0.json#/$defs/HumanDecisionId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "issued_to": {
+      "oneOf": [
+        {
+          "$ref": "common.1.0.json#/$defs/ActorRef"
+        },
+        {
+          "title": "AutonomyDialRef",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "autonomy_version"
+          ],
+          "properties": {
+            "kind": {
+              "const": "AUTONOMY_DIAL"
+            },
+            "autonomy_version": {
+              "type": "string"
+            }
+          },
+          "description": "Issued by the Autonomy Dial rather than a person (docs/05 \u00a76)."
+        }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product_code",
+        "member_id",
+        "case_id",
+        "max_amount"
+      ],
+      "properties": {
+        "product_code": {
+          "type": "string"
+        },
+        "member_id": {
+          "type": "string"
+        },
+        "case_id": {
+          "$ref": "common.1.0.json#/$defs/CaseId"
+        },
+        "max_amount": {
+          "$ref": "common.1.0.json#/$defs/Money"
+        }
+      }
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 8
+    },
+    "issued_at": {
+      "$ref": "common.1.0.json#/$defs/Timestamp"
+    },
+    "expires_at": {
+      "$ref": "common.1.0.json#/$defs/Timestamp"
+    },
+    "used_at": {
+      "oneOf": [
+        {
+          "$ref": "common.1.0.json#/$defs/Timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "signature": {
+      "$ref": "common.1.0.json#/$defs/Sha256"
+    }
+  }
+}

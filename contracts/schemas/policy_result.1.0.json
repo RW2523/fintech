@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/schemas/policy_result/1.0",
+  "title": "PolicyResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "policy_version",
+    "product_code",
+    "evaluated_at",
+    "rules",
+    "blockers",
+    "flags",
+    "affordability",
+    "exposure",
+    "required_authority",
+    "routing_hint",
+    "evidence_coverage"
+  ],
+  "properties": {
+    "schema": {
+      "const": "policy_result/1.0"
+    },
+    "policy_version": {
+      "type": "string"
+    },
+    "product_code": {
+      "type": "string"
+    },
+    "evaluated_at": {
+      "$ref": "common.1.0.json#/$defs/Timestamp"
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rule_id",
+          "category",
+          "result",
+          "evidence_refs"
+        ],
+        "properties": {
+          "rule_id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "ELIGIBILITY",
+              "DOCUMENTS",
+              "AFFORDABILITY",
+              "EXPOSURE",
+              "AUTHORITY",
+              "ROUTING",
+              "SHARIAH"
+            ]
+          },
+          "result": {
+            "$ref": "common.1.0.json#/$defs/RuleResult"
+          },
+          "on_fail": {
+            "type": "string"
+          },
+          "reason_code": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "common.1.0.json#/$defs/EvidenceId"
+            }
+          }
+        },
+        "title": "RuleOutcome"
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "affordability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dsr",
+        "dsr_limit",
+        "headroom",
+        "stress",
+        "instalment",
+        "calc_id",
+        "evidence_refs"
+      ],
+      "properties": {
+        "dsr": {
+          "type": "number",
+          "minimum": 0
+        },
+        "dsr_limit": {
+          "type": "number",
+          "minimum": 0
+        },
+        "headroom": {
+          "type": "number"
+        },
+        "residual": {
+          "$ref": "common.1.0.json#/$defs/Money"
+        },
+        "stress": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "case",
+              "dsr",
+              "pass"
+            ],
+            "properties": {
+              "case": {
+                "type": "string"
+              },
+              "dsr": {
+                "type": "number"
+              },
+              "pass": {
+                "type": "boolean"
+              }
+            },
+            "title": "StressCase"
+          }
+        },
+        "instalment": {
+          "$ref": "common.1.0.json#/$defs/Money"
+        },
+        "calc_id": {
+          "$ref": "common.1.0.json#/$defs/CalcId"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "common.1.0.json#/$defs/EvidenceId"
+          }
+        }
+      },
+      "title": "AffordabilityResult"
+    },
+    "exposure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "current",
+        "requested",
+        "resulting",
+        "limit",
+        "calc_id"
+      ],
+      "properties": {
+        "current": {
+          "$ref": "common.1.0.json#/$defs/Money"
+        },
+        "requested": {
+          "$ref": "common.1.0.json#/$defs/Money"
+        },
+        "resulting": {
+          "$ref": "common.1.0.json#/$defs/Money"
+        },
+        "limit": {
+          "$ref": "common.1.0.json#/$defs/Money"
+        },
+        "calc_id": {
+          "$ref": "common.1.0.json#/$defs/CalcId"
+        }
+      },
+      "title": "ExposureResult"
+    },
+    "required_authority": {
+      "type": "string",
+      "enum": [
+        "CREDIT_OFFICER",
+        "SENIOR_OFFICER",
+        "CREDIT_COMMITTEE",
+        "COLLECTIONS",
+        "MANAGER",
+        "COMPLIANCE",
+        "HEAD_OF_CREDIT",
+        "HEAD_OF_RISK",
+        "MEMBER",
+        "SYSTEM"
+      ]
+    },
+    "routing_hint": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        null,
+        "COMPLIANCE_REVIEW",
+        "ENHANCED_ASSESSMENT",
+        "SENIOR_REVIEW"
+      ]
+    },
+    "evidence_coverage": {
+      "$ref": "common.1.0.json#/$defs/Unit"
+    }
+  }
+}

@@ -1,0 +1,381 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/schemas/decision_record/1.0",
+  "title": "DecisionRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "decision_record_id",
+    "committee_run_id",
+    "snapshot_id",
+    "case_type",
+    "tier",
+    "hard_gates",
+    "evidence_coverage",
+    "factor_scores",
+    "weighted_score",
+    "recommendation",
+    "confidence",
+    "disagreement",
+    "challenger_open",
+    "route",
+    "route_reasons",
+    "required_authority",
+    "narrative",
+    "would_change_outcome",
+    "proposed_actions",
+    "opinions",
+    "policy_version",
+    "dff_version",
+    "autonomy_version",
+    "model_versions",
+    "budgets",
+    "created_at",
+    "hash",
+    "prev_hash"
+  ],
+  "properties": {
+    "schema": {
+      "const": "decision_record/1.0"
+    },
+    "decision_record_id": {
+      "$ref": "common.1.0.json#/$defs/DecisionRecordId"
+    },
+    "committee_run_id": {
+      "oneOf": [
+        {
+          "$ref": "common.1.0.json#/$defs/RunId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "null for pure policy stops."
+    },
+    "snapshot_id": {
+      "$ref": "common.1.0.json#/$defs/SnapshotId"
+    },
+    "case_type": {
+      "type": "string",
+      "enum": [
+        "ORIGINATION",
+        "SERVICING",
+        "EARLY_WARNING",
+        "COLLECTIONS"
+      ]
+    },
+    "tier": {
+      "$ref": "common.1.0.json#/$defs/Tier"
+    },
+    "hard_gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rule_id",
+          "result",
+          "evidence_refs"
+        ],
+        "properties": {
+          "rule_id": {
+            "type": "string"
+          },
+          "result": {
+            "$ref": "common.1.0.json#/$defs/RuleResult"
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "common.1.0.json#/$defs/EvidenceId"
+            }
+          }
+        },
+        "title": "HardGate"
+      }
+    },
+    "evidence_coverage": {
+      "$ref": "common.1.0.json#/$defs/Unit"
+    },
+    "factor_scores": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "CAPACITY",
+          "CONDUCT",
+          "COMMITMENT",
+          "CONDITIONS",
+          "INTEGRITY"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "score",
+          "weight",
+          "weighted",
+          "decisive",
+          "calc_id"
+        ],
+        "properties": {
+          "score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "weight": {
+            "$ref": "common.1.0.json#/$defs/Unit"
+          },
+          "weighted": {
+            "type": "number"
+          },
+          "decisive": {
+            "type": "boolean"
+          },
+          "calc_id": {
+            "$ref": "common.1.0.json#/$defs/CalcId"
+          }
+        }
+      }
+    },
+    "weighted_score": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "recommendation": {
+      "type": "string",
+      "enum": [
+        "APPROVE",
+        "DECLINE",
+        "REVIEW",
+        "MORE_INFORMATION_REQUIRED",
+        "ENHANCED_ASSESSMENT",
+        "COMPLIANCE_REVIEW",
+        "INTERVENE",
+        "MONITOR",
+        "DE_ESCALATE"
+      ]
+    },
+    "confidence": {
+      "oneOf": [
+        {
+          "$ref": "common.1.0.json#/$defs/Unit"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "disagreement": {
+      "oneOf": [
+        {
+          "$ref": "common.1.0.json#/$defs/Unit"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "challenger_open": {
+      "type": "boolean"
+    },
+    "route": {
+      "type": "string",
+      "enum": [
+        "AUTONOMOUS",
+        "OFFICER_REVIEW",
+        "SENIOR_REVIEW",
+        "ENHANCED_ASSESSMENT",
+        "COMMITTEE",
+        "COMPLIANCE",
+        "MANUAL_FALLBACK"
+      ]
+    },
+    "route_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "required_authority": {
+      "type": "string",
+      "enum": [
+        "CREDIT_OFFICER",
+        "SENIOR_OFFICER",
+        "CREDIT_COMMITTEE",
+        "COLLECTIONS",
+        "MANAGER",
+        "COMPLIANCE",
+        "HEAD_OF_CREDIT",
+        "HEAD_OF_RISK",
+        "MEMBER",
+        "SYSTEM"
+      ]
+    },
+    "narrative": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "member",
+        "officer",
+        "auditor"
+      ],
+      "properties": {
+        "member": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "status"
+          ],
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "OK",
+                "DEGRADED",
+                "NONE"
+              ]
+            }
+          }
+        },
+        "officer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "status"
+          ],
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "OK",
+                "DEGRADED",
+                "NONE"
+              ]
+            }
+          }
+        },
+        "auditor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "status"
+          ],
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "OK",
+                "DEGRADED",
+                "NONE"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "would_change_outcome": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "condition",
+          "new_recommendation"
+        ],
+        "properties": {
+          "condition": {
+            "type": "string"
+          },
+          "new_recommendation": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "proposed_actions": {
+      "type": "array",
+      "items": {
+        "$ref": "action_proposal.1.0.json"
+      }
+    },
+    "opinions": {
+      "type": "array",
+      "items": {
+        "$ref": "common.1.0.json#/$defs/OpinionId"
+      }
+    },
+    "policy_version": {
+      "type": "string"
+    },
+    "dff_version": {
+      "type": "string"
+    },
+    "autonomy_version": {
+      "type": "string"
+    },
+    "model_versions": {
+      "type": "object"
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tokens_used",
+        "seconds_used",
+        "tier_budget_tokens",
+        "tier_budget_seconds",
+        "exceeded"
+      ],
+      "properties": {
+        "tokens_used": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "seconds_used": {
+          "type": "number",
+          "minimum": 0
+        },
+        "tier_budget_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tier_budget_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "exceeded": {
+          "type": "boolean"
+        }
+      }
+    },
+    "created_at": {
+      "$ref": "common.1.0.json#/$defs/Timestamp"
+    },
+    "hash": {
+      "$ref": "common.1.0.json#/$defs/Sha256"
+    },
+    "prev_hash": {
+      "$ref": "common.1.0.json#/$defs/Sha256"
+    }
+  }
+}
