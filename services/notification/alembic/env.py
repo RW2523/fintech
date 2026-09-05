@@ -1,4 +1,4 @@
-"""Alembic environment for core-stub.
+"""Alembic environment for notification.
 
 The database URL comes from the service settings, never from alembic.ini, so a
 migration cannot be pointed at the wrong database by editing a config file.

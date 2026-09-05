@@ -55,9 +55,14 @@ def create_app(
 
     @app.middleware("http")
     async def correlate(request: Request, call_next: Any) -> Any:
-        """Every response carries a trace id (docs/08 preamble)."""
+        """Every response carries a trace id (docs/08 preamble).
+
+        A handler that already set one (the gateway mints ids for inbound
+        calls) keeps it; this only fills the gap.
+        """
         response = await call_next(request)
-        response.headers[TRACE_HEADER] = request.headers.get(TRACE_HEADER) or current_trace_id() or "-"
+        if not response.headers.get(TRACE_HEADER):
+            response.headers[TRACE_HEADER] = request.headers.get(TRACE_HEADER) or current_trace_id() or "-"
         return response
 
     @app.exception_handler(CioError)

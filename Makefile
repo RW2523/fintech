@@ -41,17 +41,17 @@ env:  ## create .env from the example and check the DGX Spark environment
 
 .PHONY: up
 up: $(ENV_FILE)  ## start core + observability + services (no AI)
-	@$(COMPOSE) $(CORE_PROFILES) up -d --remove-orphans
+	@$(COMPOSE) $(CORE_PROFILES) up -d --build --remove-orphans
 	@scripts/wait_healthy.sh $(WAIT_TIMEOUT)
 
 .PHONY: up-ai-local
 up-ai-local: $(ENV_FILE)  ## start with vLLM/ollama on the GB10
-	@$(COMPOSE_SPARK) $(CORE_PROFILES) --profile ai-local up -d --remove-orphans
+	@$(COMPOSE_SPARK) $(CORE_PROFILES) --profile ai-local up -d --build --remove-orphans
 	@scripts/wait_healthy.sh 900
 
 .PHONY: up-ai-remote
 up-ai-remote: $(ENV_FILE)  ## start with a hosted provider behind the gateway
-	@$(COMPOSE) $(CORE_PROFILES) --profile ai-remote up -d --remove-orphans
+	@$(COMPOSE) $(CORE_PROFILES) --profile ai-remote up -d --build --remove-orphans
 	@scripts/wait_healthy.sh $(WAIT_TIMEOUT)
 
 .PHONY: down

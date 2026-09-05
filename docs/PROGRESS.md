@@ -45,7 +45,7 @@ instead of starting a second one.
 | T-005 | done | 2026-09-05 | settings, ids, hashing, errors, db, outbox, auth, otel, http. 91 tests. Outbox proves atomicity, at-least-once delivery, consumer idempotency across a simulated crash, retry after a failing consumer, and that a healthy consumer is not re-invoked on retry. Hash chain detects tamper, deletion and reordering. Notes: (a) outbox tests need PostgreSQL and skip cleanly without it, so `make test` still runs docker-free; (b) `ddl_statements()` splits SQL respecting $$-quoted bodies; (c) dev secret defaults are >=32 chars and refused outside demo. |
 | T-006 | done | 2026-09-05 | spec, grants, masking, evidence, registry. 34 tests. `registry.call()` is the only path: grant check, per-tool and per-run budgets, argument pinning to the run's case/member scope, input+output schema validation, purpose masking, EvidenceRef minting, and an Invocation audit row for every call including denials. Minted refs are validated against EvidenceRef 1.0. Note: a scope violation still consumes budget, deliberately, so an agent cannot probe other members' ids for free. |
 | T-007 | done | 2026-09-05 | `core` schema (16 tables) + REST facade + change feed + token-guarded writes. 21 tests. Writes refuse without `X-Approval-Token`, are idempotent on the caller's key (a replayed activation returns the first result and creates nothing), and every write is logged with its token. Notes: (a) the change-feed trigger takes its key column as an argument and reads it via jsonb, because plpgsql resolves every CASE branch and `NEW.account_id` fails on `member`; (b) queries name their columns from the response model rather than `SELECT *`, so a new column cannot leak into a strict response; (c) one parameterised Dockerfile at `docker/images/service/` serves all services. |
-| T-008 | todo | | |
+| T-008 | done | 2026-09-05 | All 18 services scaffolded on the shared `cio_common.service` factory (health, version, trace header, error envelopes, OTel). Each owns its schema with its own alembic version table (`alembic_version_<service>`), because one shared table made every service fail on the others' revision ids. Gateway does real reverse proxying with bearer-token checks, principal headers forwarded to services, trace-id minting, plus `/api/auth/dev-token` and `/api/services`. 14 gateway tests + 4 meta tests per service. |
 | T-010 | todo | | |
 | T-011 | todo | | |
 | T-012 | todo | | |
@@ -94,7 +94,30 @@ instead of starting a second one.
 | T-085 | todo | | |
 
 ## Phase verification
-(none yet)
+
+### P0 — verified 2026-09-05
+
+`scripts/verify_phase.sh P0` — 13 pass, 0 fail.
+
+| Step | Result |
+|---|---|
+| uv sync | PASS |
+| make lint | PASS |
+| make typecheck | PASS |
+| make test (285 tests) | PASS |
+| make env | PASS |
+| stack healthy (28 containers) | PASS |
+| postgres reachable | PASS |
+| pgvector installed | PASS |
+| MinIO console | PASS |
+| Temporal UI | PASS |
+| Grafana | PASS |
+| otel collector | PASS |
+| all 17 services /health through the gateway | PASS |
+
+Against `docs/14` P0 criteria: `make up` healthy, codegen round-trips,
+outbox/auth/hash tests green, core stub migrated and serving. The smoke
+population lands in T-020 (P2), which is where the synthetic generator arrives.
 
 ## Blocked
 (none)
