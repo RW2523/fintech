@@ -122,6 +122,9 @@ ignore = [
 # validated as bare identifiers by cols(), and a table name checked against the
 # SEEDABLE allow-list. Every request value is a bound parameter.
 "services/core_stub/app/routes.py" = ["S608"]
+# The interpreter dispatches on `_<AstNodeName>`, following the stdlib
+# ast.NodeVisitor convention. Lowercasing them would break the dispatch.
+"services/policy/app/expr.py" = ["N802"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["cio_common", "cio_contracts", "cio_tools", "ai", "ml", "synthetic", "workflows", "app"]
