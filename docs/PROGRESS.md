@@ -38,7 +38,7 @@ instead of starting a second one.
 
 | Task | Status | Date | Notes / deviations |
 |---|---|---|---|
-| T-001 | todo | | |
+| T-001 | done | 2026-09-05 | uv workspace on py3.12. Services/ai/ml/synthetic/workflows are **virtual** uv members (`package=false`); shared runtime deps live at the root so one venv serves all. Each service keeps `app/` per CLAUDE.md §3, so `make test` runs pytest per service dir to avoid the shared `app` module name colliding. Heavy ML/doc-AI deps are extras (`ml`, `docai`, `storage`) pulled in by the phase that needs them. |
 | T-002 | todo | | |
 | T-003 | todo | | |
 | T-004 | todo | | |

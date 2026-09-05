@@ -1,0 +1,17 @@
+[project]
+name = "cio-tools"
+version = "0.1.0"
+description = "Tool registry: grants, masking, EvidenceRef attachment"
+requires-python = ">=3.12,<3.13"
+dependencies = ["cio-common", "cio-contracts", "pydantic>=2.9"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cio_tools"]
+
+[tool.uv.sources]
+cio-common = { workspace = true }
+cio-contracts = { workspace = true }

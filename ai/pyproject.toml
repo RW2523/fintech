@@ -1,0 +1,9 @@
+[project]
+name = "cio-ai"
+version = "0.1.0"
+description = "Agents, tools, guardrails, RAG and evaluation harness"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[tool.uv]
+package = false

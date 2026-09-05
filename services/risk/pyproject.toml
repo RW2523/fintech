@@ -1,0 +1,9 @@
+[project]
+name = "cio-svc-risk"
+version = "0.1.0"
+description = "Credit Intelligence OS — risk service"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[tool.uv]
+package = false

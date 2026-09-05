@@ -171,38 +171,57 @@ Inputs: `PolicyResult`, `FactorScore[]` (from owning agents' tool calls), `Agent
 ```python
 STANCE = {"SUPPORT": 1.0, "LEAN_SUPPORT": 0.5, "REVIEW": 0.0, "LEAN_OPPOSE": -0.5, "OPPOSE": -1.0}
 
+
 def synthesize(pr, factors, opinions, dff, autonomy, snap, model_health) -> DecisionRecord:
     rec = DecisionRecord.skeleton(snap, pr)
     # 1. Hard gates
     if pr.blockers:
-        rec.recommendation, rec.route = route_for_blockers(pr)          # §3.6
+        rec.recommendation, rec.route = route_for_blockers(pr)  # §3.6
         rec.route_reasons.append("HARD_GATE:" + ",".join(pr.blockers))
         return finalize(rec, confidence=None, disagreement=None)
     if any(f.family == "INTEGRITY" and f.level == "CRITICAL" for f in factors):
-        rec.recommendation, rec.route = "COMPLIANCE_REVIEW", "COMPLIANCE"; return finalize(rec)
+        rec.recommendation, rec.route = "COMPLIANCE_REVIEW", "COMPLIANCE"
+        return finalize(rec)
     # 2. Evidence validity
     blocking = [u for o in opinions for u in o.unresolved if u.blocking]
     if blocking or pr.evidence_coverage < dff.min_evidence_coverage:
         rec.recommendation, rec.route = "MORE_INFORMATION_REQUIRED", "OFFICER_REVIEW"
-        rec.proposed_actions += request_actions(blocking); return finalize(rec)
+        rec.proposed_actions += request_actions(blocking)
+        return finalize(rec)
     # 3. Authority attached (never bypassed)
     rec.required_authority = pr.required_authority
     # 4. Weighted score
     ws = sum(dff.weights[f.family] * f.score for f in factors) / sum(dff.weights.values())
-    rec.factor_scores = {f.family: dict(score=f.score, weight=dff.weights[f.family], weighted=dff.weights[f.family]*f.score, calc_id=f.calc_id) for f in factors}
+    rec.factor_scores = {
+        f.family: dict(
+            score=f.score,
+            weight=dff.weights[f.family],
+            weighted=dff.weights[f.family] * f.score,
+            calc_id=f.calc_id,
+        )
+        for f in factors
+    }
     rec.weighted_score = round(ws, 1)
-    rec.recommendation = "APPROVE" if ws >= dff.thresholds.approve else "DECLINE" if ws < dff.thresholds.decline else "REVIEW"
+    rec.recommendation = (
+        "APPROVE" if ws >= dff.thresholds.approve else "DECLINE" if ws < dff.thresholds.decline else "REVIEW"
+    )
     mark_decisive(rec.factor_scores)
     # 5. Confidence
     agent_conf = mean(o.confidence for o in opinions if o.agent_id != "challenger")
-    rec.confidence = round(gmean([pr.evidence_coverage, model_reliability(snap.model_versions, model_health), agent_conf]), 3)
+    rec.confidence = round(
+        gmean([pr.evidence_coverage, model_reliability(snap.model_versions, model_health), agent_conf]), 3
+    )
     # 6. Disagreement (reliability-weighted std-dev of stance values; BLOCK/NEED_MORE_EVIDENCE excluded)
-    pts = [(STANCE[o.stance], dff.reliability_weights[o.agent_id]) for o in opinions if o.stance in STANCE and o.agent_id != "challenger"]
+    pts = [
+        (STANCE[o.stance], dff.reliability_weights[o.agent_id])
+        for o in opinions
+        if o.stance in STANCE and o.agent_id != "challenger"
+    ]
     rec.disagreement = round(weighted_std(pts), 3)
     rec.challenger_open = any(o.agent_id == "challenger" and o.unresolved for o in opinions)
     # 7. Route
-    rec.route, rec.route_reasons = route(autonomy, rec, snap, model_health)          # §6
-    rec.would_change_outcome = counterfactuals(pr, factors, dff, rec)               # §5.1
+    rec.route, rec.route_reasons = route(autonomy, rec, snap, model_health)  # §6
+    rec.would_change_outcome = counterfactuals(pr, factors, dff, rec)  # §5.1
     return finalize(rec)
 ```
 
@@ -253,22 +272,40 @@ Routing algorithm:
 ```python
 def route(autonomy, rec, snap, model_health):
     reasons = []
-    if kill_switch_active(snap.product_code): return "OFFICER_REVIEW", ["KILL_SWITCH"]
-    base = {"APPROVE": "OFFICER_REVIEW", "DECLINE": "OFFICER_REVIEW", "REVIEW": "OFFICER_REVIEW",
-            "ENHANCED_ASSESSMENT": "ENHANCED_ASSESSMENT", "COMPLIANCE_REVIEW": "COMPLIANCE"}[rec.recommendation]
-    if rec.required_authority == "SENIOR_OFFICER": base = "SENIOR_REVIEW"
-    if rec.required_authority == "CREDIT_COMMITTEE": base = "COMMITTEE"
-    if rec.disagreement > 0.60: base, reasons = "ENHANCED_ASSESSMENT", reasons + ["DISAGREEMENT_HIGH"]
-    if autonomy.setting != "AUTONOMOUS_WITHIN_LIMITS": return base, reasons + [f"SETTING:{autonomy.setting}"]
+    if kill_switch_active(snap.product_code):
+        return "OFFICER_REVIEW", ["KILL_SWITCH"]
+    base = {
+        "APPROVE": "OFFICER_REVIEW",
+        "DECLINE": "OFFICER_REVIEW",
+        "REVIEW": "OFFICER_REVIEW",
+        "ENHANCED_ASSESSMENT": "ENHANCED_ASSESSMENT",
+        "COMPLIANCE_REVIEW": "COMPLIANCE",
+    }[rec.recommendation]
+    if rec.required_authority == "SENIOR_OFFICER":
+        base = "SENIOR_REVIEW"
+    if rec.required_authority == "CREDIT_COMMITTEE":
+        base = "COMMITTEE"
+    if rec.disagreement > 0.60:
+        base, reasons = "ENHANCED_ASSESSMENT", reasons + ["DISAGREEMENT_HIGH"]
+    if autonomy.setting != "AUTONOMOUS_WITHIN_LIMITS":
+        return base, reasons + [f"SETTING:{autonomy.setting}"]
     band = band_for(snap.requested_amount, autonomy.bands)
     checks = {
-      "BAND": band.autonomous_eligible, "REC": rec.recommendation in cond.recommendation_in,
-      "CONF": rec.confidence >= cond.min_confidence, "DISAGREE": rec.disagreement <= cond.max_disagreement,
-      "CHALLENGER": not rec.challenger_open, "GATES": no_exceptions(rec), "INTEGRITY": max_open_severity(rec) <= cond.max_sev,
-      "WATCHLIST": not watchlist(snap.member_id), "HARDSHIP": not active_hardship(snap.member_id),
-      "MODEL_HEALTH": model_health == "GREEN", "CASE_TYPE": snap.case_type in cond.case_type_in }
+        "BAND": band.autonomous_eligible,
+        "REC": rec.recommendation in cond.recommendation_in,
+        "CONF": rec.confidence >= cond.min_confidence,
+        "DISAGREE": rec.disagreement <= cond.max_disagreement,
+        "CHALLENGER": not rec.challenger_open,
+        "GATES": no_exceptions(rec),
+        "INTEGRITY": max_open_severity(rec) <= cond.max_sev,
+        "WATCHLIST": not watchlist(snap.member_id),
+        "HARDSHIP": not active_hardship(snap.member_id),
+        "MODEL_HEALTH": model_health == "GREEN",
+        "CASE_TYPE": snap.case_type in cond.case_type_in,
+    }
     failed = [k for k, ok in checks.items() if not ok]
-    if failed: return base, reasons + [f"AUTONOMY_FAIL:{k}" for k in failed]
+    if failed:
+        return base, reasons + [f"AUTONOMY_FAIL:{k}" for k in failed]
     sampled = random_draw(seed=snap.snapshot_id) < autonomy.sampling.rate
     return "AUTONOMOUS", reasons + (["SAMPLED"] if sampled else [])
 ```
