@@ -8,14 +8,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cio_common.ids import is_id
 from cio_common.outbox import Event, claim_batch, dispatch_once, emit, mark_processed
-
-pytestmark = pytest.mark.asyncio
 
 
 async def _emit(db: AsyncSession, name: str = "application.submitted", **kw: object) -> str:

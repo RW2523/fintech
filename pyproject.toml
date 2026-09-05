@@ -112,6 +112,9 @@ ignore = [
 # Exception names mirror the wire error codes in docs/08 one-for-one
 # (NOT_FOUND -> NotFound). An `...Error` suffix would break that mapping.
 "libs/cio_common/cio_common/errors.py" = ["N818"]
+# ToolDenied and BudgetExceeded name the denial, which is what appears in the
+# audit record; an `...Error` suffix would read worse at every call site.
+"libs/cio_tools/cio_tools/grants.py" = ["N818"]
 "synthetic/**" = ["S311"]   # non-crypto RNG is the point
 "contracts/codegen/**" = ["S603", "S607"]
 

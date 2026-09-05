@@ -14,6 +14,7 @@ CORE_PROFILES := --profile core --profile services --profile observability
 WAIT_TIMEOUT ?= 300
 PHASE       ?=
 SERVICES    := $(notdir $(wildcard services/*))
+LIBS        := $(notdir $(wildcard libs/*))
 
 # ---------------------------------------------------------------------------
 # meta
@@ -111,7 +112,10 @@ fmt:  ## ruff format + import fixes
 
 .PHONY: typecheck
 typecheck:  ## mypy over libs, services, workflows, ai, ml, synthetic
-	@$(UV) run mypy libs workflows ai ml synthetic tests
+	@# each library and service is its own import root (they share module names
+	@# such as `tests` and `app`), so mypy runs once per root
+	@for l in $(LIBS); do $(UV) run mypy "libs/$$l/$$l" "libs/$$l/tests" || exit 1; done
+	@$(UV) run mypy workflows ai ml synthetic tests
 	@for s in $(SERVICES); do \
 	  if compgen -G "services/$$s/app/*.py" > /dev/null; then \
 	    $(UV) run mypy "services/$$s/app" || exit 1; \
