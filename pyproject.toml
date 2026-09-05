@@ -109,6 +109,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S", "N802"]
+# Exception names mirror the wire error codes in docs/08 one-for-one
+# (NOT_FOUND -> NotFound). An `...Error` suffix would break that mapping.
+"libs/cio_common/cio_common/errors.py" = ["N818"]
 "synthetic/**" = ["S311"]   # non-crypto RNG is the point
 "contracts/codegen/**" = ["S603", "S607"]
 
