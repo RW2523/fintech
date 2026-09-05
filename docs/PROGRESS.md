@@ -1,6 +1,40 @@
 # Progress
 
-Environment: DGX Spark (record `uname -a`, CUDA version, Docker version, vLLM/ollama image tags and measured tok/s here).
+## Environment (measured 2026-09-05)
+
+| Fact | Value | Spec expectation (`docs/02`) | Status |
+|---|---|---|---|
+| `uname -m` / kernel | aarch64 · 6.17.0-1026-nvidia | aarch64 | OK |
+| OS | Ubuntu 24.04.4 LTS | DGX OS (Ubuntu 24.04 based) | OK |
+| GPU | NVIDIA GB10, driver 580.159.03 | GB10 Grace Blackwell | OK |
+| CUDA | 13.0 (V13.0.88) | CUDA 13.x | OK |
+| CPU cores | 20 | 20 Arm cores | OK |
+| Memory | 121 GB total · ~47 GB in use · ~73 GB available | 128 GB unified; build budgets ~104 GB | **CONSTRAINED** |
+| Disk | 3.7 TB, 2.3 TB free | ≥ 200 GB free | OK |
+| Docker / Compose | 29.2.1 / v5.0.2 | ≥ 24 | OK |
+| uv | 0.10.12 | required | OK |
+| Node | v22.23.1 | Node 20 LTS | newer, verify web build |
+| Python (system) | 3.13.11 | 3.12 via uv | uv must pin 3.12 |
+| vLLM / ollama image tags | not yet pulled | pin validated tag | pending T-003 |
+| Measured tok/s | not yet measured | record at P4 | pending |
+
+### Pre-existing workload on this host (affects T-002/T-003)
+
+An unrelated `echomind` stack is running in Docker and holds resources this build's
+compose profile assumes are free:
+
+| Conflict | Detail | Affected task |
+|---|---|---|
+| Port 3000 | `echomind-frontend` — spec assigns 3000 to Grafana | T-003 |
+| Port 11434 | `echomind-ollama` — spec assigns 11434 to the ollama fallback | T-003 |
+| GPU memory | ~33 GB held by echomind (`trtllm-serve` + python workers) | T-040 |
+| Host memory | ~47 GB in use, leaving ~73 GB vs the ~104 GB budgeted in `docs/02 §4.3` | T-040 |
+
+Resolution options (decide before T-003, record as an ADR if it changes the spec):
+stop the echomind stack for demo runs; remap Grafana/ollama ports in `docker/.env`;
+or reuse the running ollama (it already serves `bge-m3`, the spec's `embed` model)
+instead of starting a second one.
+
 
 | Task | Status | Date | Notes / deviations |
 |---|---|---|---|
