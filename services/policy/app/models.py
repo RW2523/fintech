@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -147,3 +148,24 @@ class RouteRequest(Strict):
     member_watchlist: bool = False
     active_hardship_arrangement: bool = False
     max_open_integrity_severity: str = Field(default="LOW", pattern="^(LOW|MEDIUM|HIGH|CRITICAL)$")
+
+
+class SandboxRange(Strict):
+    """Which decided cases to replay."""
+
+    date_from: datetime | None = None
+    date_to: datetime | None = None
+    snapshot_ids: list[str] = Field(default_factory=list)
+    limit: int = Field(default=5000, ge=1, le=20000)
+
+
+class SandboxReplayRequest(Strict):
+    """Replay stored cases under a candidate pack (docs/05 §7)."""
+
+    product_code: str = "PF-STD"
+    policy_version: str | None = None
+    candidate: dict[str, Any] = Field(
+        default_factory=dict, description="Patches keyed by file: {'dff': {'weights': {...}}}."
+    )
+    range: SandboxRange = Field(default_factory=SandboxRange)
+    compare_to: str = "current"

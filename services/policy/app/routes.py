@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from app.affordability import AffordabilityInputs, compute
 from app.autonomy import AutonomyInputs
 from app.autonomy import route as route_case
+from app.db import session
 from app.evaluate import evaluate_case
 from app.factors import FactorScore, score_family
 from app.models import (
@@ -17,12 +18,16 @@ from app.models import (
     EvaluateRequest,
     FactorScoreRequest,
     RouteRequest,
+    SandboxReplayRequest,
     SynthesizeRequest,
 )
 from app.packs import PackError, PolicyPack, available_packs, load_pack
+from app.repository import load_replay_cases, save_sandbox_run
+from app.sandbox import replay as run_replay
 from app.synthesize import SynthesisInputs
 from app.synthesize import synthesize as run_synthesis
 from cio_common.errors import NotFound, ValidationFailed
+from cio_common.ids import new_id
 
 router = APIRouter(prefix="/policy", tags=["policy"])
 
@@ -212,4 +217,41 @@ async def evaluate_route(body: RouteRequest) -> dict[str, Any]:
         "failed_conditions": decision.failed_conditions,
         "autonomy_version": pack.autonomy_version,
         "setting": pack.autonomy["setting"],
+    }
+
+
+@router.post("/sandbox/replay", summary="Replay decided cases under a candidate pack")
+async def sandbox_replay(body: SandboxReplayRequest) -> dict[str, Any]:
+    """No model is called: stored opinions are reused and the code re-decides."""
+    pack = _pack(body.product_code, body.policy_version)
+
+    async with session() as db:
+        cases = await load_replay_cases(
+            db,
+            product_code=pack.product,
+            date_from=body.range.date_from,
+            date_to=body.range.date_to,
+            snapshot_ids=body.range.snapshot_ids or None,
+            limit=body.range.limit,
+        )
+        if not cases:
+            raise NotFound("no decided cases in that range to replay")
+
+        report = run_replay(pack, cases, body.candidate)
+        sandbox_id = new_id("sbx")
+        await save_sandbox_run(
+            db,
+            sandbox_id=sandbox_id,
+            product_code=pack.product,
+            candidate=body.candidate,
+            case_range=body.range.model_dump(mode="json"),
+            results=report.as_dict(),
+        )
+
+    return {
+        "sandbox_id": sandbox_id,
+        "product_code": pack.product,
+        "policy_version": pack.policy_version,
+        "candidate": body.candidate,
+        **report.as_dict(),
     }
