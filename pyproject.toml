@@ -16,6 +16,7 @@ dependencies = [
   "sqlalchemy[asyncio]>=2.0",
   "asyncpg>=0.30",
   "alembic>=1.14",
+  "psycopg[binary]>=3.2",
   "redis>=5.2",
   "orjson>=3.10",
   "pyyaml>=6.0",
@@ -117,6 +118,10 @@ ignore = [
 "libs/cio_tools/cio_tools/grants.py" = ["N818"]
 "synthetic/**" = ["S311"]   # non-crypto RNG is the point
 "contracts/codegen/**" = ["S603", "S607"]
+# The only values interpolated into SQL here are response-model field names,
+# validated as bare identifiers by cols(), and a table name checked against the
+# SEEDABLE allow-list. Every request value is a bound parameter.
+"services/core_stub/app/routes.py" = ["S608"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["cio_common", "cio_contracts", "cio_tools", "ai", "ml", "synthetic", "workflows", "app"]

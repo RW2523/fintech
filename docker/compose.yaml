@@ -10,8 +10,6 @@
 name: ${COMPOSE_PROJECT_NAME:-cio}
 
 x-service-defaults: &service-defaults
-  build:
-    context: ./images/service-placeholder
   restart: unless-stopped
   depends_on:
     postgres: { condition: service_healthy }
@@ -258,6 +256,10 @@ services:
   # ==========================================================================
   gateway:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: gateway }
     environment:
       <<: *service-env
       SERVICE_NAME: gateway
@@ -271,6 +273,10 @@ services:
       start_period: 20s
   application:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: application }
     environment:
       <<: *service-env
       SERVICE_NAME: application
@@ -283,6 +289,10 @@ services:
       start_period: 20s
   document:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: document }
     environment:
       <<: *service-env
       SERVICE_NAME: document
@@ -295,6 +305,10 @@ services:
       start_period: 20s
   member_intelligence:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: member_intelligence }
     environment:
       <<: *service-env
       SERVICE_NAME: member_intelligence
@@ -307,6 +321,10 @@ services:
       start_period: 20s
   policy:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: policy }
     environment:
       <<: *service-env
       SERVICE_NAME: policy
@@ -319,6 +337,10 @@ services:
       start_period: 20s
   feature:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: feature }
     environment:
       <<: *service-env
       SERVICE_NAME: feature
@@ -331,6 +353,10 @@ services:
       start_period: 20s
   risk:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: risk }
     environment:
       <<: *service-env
       SERVICE_NAME: risk
@@ -343,6 +369,10 @@ services:
       start_period: 20s
   fraud:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: fraud }
     environment:
       <<: *service-env
       SERVICE_NAME: fraud
@@ -355,6 +385,10 @@ services:
       start_period: 20s
   lmi:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: lmi }
     environment:
       <<: *service-env
       SERVICE_NAME: lmi
@@ -367,6 +401,10 @@ services:
       start_period: 20s
   committee:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: committee }
     environment:
       <<: *service-env
       SERVICE_NAME: committee
@@ -379,6 +417,10 @@ services:
       start_period: 20s
   core_stub:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: core_stub }
     environment:
       <<: *service-env
       SERVICE_NAME: core_stub
@@ -391,6 +433,10 @@ services:
       start_period: 20s
   agent_runtime:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: agent_runtime }
     environment:
       <<: *service-env
       SERVICE_NAME: agent_runtime
@@ -403,6 +449,10 @@ services:
       start_period: 20s
   decision:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: decision }
     environment:
       <<: *service-env
       SERVICE_NAME: decision
@@ -415,6 +465,10 @@ services:
       start_period: 20s
   execution:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: execution }
     environment:
       <<: *service-env
       SERVICE_NAME: execution
@@ -427,6 +481,10 @@ services:
       start_period: 20s
   notification:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: notification }
     environment:
       <<: *service-env
       SERVICE_NAME: notification
@@ -439,6 +497,10 @@ services:
       start_period: 20s
   audit:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: audit }
     environment:
       <<: *service-env
       SERVICE_NAME: audit
@@ -451,6 +513,10 @@ services:
       start_period: 20s
   governance:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: governance }
     environment:
       <<: *service-env
       SERVICE_NAME: governance
@@ -463,6 +529,10 @@ services:
       start_period: 20s
   llm_gateway:
     <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: docker/images/service/Dockerfile
+      args: { SERVICE: llm_gateway }
     environment:
       <<: *service-env
       SERVICE_NAME: llm_gateway

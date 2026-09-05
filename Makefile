@@ -71,8 +71,8 @@ ps: $(ENV_FILE)  ## show container health
 	@$(COMPOSE) $(CORE_PROFILES) ps --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}'
 
 .PHONY: migrate
-migrate:  ## alembic upgrade head for every service
-	@$(MAKE) todo TASK=T-007
+migrate: $(ENV_FILE)  ## alembic upgrade head for every service
+	@scripts/migrate.sh $(S)
 
 # ---------------------------------------------------------------------------
 # contracts and data
@@ -128,7 +128,8 @@ test:  ## unit + contract tests (no docker)
 	@for s in $(SERVICES); do \
 	  if compgen -G "services/$$s/tests/test_*.py" > /dev/null; then \
 	    echo "--- services/$$s"; \
-	    ( cd "services/$$s" && $(UV) run pytest -c pyproject.toml --rootdir=. tests ) || exit 1; \
+	    ( cd "services/$$s" && $(UV) run pytest -c "$(CURDIR)/pyproject.toml" --rootdir=. \
+	        -o testpaths=tests tests ) || exit 1; \
 	  fi; \
 	done
 
