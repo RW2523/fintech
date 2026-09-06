@@ -409,3 +409,54 @@ def test_the_prediction_rule_does_not_catch_questions_about_the_record() -> None
         "What would change the outcome?",
     ):
         assert check_question(question, case_id=CASE) is None, question
+
+
+# ---------------------------------------------------------------------------
+# an answer filed as a refusal (P8)
+# ---------------------------------------------------------------------------
+def test_a_refusal_that_cites_evidence_is_recognised_as_an_answer() -> None:
+    """The one repair the platform makes for itself.
+
+    A refusal carrying citations is an answer under the wrong heading. The
+    screen says so in those words and the corrective turn asks the model to
+    move it, which works most of the time and not always.
+    """
+    from app.copilot import _answer_filed_as_a_refusal
+
+    body = {
+        "schema": "copilot_answer/1.0",
+        "answer": "",
+        "citations": [{"ref": EVIDENCE, "what": "the record"}],
+        "refusal": {"reason": "The platform recommended COMPLIANCE_REVIEW.", "code": "NO_EVIDENCE"},
+    }
+    repaired = _answer_filed_as_a_refusal(body)
+
+    assert repaired is not None
+    assert repaired["answer"] == "The platform recommended COMPLIANCE_REVIEW."
+    assert "refusal" not in repaired
+    assert repaired["citations"] == body["citations"]
+
+
+def test_a_refusal_that_cites_nothing_is_left_alone() -> None:
+    """Promoting one would turn "I cannot see your application" into a claim
+    about the application."""
+    from app.copilot import _answer_filed_as_a_refusal
+
+    body = {
+        "schema": "copilot_answer/1.0",
+        "answer": "",
+        "citations": [],
+        "refusal": {"reason": "I can only read the case in front of you.", "code": "ANOTHER_CASE"},
+    }
+    assert _answer_filed_as_a_refusal(body) is None
+
+
+def test_an_answer_that_is_already_an_answer_is_not_touched() -> None:
+    from app.copilot import _answer_filed_as_a_refusal
+
+    body = {
+        "schema": "copilot_answer/1.0",
+        "answer": "All hard gates passed.",
+        "citations": [{"ref": EVIDENCE, "what": "the record"}],
+    }
+    assert _answer_filed_as_a_refusal(body) is None

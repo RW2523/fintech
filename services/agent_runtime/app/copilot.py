@@ -94,6 +94,34 @@ def refusal(reason: str, code: str = "NO_EVIDENCE") -> dict[str, Any]:
     }
 
 
+def _answer_filed_as_a_refusal(body: dict[str, Any]) -> dict[str, Any] | None:
+    """The same answer with the refusal label taken off, or None.
+
+    Only when the shape is unambiguous: an empty `answer`, a refusal with a
+    reason, and citations attached to it. A refusal that cites nothing is a
+    refusal and is left alone, because promoting one would turn "I cannot see
+    your application" into a claim about the application.
+
+    **Not used in the answer path, deliberately.** It was, for one build. A
+    refusal carrying citations is an answer under the wrong heading often
+    enough to be tempting, and when it is not, promoting it puts something in
+    front of a member that the model had itself declined to stand behind.
+    Measured: "No balance information available for the requested account" and
+    a fragment of the prompt's own scaffolding, both promoted into answers, for
+    a member whose balance the tools had returned. Refusing was the honest
+    outcome and the member got a sentence they could act on.
+
+    Kept because the shape is worth naming and the tests below pin what it
+    would and would not touch, and because the next person to have this idea
+    should find the reason it was abandoned rather than the idea alone.
+    """
+    refusal = body.get("refusal") or {}
+    reason = str(refusal.get("reason") or "").strip()
+    if str(body.get("answer") or "").strip() or not reason or not body.get("citations"):
+        return None
+    return {**{k: v for k, v in body.items() if k != "refusal"}, "answer": reason}
+
+
 def evidence_in(tool_results: list[dict[str, Any]]) -> set[str]:
     """Every identifier the tools in this run produced.
 
@@ -236,6 +264,7 @@ async def answer_question(
             )
 
         problems = [str(rejection.get("reason")) for rejection in result.rejections]
+
         if attempt > CORRECTIVE_ATTEMPTS:
             break
 

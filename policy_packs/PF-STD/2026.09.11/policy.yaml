@@ -1,0 +1,204 @@
+schema: policy/1.0
+product: PF-STD
+name: Personal Financing — Standard
+version: 2026.09.11
+effective_from: '2026-09-01'
+currency: LCU
+product_terms:
+  min_amount: 1000
+  max_amount: 150000
+  min_tenor: 6
+  max_tenor: 84
+  profit_rate: 0.065
+  instalment_formula: amount * (1 + profit_rate * tenor / 12) / tenor
+  min_share_units: 100
+  purposes_allowed:
+  - PERSONAL
+  - EDUCATION
+  - MEDICAL
+  - HOME_IMPROVEMENT
+  - DEBT_CONSOLIDATION
+  - VEHICLE
+  - OTHER
+eligibility:
+  rules:
+  - id: ELG-01
+    rule: member.status == 'ACTIVE'
+    on_fail: INELIGIBLE
+    reason_code: ELG-01
+    reads:
+    - member.status
+  - id: ELG-02
+    rule: member.tenure_months >= 6
+    on_fail: INELIGIBLE
+    reason_code: ELG-02
+    reads:
+    - member.tenure_months
+  - id: ELG-03
+    rule: identity.verified == true
+    on_fail: BLOCK_NORMAL_PATH
+    reason_code: ELG-03
+    reads:
+    - identity.verified
+  - id: ELG-04
+    rule: member.age >= 18 and member.age + requested.tenor / 12 <= 65
+    on_fail: INELIGIBLE
+    reason_code: ELG-04
+    reads:
+    - member.age
+    - requested.tenor
+  - id: ELG-05
+    rule: requested.amount >= product.min_amount and requested.amount <= product.max_amount
+      and requested.tenor >= product.min_tenor and requested.tenor <= product.max_tenor
+    on_fail: INELIGIBLE
+    reason_code: ELG-05
+    reads:
+    - requested.amount
+    - requested.tenor
+documents:
+  required:
+  - IDENTITY
+  - PAYSLIP_LATEST_3
+  - EMPLOYMENT_CONFIRMATION
+  optional:
+  - BANK_STATEMENT_3M
+  - PROVIDENT_FUND_STATEMENT
+  critical_fields:
+    PAYSLIP_LATEST_3:
+    - net_salary
+    - gross_salary
+    - employer_name
+    - period
+    IDENTITY:
+    - id_number
+    - name
+    - dob
+  min_critical_confidence: 0.85
+  rules:
+  - id: DOC-01
+    rule: documents.required_complete == true
+    on_fail: MORE_INFORMATION_REQUIRED
+    reason_code: DOC-01
+    reads:
+    - documents.required_complete
+  - id: DOC-04
+    rule: documents.min_critical_confidence >= 0.85
+    on_fail: MORE_INFORMATION_REQUIRED
+    reason_code: DOC-04
+    reads:
+    - documents.min_critical_confidence
+affordability:
+  income_basis: income.verified_monthly
+  dsr: (commitments.monthly + proposed.instalment) / income.verified_monthly
+  dsr_limit: 0.6
+  residual_income_min: 800
+  stress:
+  - case: income-10%
+    income_factor: 0.9
+  - case: rate+2%
+    profit_rate_delta: 0.02
+  - case: commit+10%
+    commitments_factor: 1.1
+  rules:
+  - id: AFF-01
+    rule: affordability.dsr <= affordability.dsr_limit
+    on_fail: POLICY_EXCEPTION_OR_DECLINE
+    reason_code: CAP-02
+    reads:
+    - affordability.dsr
+  - id: AFF-02
+    rule: all(affordability.stress, dsr <= affordability.dsr_limit + 0.05)
+    on_fail: FLAG:THIN_HEADROOM
+    reason_code: CAP-03
+    reads:
+    - affordability.stress
+  - id: AFF-03
+    rule: income.verified_monthly - commitments.monthly - proposed.instalment >= affordability.residual_income_min
+    on_fail: POLICY_EXCEPTION_OR_DECLINE
+    reason_code: CAP-02
+    reads:
+    - income.verified_monthly
+    - commitments.monthly
+    - proposed.instalment
+  - id: AFF-04
+    rule: income.verified == true
+    on_fail: MORE_INFORMATION_REQUIRED
+    reason_code: CAP-04
+    reads:
+    - income.verified
+exposure:
+  limit_by_grade:
+    A: 200000
+    B: 150000
+    C: 100000
+    D: 60000
+    E: 30000
+  rules:
+  - id: EXP-01
+    rule: member.total_exposure + requested.amount <= exposure.limit
+    on_fail: POLICY_EXCEPTION_OR_DECLINE
+    reason_code: EXP-02
+    reads:
+    - member.total_exposure
+    - requested.amount
+    - member.grade
+authority:
+  bands:
+  - max_amount: 20000
+    role: CREDIT_OFFICER
+  - max_amount: 75000
+    role: SENIOR_OFFICER
+  - max_amount: null
+    role: CREDIT_COMMITTEE
+  exception_approver: SENIOR_OFFICER
+routing:
+  rules:
+  - id: RT-01
+    when: fraud.level == 'HIGH'
+    route: COMPLIANCE_REVIEW
+  - id: RT-02
+    when: fraud.level == 'CRITICAL'
+    route: COMPLIANCE_REVIEW
+    on_fail: BLOCK_NORMAL_PATH
+  - id: RT-03
+    when: identity.mismatch == 'CRITICAL'
+    route: ENHANCED_ASSESSMENT
+  - id: RT-04
+    when: history.arrears_12m >= 2
+    route: ENHANCED_ASSESSMENT
+  - id: RT-05
+    when: requested.amount > actor.max_amount
+    route: ESCALATE
+tier_selection:
+  fast_path_max_amount: 10000
+  fast_path_requires:
+    clean_12m: true
+    no_findings: true
+    all_gates_pass: true
+  extended_triggers:
+    top_band: true
+    fraud_level_min: MEDIUM
+    identity_mismatch: true
+    active_hardship: true
+    disagreement_min: 0.35
+    contradiction: true
+reminders:
+  cadence:
+  - -14
+  - -7
+  - -3
+  - 0
+  - 1
+  priority_if: member.state in ['WATCH', 'ELEVATED'] or history.late_12m >= 1
+collections:
+  tiers:
+    P1: p_default_90d >= 0.60 or state == 'CRITICAL'
+    P2: state == 'ELEVATED'
+    P3: days_late >= 1 and days_late <= 7 and state == 'STABLE'
+  restructure_options:
+  - DEFERMENT_1M
+  - DEFERMENT_2M
+  - RESCHEDULE_EXTEND_12M
+  - RESCHEDULE_EXTEND_24M
+  restructure_authority: SENIOR_OFFICER
+  cap_per_officer: 25

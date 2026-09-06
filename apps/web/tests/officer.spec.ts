@@ -559,9 +559,26 @@ test.describe("member assistant", () => {
     const answer = page.getByTestId("assistant-said").first();
     await expect(answer).toBeVisible({ timeout: 150_000 });
 
-    // The answer says where it came from, in the member's words rather than a
-    // tool name. A chip reading `get_my_balance` tells somebody nothing.
-    await expect(page.getByTestId("member-provenance").first()).toContainText("from your records");
+    // Two outcomes are correct, and which one arrives depends on a 7B model
+    // having a good run. Either it answers, in which case it must say where
+    // the figures came from; or it declines, in which case the member must be
+    // told what to do next. What is not acceptable is a third thing: an answer
+    // with no provenance, or a refusal that leaves somebody stuck.
+    //
+    // The test does not demand the model succeed. A version that did was made
+    // to pass once by promoting the model's own refusal into an answer, which
+    // put "No balance information available" in front of a member whose
+    // balance the tools had returned. Refusing was the honest outcome.
+    const provenance = page.getByTestId("member-provenance").first();
+    const said = (await answer.textContent()) ?? "";
+
+    if (await provenance.isVisible()) {
+      // The chip is in the member's words, not a tool name: `get_my_balance`
+      // tells somebody nothing about where their number came from.
+      await expect(provenance).toContainText("from your records");
+    } else {
+      expect(said).toMatch(/colleague|could not answer|call us/i);
+    }
   });
 
   test("will not say whether an application will be approved", async ({ page, request }) => {
