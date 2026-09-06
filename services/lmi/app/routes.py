@@ -8,6 +8,7 @@ it has too little history to say anything.
 from __future__ import annotations
 
 import json
+import time
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -23,6 +24,7 @@ from app.detect import latest_features, run_detection
 from app.evaluate import evaluate_book
 from app.materialise import materialise
 from cio_common.errors import NotFound, ValidationFailed
+from cio_common.metrics import lmi_members_in_state, lmi_run_seconds
 
 router = APIRouter(tags=["lmi"])
 
@@ -48,9 +50,13 @@ async def run_materialisation(body: MaterialiseRequest) -> dict[str, Any]:
     at midnight.
     """
     as_of = date.fromisoformat(body.as_of) if body.as_of else _today()
+    started = time.perf_counter()
     async with session() as db:
         run = await materialise(db, as_of=as_of, member_ids=body.member_ids)
         await db.commit()
+    # The nightly run has a ten-minute budget (docs/07 §4.2). This is where it
+    # is seen to be inside it.
+    lmi_run_seconds.labels(stage="materialise").observe(time.perf_counter() - started)
     return run.as_dict()
 
 
@@ -354,6 +360,7 @@ async def evaluate(body: EvaluateRequest) -> dict[str, Any]:
     cannot follow.
     """
     as_of = date.fromisoformat(body.as_of) if body.as_of else _today()
+    started = time.perf_counter()
 
     model = None
     try:
@@ -374,6 +381,15 @@ async def evaluate(body: EvaluateRequest) -> dict[str, Any]:
             officers=body.officers,
         )
         await db.commit()
+
+    lmi_run_seconds.labels(stage="evaluate").observe(time.perf_counter() - started)
+
+    # The book by state, after the pass that just changed it. Read from the
+    # database rather than from the run's own counters: the run reports what it
+    # moved, and the dashboard needs where everybody stands.
+    async with session() as db:
+        for state, count in (await repository.state_counts(db)).items():
+            lmi_members_in_state.labels(state=state).set(count)
 
     return {**run.as_dict(), "scored": model is not None}
 

@@ -1,0 +1,128 @@
+{
+  "uid": "cio-tier-latency",
+  "title": "Tier latency",
+  "tags": [
+    "cio"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "description": "Where the time goes. A tier that drifts past its budget shows here before anybody complains, and the slowest-routes panel says which handler to open.",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "links": [],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Committee run p95 by tier",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(cio_committee_run_seconds_bucket[10m])))",
+          "refId": "A",
+          "legendFormat": "{{tier}}"
+        }
+      ],
+      "unit": "s"
+    },
+    {
+      "type": "timeseries",
+      "title": "Committee run median by tier",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, tier) (rate(cio_committee_run_seconds_bucket[10m])))",
+          "refId": "A",
+          "legendFormat": "{{tier}}"
+        }
+      ],
+      "unit": "s"
+    },
+    {
+      "type": "timeseries",
+      "title": "Request p95 by service",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service) (rate(cio_http_request_seconds_bucket[5m])))",
+          "refId": "A",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "unit": "s"
+    },
+    {
+      "type": "timeseries",
+      "title": "Requests in flight",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "cio_http_requests_in_flight",
+          "refId": "A",
+          "legendFormat": "{{service}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Slowest routes, p95",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "topk(10, histogram_quantile(0.95, sum by (le, service, route) (rate(cio_http_request_seconds_bucket[10m]))))",
+          "refId": "A",
+          "legendFormat": "{{service}} {{route}}"
+        }
+      ],
+      "unit": "s"
+    }
+  ]
+}

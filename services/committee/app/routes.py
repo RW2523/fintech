@@ -58,7 +58,13 @@ class RunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     snapshot: dict[str, Any]
-    policy_result: dict[str, Any] = Field(default_factory=dict)
+    #: The gate results the case has already been through. Required: a
+    #: committee cannot deliberate on a case whose gates nobody ran, and the
+    #: Synthesizer reads `rules` and `blockers` from here as its first step.
+    #: It used to default to an empty dict, and a run submitted without one
+    #: got a 500 from a KeyError five services deep instead of being told what
+    #: was missing.
+    policy_result: dict[str, Any]
     #: Per-agent tool results, keyed by agent id. Gathered by the caller,
     #: because the orchestrator does not decide what an agent may read.
     tool_results: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
@@ -84,6 +90,13 @@ async def create_run(body: RunRequest, response: Response) -> dict[str, Any]:
     snapshot_id = str(snapshot.get("snapshot_id") or "")
     if not snapshot_id:
         raise ValidationFailed("the snapshot has no snapshot_id")
+
+    missing = [key for key in ("rules", "blockers") if key not in body.policy_result]
+    if missing:
+        raise ValidationFailed(
+            f"the policy result is missing {', '.join(missing)}; run /policy/evaluate first",
+            missing=missing,
+        )
 
     product = str(snapshot.get("product_code") or "PF-STD")
     try:

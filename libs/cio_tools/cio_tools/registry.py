@@ -8,6 +8,7 @@ caller's purpose, mints EvidenceRefs, and records an invocation for audit.
 
 from __future__ import annotations
 
+import contextlib
 import inspect
 import time
 from collections.abc import Callable
@@ -250,6 +251,30 @@ class ToolRegistry:
                 error=error,
             )
         )
+        # Denials are the interesting series. A tool that is refused often is
+        # either an agent reaching past its grants or a grant that is wrong,
+        # and both need somebody to look; a dashboard that only counted
+        # successful calls would show neither.
+        _count_call(
+            tool=name,
+            agent_id=ctx.agent_id,
+            outcome="ok" if ok else ("denied" if denial_reason else "error"),
+        )
+
+
+def _count_call(*, tool: str, agent_id: str, outcome: str) -> None:
+    """Record one call for Prometheus, and never let telemetry break a call.
+
+    Imported lazily so this library does not require the metrics package to be
+    installed: the tool registry runs in tests and scripts that have no
+    interest in a scrape endpoint.
+    """
+    try:
+        from cio_common.metrics import tool_calls
+    except Exception:  # pragma: no cover - metrics are optional here
+        return
+    with contextlib.suppress(Exception):
+        tool_calls.labels(tool=tool, agent_id=agent_id, outcome=outcome).inc()
 
 
 #: The process-wide registry. Services register their tools into this at import.

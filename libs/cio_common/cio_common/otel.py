@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 from typing import Any
 
 from cio_common.settings import get_settings
 
-__all__ = ["current_trace_id", "init_otel", "span_attributes"]
+__all__ = ["current_trace_id", "init_otel", "inject_context", "span_attributes"]
 
 log = logging.getLogger(__name__)
 _INITIALISED: set[str] = set()
@@ -29,6 +30,16 @@ def init_otel(service_name: str, app: Any = None) -> None:
     settings = get_settings()
     if not settings.otel_enabled:
         log.info("OTel disabled for %s", service_name)
+        _INITIALISED.add(service_name)
+        return
+
+    # A service that was never told where to send traces does not send any.
+    # The setting has a default so a developer can point at a local collector
+    # without configuring one, but that default made every unit test open a
+    # connection to a collector that is not there: the suite spent its time
+    # retrying exports and printed a screen of connection errors per file.
+    if "OTEL_EXPORTER_OTLP_ENDPOINT" not in os.environ:
+        log.debug("no OTLP endpoint configured; %s runs untraced", service_name)
         _INITIALISED.add(service_name)
         return
 
@@ -55,7 +66,11 @@ def init_otel(service_name: str, app: Any = None) -> None:
         if app is not None:
             from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-            FastAPIInstrumentor.instrument_app(app, tracer_provider=provider)
+            # Health checks and Prometheus scrapes are excluded. Every service
+            # is polled for both several times a minute, and each poll was a
+            # trace: the real ones were needles in a haystack the platform
+            # generated itself, at four traces a minute per service.
+            FastAPIInstrumentor.instrument_app(app, tracer_provider=provider, excluded_urls="health,metrics")
 
         from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
@@ -77,6 +92,22 @@ def current_trace_id() -> str | None:
         if context.is_valid:
             return format(context.trace_id, "032x")
     return None
+
+
+def inject_context(headers: dict[str, str]) -> dict[str, str]:
+    """Add W3C trace context to outgoing headers, in place.
+
+    The gateway forwards a `traceparent` it was given, so a caller that sends
+    one gets a joined-up trace. A caller that sends none -- a browser, a curl,
+    the workbench -- got a gateway span and nothing behind it, because nothing
+    injected the context the gateway had just created. Every trace in Tempo was
+    one service deep.
+    """
+    with contextlib.suppress(Exception):
+        from opentelemetry.propagate import inject
+
+        inject(headers)
+    return headers
 
 
 def span_attributes(**kwargs: Any) -> None:

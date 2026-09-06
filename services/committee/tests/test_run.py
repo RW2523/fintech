@@ -14,8 +14,15 @@ from app.orchestrate import COUNCIL
 
 
 async def start(client: AsyncClient, snapshot: dict[str, Any], **overrides: Any) -> dict[str, Any]:
-    body = {"snapshot": snapshot, "policy_result": {"blockers": []}, **overrides}
+    body = {"snapshot": snapshot, "policy_result": POLICY_RESULT, **overrides}
     return (await client.post("/committee/runs", json=body)).json()
+
+
+#: What `/policy/evaluate` actually returns. The tests used to send only
+#: `blockers`, which the faked synthesizer accepted and the real one does
+#: not: it reads `rules` as its first step and a run submitted without them
+#: failed with a KeyError five services deep.
+POLICY_RESULT = {"blockers": [], "rules": [], "evidence_coverage": 1.0}
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +174,7 @@ async def test_a_second_submission_joins_the_run_that_exists(
     calls = len([c for c in fake.calls if c[0] == "invoke"])
 
     response = await client.post(
-        "/committee/runs", json={"snapshot": snapshot, "policy_result": {"blockers": []}, "top_band": True}
+        "/committee/runs", json={"snapshot": snapshot, "policy_result": POLICY_RESULT, "top_band": True}
     )
     assert response.status_code == 200
     body = response.json()
@@ -230,7 +237,7 @@ async def test_the_same_snapshot_gives_the_same_opinions(
     stances = {o["agent_id"]: o["stance"] for o in stored["opinions"]}
 
     second = await client.post(
-        "/committee/runs", json={"snapshot": snapshot, "policy_result": {"blockers": []}, "top_band": True}
+        "/committee/runs", json={"snapshot": snapshot, "policy_result": POLICY_RESULT, "top_band": True}
     )
     again = (await client.get(f"/committee/runs/{second.json()['run_id']}")).json()
     assert {o["agent_id"]: o["stance"] for o in again["opinions"]} == stances

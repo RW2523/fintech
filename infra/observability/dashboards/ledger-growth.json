@@ -1,0 +1,102 @@
+{
+  "uid": "cio-ledger-growth",
+  "title": "Ledger and audit growth",
+  "tags": [
+    "cio"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "description": "Two chains that must both keep growing and never be rewritten. A queue depth that only rises is a book nobody is working.",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "links": [],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Entries in each chain",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "cio_ledger_entries",
+          "refId": "A",
+          "legendFormat": "{{chain}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Entries appended per hour",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "sum by (chain) (increase(cio_ledger_entries[1h]))",
+          "refId": "A",
+          "legendFormat": "{{chain}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Decisions waiting for a person",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "cio_decision_queue_depth",
+          "refId": "A",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Chain verification",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cio-loki"
+      },
+      "targets": [
+        {
+          "expr": "{service=~\"cio-decision|cio-audit\"} |= \"verify\"",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

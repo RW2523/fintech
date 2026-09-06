@@ -32,6 +32,10 @@ dependencies = [
   "opentelemetry-instrumentation-fastapi>=0.49b0",
   "opentelemetry-instrumentation-httpx>=0.49b0",
   "opentelemetry-instrumentation-sqlalchemy>=0.49b0",
+  # Prometheus scrapes /metrics on every service (infra/observability/config
+  # /prometheus.yml). Until this was added, every scrape was a 404 and every
+  # dashboard drew an empty panel.
+  "prometheus-client>=0.21",
   # --- workspace libraries ------------------------------------------------
   "cio-contracts",
   "cio-common",

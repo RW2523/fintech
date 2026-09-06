@@ -1,0 +1,170 @@
+{
+  "uid": "cio-committee-run",
+  "title": "Committee run",
+  "tags": [
+    "cio"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "description": "One run, end to end. A DecisionRecord names its committee_run_id and its case_id; either one finds the trace, which spans the gateway, the committee, the agent runtime, the model gateway and the policy service.",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "links": [],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Runs per minute by outcome",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "sum by (outcome, tier) (rate(cio_committee_run_seconds_count[5m])) * 60",
+          "refId": "A",
+          "legendFormat": "{{tier}} {{outcome}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tool calls by outcome",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(cio_tool_calls_total[5m]))",
+          "refId": "A",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Denied tool calls by agent",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "sum by (agent_id, tool) (rate(cio_tool_calls_total{outcome=\"denied\"}[15m]))",
+          "refId": "A",
+          "legendFormat": "{{agent_id}} {{tool}}"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Logs for this case",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "cio-loki"
+      },
+      "targets": [
+        {
+          "expr": "{service=~\"cio-.+\"} |= \"$case_id\"",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "traces",
+      "title": "Find the run for a case",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "cio-tempo"
+      },
+      "targets": [
+        {
+          "queryType": "traceql",
+          "query": "{ .cio.case_id = \"$case_id\" }",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "traces",
+      "title": "Find the run by its committee_run_id",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "cio-tempo"
+      },
+      "targets": [
+        {
+          "queryType": "traceql",
+          "query": "{ .cio.run_id = \"$run_id\" }",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "case_id",
+        "type": "textbox",
+        "label": "Case id",
+        "query": "case_S1CLEAN",
+        "current": {
+          "text": "case_S1CLEAN",
+          "value": "case_S1CLEAN"
+        },
+        "description": "From the workbench, or the case_id on a DecisionRecord. Every committee run stamps it on its spans."
+      },
+      {
+        "name": "run_id",
+        "type": "textbox",
+        "label": "Committee run id",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "description": "The committee_run_id a DecisionRecord names."
+      }
+    ]
+  }
+}

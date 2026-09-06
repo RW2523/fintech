@@ -28,6 +28,10 @@ x-service-defaults: &service-defaults
     INTERNAL_KEY: ${INTERNAL_KEY:-change-me-internal}
     OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     OTEL_TRACES_EXPORTER: otlp
+    # Health checks and Prometheus scrapes are not traces. Every service is
+    # polled for both several times a minute, and each poll was producing one:
+    # a real trace was a needle in a haystack the platform generated itself.
+    OTEL_PYTHON_EXCLUDED_URLS: "health,metrics"
   # Trained model artifacts, mounted read-only.
   #
   # The image would carry them, and in a deployment it should: a service must

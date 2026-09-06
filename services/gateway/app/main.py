@@ -16,6 +16,7 @@ from app.routing import PUBLIC_PREFIXES, UPSTREAMS, upstream_for
 from app.settings import settings
 from cio_common.auth import ROLES, decode_token, issue_token
 from cio_common.errors import Forbidden, NotFound, ValidationFailed
+from cio_common.otel import inject_context
 from cio_common.service import TRACE_HEADER, create_app
 
 router = APIRouter()
@@ -104,6 +105,10 @@ async def proxy(service: str, path: str, request: Request) -> Response:
         if principal.member_id:
             headers["X-Principal-Member"] = principal.member_id
     headers["X-Internal-Key"] = settings().internal_key
+    # The trace the gateway is in, passed to whoever it calls. A `traceparent`
+    # the caller sent is already in `headers`; this fills it in when there was
+    # none, which is every request from the workbench.
+    inject_context(headers)
 
     assert _client is not None, "gateway client not started"
     # Services that run a model get the longer deadline; everything else keeps

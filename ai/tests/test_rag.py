@@ -43,15 +43,24 @@ def _database() -> None:
 def test_the_corpus_is_generated_from_the_policy_packs(corpus: Path) -> None:
     """A corpus maintained by hand drifts from the rules within a release, and
     then a citation looks like provenance without being it."""
-    names = {d.path.name for d in build_corpus()}
+    written = build_corpus()
+    names = {d.path.name for d in written}
     assert {
         "credit_policy.md",
-        "product_PF-STD.md",
-        "product_PF-SHARIAH.md",
         "authority_matrix.md",
         "collections_procedure.md",
         "hardship_policy.md",
     } <= names
+
+    # One product sheet per version, not per product. Every version used to be
+    # written to the same filename, so the corpus described whichever pack
+    # sorted last and a lookup could cite clauses from a version nobody decided
+    # under.
+    products = {(d.product, d.version) for d in written if d.product != "ALL"}
+    assert ("PF-STD", "2026.09.1") in products
+    assert ("PF-SHARIAH", "2026.09.1") in products
+    for product, version in products:
+        assert f"product_{product}_{version}.md" in names
 
 
 def test_every_rule_in_a_pack_becomes_a_clause(corpus: Path) -> None:
@@ -64,7 +73,9 @@ def test_every_rule_in_a_pack_becomes_a_clause(corpus: Path) -> None:
         if isinstance(section, dict)
         for rule in (section.get("rules") or [])
     }
-    indexed = {c.clause_id for c in chunk_document(corpus / "product_PF-STD.md")}
+    # The sheet for the version the pack was read from, not "the PF-STD sheet":
+    # there is one per version now.
+    indexed = {c.clause_id for c in chunk_document(corpus / "product_PF-STD_2026.09.1.md")}
     assert expected <= indexed
 
 

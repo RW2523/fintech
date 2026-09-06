@@ -22,6 +22,7 @@ from app.settings import settings
 from cio_common.auth import ROLES
 from cio_common.errors import Conflict, Forbidden, NotFound, ValidationFailed
 from cio_common.ids import derived_id, new_id
+from cio_common.metrics import decision_queue_depth, ledger_entries
 from cio_common.outbox import emit
 
 router = APIRouter(tags=["decision"])
@@ -190,6 +191,20 @@ async def queue(route: str | None = None, limit: int = 100) -> dict[str, Any]:
         )
 
     entries.sort(key=lambda e: (order.get(str(e["route"]), len(order)), str(e["created_at"])))
+    # Set on the read rather than on the write. The queue is derived from the
+    # ledger, so the only honest moment to measure its depth is when it has
+    # just been derived; a counter incremented on append would drift the first
+    # time a decision was superseded.
+    waiting: dict[str, int] = dict.fromkeys(ROUTE_PRIORITY, 0)
+    for entry in entries:
+        if not entry.get("decided"):
+            waiting[str(entry.get("route") or "UNKNOWN")] = (
+                waiting.get(str(entry.get("route") or "UNKNOWN"), 0) + 1
+            )
+    for name, depth in waiting.items():
+        decision_queue_depth.labels(route=name).set(depth)
+    ledger_entries.labels(chain="ledger").set(len(rows))
+
     return {"count": len(entries), "routes": list(ROUTE_PRIORITY), "decisions": entries}
 
 

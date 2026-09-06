@@ -33,7 +33,9 @@ async def extended(client: AsyncClient, snapshot: dict[str, Any], **overrides: A
     """Start a run that qualifies for Tier 2."""
     body = {
         "snapshot": snapshot,
-        "policy_result": {"blockers": []},
+        # Both keys the Synthesizer reads. `blockers` alone is a shape the
+        # evaluator never returns.
+        "policy_result": {"blockers": [], "rules": [], "evidence_coverage": 1.0},
         "top_band": True,
         **overrides,
     }
@@ -294,7 +296,16 @@ async def test_a_standard_run_does_not_repair(client: AsyncClient, snapshot: Any
     """docs/06 §8 — REPAIR is Tier 2 only. A Standard case with a reservation
     routes to a person instead, which is cheaper and just as safe."""
     challenger_wants(fake, gap(), then_clean=False)
-    body = await extended(client, snapshot, top_band=False, policy_result={"blockers": ["AFF-01"]})
+    body = await extended(
+        client,
+        snapshot,
+        top_band=False,
+        policy_result={
+            "blockers": ["AFF-01"],
+            "rules": [{"rule_id": "AFF-01", "result": "FAIL", "on_fail": "POLICY_EXCEPTION_OR_DECLINE"}],
+            "evidence_coverage": 1.0,
+        },
+    )
 
     assert body["tier"] == "STANDARD"
     assert "REPAIR" not in body["rounds"]

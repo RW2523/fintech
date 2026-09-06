@@ -24,6 +24,8 @@ from app.clients import Clients, UpstreamError
 from app.narrate import NARRATIVE_SCHEMA, degraded_narrative, narrative_prompt
 from app.tiers import AGENT_TIMEOUT_SHARE, TierDecision
 from cio_common.ids import derived_id, new_id
+from cio_common.metrics import committee_run_seconds
+from cio_common.otel import span_attributes
 
 __all__ = ["COUNCIL", "STATES", "RunResult", "run_committee"]
 
@@ -350,6 +352,19 @@ async def run_committee(
         state="CREATED",
         budgets=dict(tier.budget),
     )
+    # Stamped on the span so a run can be found in Tempo by what an officer
+    # actually has: a case id from the workbench or a run id from the decision
+    # record. Searching by raw trace id would mean adding one to a published
+    # contract, and an attribute search is the more useful thing anyway.
+    span_attributes(
+        **{
+            "cio.run_id": result.run_id,
+            "cio.snapshot_id": result.snapshot_id,
+            "cio.case_id": str(snapshot.get("case_id") or ""),
+            "cio.tier": result.tier,
+        }
+    )
+
     deadline = started + tier.budget["seconds"]
     per_agent = tier.budget["seconds"] * AGENT_TIMEOUT_SHARE
     tokens_each = max(tier.budget["tokens"] // max(len(COUNCIL) + 1, 1), 2000)
@@ -531,6 +546,7 @@ async def run_committee(
         result.state = "FAILED"
         result.detail = f"the synthesizer was unavailable: {exc}"
         result.seconds = time.perf_counter() - started
+        committee_run_seconds.labels(tier=result.tier, outcome="failed").observe(result.seconds)
         return result
 
     result.decision_record = record
@@ -559,4 +575,7 @@ async def run_committee(
 
     result.state = "DONE"
     result.seconds = time.perf_counter() - started
+    # Labelled by outcome as well as tier, because a tier that looks fast may
+    # be fast at failing. The two series have to be separable.
+    committee_run_seconds.labels(tier=result.tier, outcome="done").observe(result.seconds)
     return result

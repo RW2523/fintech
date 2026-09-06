@@ -11,9 +11,10 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from cio_common.errors import CioError
+from cio_common.metrics import CONTENT_TYPE_LATEST, render, time_request
 from cio_common.otel import current_trace_id, init_otel
 from cio_common.settings import Settings, get_settings
 
@@ -43,7 +44,6 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
-        init_otel(service, app)
         if on_startup is not None:
             await on_startup(app)
         yield
@@ -59,6 +59,18 @@ def create_app(
     app.state.service = service
     app.state.version = version
     app.state.settings = config
+
+    # Before the app serves anything, not in the lifespan. FastAPI builds its
+    # middleware stack on the first request, and the instrumentation adds
+    # middleware: adding it from a startup hook is silently too late, so twelve
+    # of the eighteen services produced no HTTP spans at all. The six that did
+    # were the ones making outbound calls, whose spans come from the httpx
+    # client rather than from the app.
+    init_otel(service, app)
+
+    # Registered before `correlate` so it is the outer middleware and times
+    # the whole handling, including the correlation header.
+    app.middleware("http")(time_request(service))
 
     @app.middleware("http")
     async def correlate(request: Request, call_next: Any) -> Any:
@@ -79,6 +91,15 @@ def create_app(
     @app.get("/health", tags=["meta"], summary="Liveness and version")
     async def health() -> dict[str, str]:
         return {"status": "ok", "service": service, "version": version}
+
+    @app.get("/metrics", tags=["meta"], summary="Prometheus scrape", include_in_schema=False)
+    async def metrics() -> Response:
+        """docs/13 §5. Prometheus scrapes this on every service.
+
+        It scraped it before this existed too, and got a 404 every fifteen
+        seconds from all eighteen, which is why the dashboards drew nothing.
+        """
+        return Response(content=render(), media_type=CONTENT_TYPE_LATEST)
 
     @app.get("/version", tags=["meta"], summary="Build and configuration version")
     async def version_info() -> dict[str, Any]:

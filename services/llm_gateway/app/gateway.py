@@ -29,6 +29,7 @@ from app.providers import (
     ProviderRejectedError,
     provider_for,
 )
+from cio_common.metrics import llm_errors, llm_request_seconds, llm_tokens
 
 __all__ = ["BadRequestError", "GatewayError", "Result", "SchemaViolationError", "complete", "embed"]
 
@@ -194,8 +195,13 @@ async def complete(
             # The provider answered: it understood and refused. Counting that
             # toward the breaker would let one bad request take the route down
             # for every caller.
+            llm_errors.labels(route=route, provider=adapter.name, kind="rejected").inc()
             raise BadRequestError(str(exc)) from exc
         except ProviderError as exc:
+            llm_errors.labels(route=route, provider=adapter.name, kind="unavailable").inc()
+            llm_request_seconds.labels(route=route, provider=adapter.name, outcome="error").observe(
+                time.perf_counter() - started
+            )
             breaker.record_failure(str(exc))
             raise GatewayError(str(exc)) from exc
         spent_in += completion.tokens_in
@@ -230,6 +236,19 @@ async def complete(
     # way, and a run that fails its schema twice must not get them back.
     ledger.record(run_id, spent_in + spent_out)
     run_usage = ledger.report(run_id)
+
+    # The bill, on the same terms as the budget. A schema failure spent its
+    # tokens too, so it is counted here rather than in the error path.
+    elapsed = time.perf_counter() - started
+    llm_tokens.labels(route=route, provider=completion.provider, direction="in").inc(spent_in)
+    llm_tokens.labels(route=route, provider=completion.provider, direction="out").inc(spent_out)
+    llm_request_seconds.labels(
+        route=route,
+        provider=completion.provider,
+        outcome="schema_violation" if errors else "ok",
+    ).observe(elapsed)
+    if errors:
+        llm_errors.labels(route=route, provider=completion.provider, kind="schema").inc()
 
     if errors:
         # A schema failure is not a provider failure: the model answered, it

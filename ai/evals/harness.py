@@ -33,6 +33,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -275,9 +276,22 @@ def evidence_offered(case: Any) -> set[str]:
     What a claim may cite. An id an officer could not open from this case is a
     citation that looks like proof and is not.
     """
-    offered = set(case.evidence_ids())
-    offered |= set(re.findall(r"\b[A-Z]{3}-\d{2}\b", json.dumps(case.tool_results)))
-    return offered
+    return set(case.evidence_ids())
+
+
+@lru_cache(maxsize=1)
+def pack_reason_codes() -> frozenset[str]:
+    """Every reason code the policy packs define.
+
+    A reason code is a clause in the pack, not something a tool returns, so
+    checking one against tool output was the wrong question: it scored 0.275
+    while every code an agent cited was real. What matters is that the clause
+    exists and that an officer opening it finds the rule the agent meant.
+    """
+    codes: set[str] = set()
+    for path in sorted((ROOT / "policy_packs").glob("*/*/*.yaml")):
+        codes |= set(re.findall(r"\b[A-Z]{3}-\d{2}\b", path.read_text()))
+    return frozenset(codes)
 
 
 async def invoke(client: httpx.AsyncClient, agent_id: str, case: Any) -> dict[str, Any]:
@@ -331,8 +345,18 @@ def score_agent(run: Run, case: Any, agent_id: str, body: dict[str, Any], offere
             else "",
         )
 
+        # The snapshot as well as the tools. An agent is given both, and the
+        # tenor, amount and product terms it reads there are not inventions:
+        # scoring against the tools alone marked "84 months" as an unsupported
+        # number when it is on the application.
+        given = json.dumps(
+            {
+                "snapshot": case.snapshot,
+                "tools": case.results_for([g.name for g in _grants(agent_id)]),
+            }
+        )
         available: set[str] = set()
-        for value in numbers_in(json.dumps(case.results_for([g.name for g in _grants(agent_id)]))):
+        for value in numbers_in(given):
             available |= rounded_forms(value)
         invented = sorted(numbers_in(str(claim.get("text") or "")) - available)
         run.add(
@@ -342,13 +366,14 @@ def score_agent(run: Run, case: Any, agent_id: str, body: dict[str, Any], offere
             f"claim {index}: {invented}" if invented else "",
         )
 
+    known = pack_reason_codes()
     for code in opinion.get("reason_codes") or []:
         if re.fullmatch(r"[A-Z]{3}-\d{2}", str(code)):
             run.add(
                 label,
                 "policy_citation_accuracy",
-                str(code) in offered,
-                f"cited {code}, which no tool in this run returned",
+                str(code) in known,
+                f"cited {code}, which no policy pack defines",
             )
 
 

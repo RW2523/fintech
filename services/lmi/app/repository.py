@@ -39,6 +39,18 @@ async def current_state(db: AsyncSession, member_id: str) -> dict[str, Any] | No
     return dict(row) if row else None
 
 
+async def state_counts(db: AsyncSession) -> dict[str, int]:
+    """How many members stand in each state right now.
+
+    A count rather than a list, because this backs a dashboard panel and a
+    gauge with one series per member is a gauge that takes Prometheus down.
+    """
+    rows = (
+        await db.execute(text("SELECT state, count(*) AS members FROM app_lmi.member_state GROUP BY state"))
+    ).mappings()
+    return {str(row["state"]): int(row["members"]) for row in rows}
+
+
 async def member_states(
     db: AsyncSession, *, state: str | None = None, limit: int = 500
 ) -> list[dict[str, Any]]:

@@ -58,8 +58,15 @@ class Clause:
 
     @property
     def key(self) -> str:
-        """Unique across the index, including a split clause's pieces."""
-        return f"{self.doc}:{self.clause_id}" + (f"#{self.part}" if self.parts > 1 else "")
+        """Unique across the index, including a split clause's pieces.
+
+        The version is part of the key. Two versions of a product sheet carry
+        the same clause ids, and without it the newer row overwrote the older
+        on upsert: a lookup filtered to the version a case was decided under
+        would have returned the text of a version adopted afterwards, which is
+        the one thing a policy citation must never do.
+        """
+        return f"{self.doc}@{self.version}:{self.clause_id}" + (f"#{self.part}" if self.parts > 1 else "")
 
     def as_row(self) -> dict[str, Any]:
         return {

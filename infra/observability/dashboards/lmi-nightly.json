@@ -1,0 +1,83 @@
+{
+  "uid": "cio-lmi-nightly",
+  "title": "LMI nightly",
+  "tags": [
+    "cio"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "description": "The nightly run has a ten-minute budget (docs/07). This is where it is seen to be inside it, and where a stage that has started to crawl shows.",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "links": [],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Batch duration by stage",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, stage) (rate(cio_lmi_run_seconds_bucket[1h])))",
+          "refId": "A",
+          "legendFormat": "{{stage}}"
+        }
+      ],
+      "unit": "s"
+    },
+    {
+      "type": "stat",
+      "title": "Longest stage, last 24h",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "max(histogram_quantile(0.95, sum by (le, stage) (rate(cio_lmi_run_seconds_bucket[24h]))))",
+          "refId": "A"
+        }
+      ],
+      "unit": "s"
+    },
+    {
+      "type": "timeseries",
+      "title": "Members in each early-warning state",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cio-prom"
+      },
+      "targets": [
+        {
+          "expr": "cio_lmi_members_in_state",
+          "refId": "A",
+          "legendFormat": "{{state}}"
+        }
+      ]
+    }
+  ]
+}
