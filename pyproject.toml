@@ -147,6 +147,8 @@ ignore = [
 # competing deadline over one the HTTP client already applies correctly.
 "services/llm_gateway/app/providers.py" = ["ASYNC109"]
 "services/llm_gateway/app/gateway.py" = ["ASYNC109"]
+# Same: the timeout goes to the HTTP client that enforces it.
+"ai/rag/index.py" = ["ASYNC109", "S608"]
 # The interpreter dispatches on `_<AstNodeName>`, following the stdlib
 # ast.NodeVisitor convention. Lowercasing them would break the dispatch.
 "services/policy/app/expr.py" = ["N802"]
