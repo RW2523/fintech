@@ -25,10 +25,13 @@ ROUTES = ("agent", "reasoning", "fast", "vision", "embed", "rerank")
 #: sees as "the answer was not JSON" rather than as the limit it is.
 DEFAULT_MAX_TOKENS = {"agent": 1600, "reasoning": 2000, "fast": 400, "vision": 1200, "embed": 0, "rerank": 0}
 
-#: A route that has not answered in this long is treated as down. Generous
-#: enough for a large local model's first token, short enough that a hung
-#: provider does not hold a committee run open.
-DEFAULT_TIMEOUT_SECONDS = 90.0
+#: A route that has not answered in this long is treated as down. Measured on
+#: the GB10: one Council agent decodes a schema-constrained opinion in about
+#: forty seconds, and five contending for one device stretch that past ninety.
+#: At ninety, two of twenty-five golden invocations failed as "unavailable"
+#: when the provider was working normally, which is the worst kind of error:
+#: it looks like an outage and is a queue.
+DEFAULT_TIMEOUT_SECONDS = 240.0
 
 
 @dataclass(frozen=True, slots=True)
