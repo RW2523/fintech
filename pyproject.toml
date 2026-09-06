@@ -40,13 +40,22 @@ dependencies = [
 
 [project.optional-dependencies]
 # Heavier stacks are pulled in by the phase that needs them (see docs/PROGRESS.md).
-ml = [
+# Array and dataframe work: needed from P2 for the synthetic programme.
+data = [
   "numpy>=2.1",
   "pandas>=2.2",
   "scipy>=1.14",
+]
+# The modelling stack: needed from P3.
+# numba and llvmlite are pinned because shap's dependency range still admits
+# llvmlite 0.36, which refuses to build on Python 3.12.
+ml = [
+  "credit-intelligence-os[data]",
   "scikit-learn>=1.5",
   "lightgbm>=4.5",
   "shap>=0.46",
+  "numba>=0.60",
+  "llvmlite>=0.43",
   "lifelines>=0.30",
   "ruptures>=1.1",
   "statsmodels>=0.14",

@@ -413,6 +413,27 @@ def _refuse_in_production() -> None:
         raise Forbidden("seed and reset endpoints are disabled outside development")
 
 
+async def _column_types(db: AsyncSession, table: str) -> dict[str, str]:
+    """Actual SQL type per column, so bound values are cast rather than guessed.
+
+    asyncpg will not coerce an ISO date string into a `date` column on its own,
+    and the seed loader sends JSON, so every parameter is cast explicitly.
+    """
+    rows = await db.execute(
+        text("""
+        SELECT a.attname AS column_name,
+               format_type(a.atttypid, a.atttypmod) AS sql_type
+        FROM pg_attribute a
+        JOIN pg_class c ON c.oid = a.attrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'core' AND c.relname = :table
+          AND a.attnum > 0 AND NOT a.attisdropped
+    """),
+        {"table": table},
+    )
+    return {r["column_name"]: r["sql_type"] for r in rows.mappings()}
+
+
 @router.post("/admin/bulk", summary="Insert synthetic rows (seeding only)")
 async def bulk(body: BulkRequest) -> dict[str, Any]:
     _refuse_in_production()
@@ -425,13 +446,30 @@ async def bulk(body: BulkRequest) -> dict[str, Any]:
     if any(set(row) != set(columns) for row in body.rows):
         raise ValidationFailed("every row must carry the same columns")
 
-    placeholders = ", ".join(f":{c}" for c in columns)
-    statement = text(
-        f"INSERT INTO core.{body.table} ({', '.join(columns)}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
-    )
     async with session() as db:
+        types = await _column_types(db, body.table)
+        unknown = [c for c in columns if c not in types]
+        if unknown:
+            raise ValidationFailed(f"core.{body.table} has no column {unknown[0]!r}", columns=sorted(types))
+
+        # Scalars are bound as text and converted by PostgreSQL: asyncpg wants a
+        # real date or Decimal once it knows the target type, and the seed loader
+        # only has JSON. Arrays are bound directly, which asyncpg handles.
+        arrays = {c for c in columns if types[c].endswith("[]")}
+        placeholders = ", ".join(
+            f"CAST(:{c} AS {types[c]})" if c in arrays else f"CAST(CAST(:{c} AS text) AS {types[c]})"
+            for c in columns
+        )
+        statement = text(
+            f"INSERT INTO core.{body.table} ({', '.join(columns)}) "
+            f"VALUES ({placeholders}) ON CONFLICT DO NOTHING"
+        )
         for row in body.rows:
-            await db.execute(statement, row)
+            bound = {
+                key: value if (key in arrays or value is None) else str(value) for key, value in row.items()
+            }
+            await db.execute(statement, bound)
+
     return {"table": body.table, "inserted": len(body.rows)}
 
 
