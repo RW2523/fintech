@@ -112,6 +112,8 @@ class DecisionOutcome:
     token_id: str | None = None
     human_decision_id: str | None = None
     final_action: str | None = None
+    #: Set when the decision was made autonomously and drawn for review.
+    sample_id: str | None = None
 
 
 @dataclass

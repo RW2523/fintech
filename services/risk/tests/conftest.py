@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import socket
 from collections.abc import AsyncIterator
 from functools import lru_cache
@@ -13,25 +12,21 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+from cio_common.testing import prepared_test_database_url
+
 ROOT = Path(__file__).resolve().parents[3]
 
 
 @lru_cache(maxsize=1)
 def database_url() -> str:
-    if url := os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL"):
-        return url
-    values: dict[str, str] = {}
-    env = ROOT / "docker" / ".env"
-    if env.is_file():
-        for line in env.read_text().splitlines():
-            if "=" in line and not line.strip().startswith("#"):
-                key, _, value = line.partition("=")
-                values[key.strip()] = value.strip()
-    return (
-        f"postgresql+asyncpg://{values.get('POSTGRES_USER', 'cio')}:"
-        f"{values.get('POSTGRES_PASSWORD', '')}@localhost:"
-        f"{values.get('POSTGRES_PORT', '5432')}/{values.get('POSTGRES_DB', 'cio')}"
-    )
+    """The test database, never the demo one.
+
+    Truncating the tables a test exercises is the only way to test a chain or
+    a queue from a known start, and doing that to the demo database empties the
+    population, the loaded documents and the decisions in front of the
+    workbench without saying so.
+    """
+    return prepared_test_database_url(ROOT)
 
 
 @lru_cache(maxsize=1)

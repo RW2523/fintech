@@ -31,7 +31,23 @@ _AUTHORITY_ROUTE = {
     "CREDIT_COMMITTEE": "COMMITTEE",
 }
 
-_SEVERITY_ORDER = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+#: Least to most severe. NONE is here because the fraud service produces it for
+#: a case with no findings, and a router that could not name the cleanest
+#: possible case raised rather than routed it.
+_SEVERITY_ORDER = ["NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
+
+
+def _severity_rank(level: str | None) -> int:
+    """Where a severity sits, with an unrecognised one treated as the worst.
+
+    Failing closed matters more than failing loudly here: a level this router
+    does not know is a level it cannot reason about, and letting an unknown
+    through to an autonomous approval is the wrong way to be wrong.
+    """
+    try:
+        return _SEVERITY_ORDER.index(str(level or "NONE").upper())
+    except ValueError:
+        return len(_SEVERITY_ORDER)
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,8 +145,7 @@ def route(
         "DISAGREE": inputs.disagreement is not None and inputs.disagreement <= conditions["max_disagreement"],
         "CHALLENGER": not inputs.challenger_open,
         "GATES": inputs.hard_gate_exceptions == conditions["hard_gate_exceptions"],
-        "INTEGRITY": _SEVERITY_ORDER.index(inputs.max_open_integrity_severity)
-        <= _SEVERITY_ORDER.index(max_severity),
+        "INTEGRITY": _severity_rank(inputs.max_open_integrity_severity) <= _severity_rank(max_severity),
         "WATCHLIST": inputs.member_watchlist is conditions["member_watchlist"],
         "HARDSHIP": inputs.active_hardship_arrangement is conditions["active_hardship_arrangement"],
         "MODEL_HEALTH": inputs.model_health == conditions["model_health"],

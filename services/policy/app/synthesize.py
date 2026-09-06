@@ -69,6 +69,10 @@ class SynthesisInputs:
     autonomy: dict[str, Any]
     model_versions: dict[str, str]
     committee_run_id: str | None = None
+    #: What the autonomy document in force is called. Defaults to the pack's
+    #: own; an amendment names itself, so a record shows which dial setting it
+    #: was decided under and not merely which pack.
+    autonomy_version: str | None = None
     #: Proposals raised outside any opinion, such as the evidence requests a
     #: Tier 2 repair could not fill with a tool.
     proposed_actions: tuple[dict[str, Any], ...] = ()
@@ -276,7 +280,8 @@ def _skeleton(inputs: SynthesisInputs) -> dict[str, Any]:
         "opinions": [o["opinion_id"] for o in inputs.opinions if "opinion_id" in o],
         "policy_version": policy_result["policy_version"],
         "dff_version": f"dff/{inputs.product_code}/{inputs.dff['version']}",
-        "autonomy_version": f"autonomy/{inputs.product_code}/{inputs.autonomy['version']}",
+        "autonomy_version": inputs.autonomy_version
+        or f"autonomy/{inputs.product_code}/{inputs.autonomy['version']}",
         "model_versions": dict(inputs.model_versions),
         "budgets": {
             "tokens_used": 0,
@@ -457,6 +462,12 @@ def synthesize(inputs: SynthesisInputs) -> dict[str, Any]:
 
 
 def _integrity_level(factors: tuple[FactorScore, ...]) -> str:
+    """The worst open integrity finding, or LOW when none was reported.
+
+    LOW rather than NONE when the factor is absent: a case that did not report
+    an integrity level has not been shown to be clean, and reading silence as
+    the cleanest possible answer is how an unassessed case reaches autonomy.
+    """
     for factor in factors:
         if factor.family == "INTEGRITY" and factor.level:
             return factor.level

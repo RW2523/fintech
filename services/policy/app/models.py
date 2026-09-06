@@ -172,3 +172,37 @@ class SandboxReplayRequest(Strict):
     )
     range: SandboxRange = Field(default_factory=SandboxRange)
     compare_to: str = "current"
+
+
+# ---------------------------------------------------------------------------
+# the Autonomy Dial (docs/08 §6)
+# ---------------------------------------------------------------------------
+class Approver(Strict):
+    """One of the two people a dial change needs."""
+
+    role: str = Field(pattern="^(HEAD_OF_CREDIT|HEAD_OF_RISK)$")
+    actor_id: str = Field(min_length=1, max_length=64)
+
+
+class AutonomyChangeRequest(Strict):
+    """Move the dial. Only the parts of the autonomy document a dial change is
+    allowed to touch are here: the action levels and the kill-switch owners
+    come from the pack, so a setting change cannot become a rewrite of what the
+    platform may do at all."""
+
+    setting: str | None = Field(
+        default=None, pattern="^(ADVISE|ASSIST|ACT_WITH_APPROVAL|AUTONOMOUS_WITHIN_LIMITS)$"
+    )
+    bands: list[dict[str, Any]] | None = None
+    conditions: dict[str, Any] | None = None
+    sampling: dict[str, Any] | None = None
+    approvers: list[Approver]
+    reason: str = Field(default="", max_length=500)
+
+
+class KillSwitchRequest(Strict):
+    """Stop, or release. One owner either way."""
+
+    actor_id: str = Field(min_length=1, max_length=64)
+    actor_role: str = Field(min_length=2, max_length=32)
+    reason: str = Field(min_length=1, max_length=500)

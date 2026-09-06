@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -82,3 +83,59 @@ async def card(family: str, version: str) -> dict[str, Any]:
         return model_inventory.model_card(family, version)
     except (ArtifactError, FileNotFoundError) as exc:
         raise NotFound(str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# the autonomy programme, seen from oversight (docs/05 §6, docs/09 §6)
+# ---------------------------------------------------------------------------
+@router.get("/governance/autonomy", summary="Where the dial is set on every product")
+async def autonomy_overview() -> dict[str, Any]:
+    """One place to see how much the platform is doing on its own.
+
+    Read from the policy service rather than kept here, because a second copy
+    of the dial is a second answer to the only question that matters: what is
+    the setting right now. A product whose service cannot be reached is
+    reported as unreadable, not as ADVISE: not knowing is not the same as
+    knowing it is safe.
+    """
+    policy_url = os.environ.get("POLICY_URL", "http://policy:8004").rstrip("/")
+    products: list[dict[str, Any]] = []
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            listed = await client.get(f"{policy_url}/policy/products")
+            names = list(listed.json().get("products") or []) if listed.status_code == 200 else []
+        except httpx.HTTPError:
+            names = []
+        if not names:
+            names = ["PF-STD", "PF-SHARIAH"]
+
+        for product in names:
+            try:
+                response = await client.get(f"{policy_url}/autonomy/{product}")
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                products.append({"product_code": product, "readable": False, "detail": str(exc)})
+                continue
+            dial = response.json()
+            products.append(
+                {
+                    "product_code": product,
+                    "readable": True,
+                    "setting": dial.get("setting"),
+                    "effective_setting": dial.get("effective_setting"),
+                    "autonomy_version": dial.get("autonomy_version"),
+                    "kill_switch": dial.get("kill_switch"),
+                    "sampling": dial.get("sampling"),
+                    "last_change": (dial.get("history") or [{}])[0],
+                }
+            )
+
+    acting = [p for p in products if p.get("effective_setting") == "AUTONOMOUS_WITHIN_LIMITS"]
+    stopped = [p for p in products if (p.get("kill_switch") or {}).get("enabled")]
+    return {
+        "products": products,
+        "acting_alone": [p["product_code"] for p in acting],
+        "stopped": [p["product_code"] for p in stopped],
+        "unreadable": [p["product_code"] for p in products if not p.get("readable")],
+    }

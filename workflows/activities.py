@@ -222,6 +222,21 @@ async def decide(
 @activity.defn
 async def record_decision(case: CaseRef, record: dict[str, Any]) -> DecisionOutcome:
     """Append the record to the ledger. Nothing proceeds without this."""
+    # The sampling rate, the reviewing role and the deadline belong to the
+    # policy pack, so they are read from the dial rather than defaulted in the
+    # decision service. A rate the institution lowered must take effect on the
+    # next decision, not on the next deployment.
+    sampling: dict[str, Any] = {}
+    if record.get("sampled"):
+        try:
+            dial = await _get("policy", 8004, f"/autonomy/{case.product_code}")
+            sampling = dict(dial.get("sampling") or {})
+        except httpx.HTTPError:
+            # The review still gets queued, on the decision service's own
+            # defaults. A sample nobody reviews is worse than one reviewed by
+            # the wrong role.
+            sampling = {}
+
     appended = await _post(
         "decision",
         8012,
@@ -230,6 +245,7 @@ async def record_decision(case: CaseRef, record: dict[str, Any]) -> DecisionOutc
             "decision_record": record,
             "case_id": case.case_id,
             "member_id": case.member_id,
+            "sampling": sampling,
         },
     )
     return DecisionOutcome(
@@ -238,6 +254,7 @@ async def record_decision(case: CaseRef, record: dict[str, Any]) -> DecisionOutc
         route=record["route"],
         required_authority=record["required_authority"],
         ledger_entry_id=appended["entry_id"],
+        sample_id=appended.get("sample_id"),
     )
 
 

@@ -147,6 +147,10 @@ test-int:  ## integration tests against the running stack
 seed-demo:  ## put decided golden cases in front of the workbench
 	@$(UV) run python scripts/seed_demo_case.py
 
+.PHONY: autonomy-drill
+autonomy-drill:  ## turn the dial up, act alone, then stop (needs 'make up')
+	@$(UV) run python scripts/autonomy_drill.py
+
 .PHONY: test-e2e
 test-e2e:  ## Playwright smoke over the officer workbench (needs 'make up')
 	@if [ ! -d apps/web/node_modules ]; then \

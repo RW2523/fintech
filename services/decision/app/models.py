@@ -18,6 +18,9 @@ class RecommendationRequest(Strict):
     decision_record: dict[str, Any]
     case_id: str | None = None
     member_id: str | None = None
+    #: The pack's sampling block, so the review's role and deadline come from
+    #: the policy in force rather than from a constant here.
+    sampling: dict[str, Any] | None = None
 
 
 class OverrideReason(Strict):
@@ -69,3 +72,11 @@ class TokenRequest(Strict):
     human_decision_id: str | None = None
     issued_to: dict[str, Any] | None = None
     ttl_seconds: int = Field(default=86400, ge=60, le=86400)
+
+
+class SampleReviewRequest(Strict):
+    """A reviewer's verdict on a decision the platform made alone (docs/05 §6)."""
+
+    reviewer_id: str = Field(min_length=1, max_length=64)
+    verdict: str = Field(pattern="^(AGREE|DISAGREE|UNSURE)$")
+    notes: str = Field(default="", max_length=1000)

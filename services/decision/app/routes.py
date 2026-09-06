@@ -6,16 +6,22 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from sqlalchemy import text
 
 from app import ledger, tokens
 from app.authority import check_authority
 from app.db import session
-from app.models import HumanDecisionRequest, RecommendationRequest, TokenRequest
+from app.models import (
+    HumanDecisionRequest,
+    RecommendationRequest,
+    SampleReviewRequest,
+    TokenRequest,
+)
 from app.settings import settings
-from cio_common.errors import Conflict, NotFound, ValidationFailed
-from cio_common.ids import new_id
+from cio_common.auth import ROLES
+from cio_common.errors import Conflict, Forbidden, NotFound, ValidationFailed
+from cio_common.ids import derived_id, new_id
 
 router = APIRouter(tags=["decision"])
 
@@ -60,13 +66,54 @@ async def append_recommendation(body: RecommendationRequest) -> dict[str, Any]:
             },
         )
 
+        # docs/05 §6 — a sampled autonomous decision joins the review queue as
+        # it is recorded, in the same transaction. A queue written afterwards
+        # can be missed, and the one decision nobody looked at would be the one
+        # the platform made on its own.
+        sample = await _queue_sample(db, record, body.sampling)
+
     return {
         "decision_record_id": record["decision_record_id"],
         "entry_id": entry.entry_id,
         "seq": entry.seq,
         "hash": entry.hash,
         "prev_hash": entry.prev_hash,
+        "sample_id": sample,
     }
+
+
+async def _queue_sample(db: Any, record: dict[str, Any], sampling: dict[str, Any] | None) -> str | None:
+    """Put a sampled decision in front of a reviewer, or return None.
+
+    Only a decision the platform made alone is sampled: a case a person already
+    decided has been reviewed by definition, and putting it in the queue would
+    dilute the sample with cases nobody needs to look at again.
+    """
+    if record.get("route") != "AUTONOMOUS" or not record.get("sampled"):
+        return None
+
+    settings = sampling or {}
+    role = str(settings.get("reviewer_role") or "SENIOR_OFFICER")
+    hours = int(settings.get("sla_hours") or 24)
+    # Derived from the record, so replaying the same decision does not queue a
+    # second review of it.
+    sample_id = derived_id("smp", str(record["decision_record_id"]))
+
+    await db.execute(
+        text("""
+        INSERT INTO ledger.sample_review
+          (sample_id, decision_record_id, assigned_role, due_at)
+        VALUES (:sample_id, :record_id, :role, now() + make_interval(hours => :hours))
+        ON CONFLICT (sample_id) DO NOTHING
+    """),
+        {
+            "sample_id": sample_id,
+            "record_id": record["decision_record_id"],
+            "role": role,
+            "hours": hours,
+        },
+    )
+    return sample_id
 
 
 #: docs/09 §2 — the officer queue is sorted by how much attention a case needs,
@@ -122,6 +169,146 @@ async def queue(route: str | None = None, limit: int = 100) -> dict[str, Any]:
 
     entries.sort(key=lambda e: (order.get(str(e["route"]), len(order)), str(e["created_at"])))
     return {"count": len(entries), "routes": list(ROUTE_PRIORITY), "decisions": entries}
+
+
+#: Who may read any sample, not only their own. These are the roles that own
+#: the Autonomy Dial (docs/05 §6): the people accountable for the programme
+#: are the people who may look at what it did.
+SAMPLE_OVERSIGHT = frozenset({"HEAD_OF_CREDIT", "HEAD_OF_RISK"})
+
+
+# ---------------------------------------------------------------------------
+# the sampling queue (docs/05 §6, docs/08 §6)
+#
+# A share of what the platform decides alone is read by a person afterwards.
+# The point is not to catch a bad decision, though it might: it is to keep a
+# human eye on what autonomy is actually doing, at a rate the institution set.
+# ---------------------------------------------------------------------------
+@router.get("/samples", summary="Autonomous decisions waiting to be reviewed")
+async def samples(role: str | None = None, reviewed: bool = False, limit: int = 100) -> dict[str, Any]:
+    """Oldest deadline first: a sample review has an SLA, and a queue sorted by
+    arrival buries the one about to breach it."""
+    async with session() as db:
+        rows = (
+            (
+                await db.execute(
+                    text("""
+            SELECT s.sample_id, s.decision_record_id, s.assigned_role, s.due_at,
+                   s.reviewed_by, s.verdict, s.notes, s.created_at,
+                   r.case_id, r.recommendation, r.route
+              FROM ledger.sample_review s
+              LEFT JOIN app_decision.decision_record r
+                     ON r.decision_record_id = s.decision_record_id
+             WHERE (CAST(:role AS text) IS NULL OR s.assigned_role = CAST(:role AS text))
+               AND (s.verdict IS NOT NULL) = CAST(:reviewed AS boolean)
+             ORDER BY s.due_at ASC
+             LIMIT :limit
+        """),
+                    {"role": role, "reviewed": reviewed, "limit": limit},
+                )
+            )
+            .mappings()
+            .all()
+        )
+
+    now = datetime.now(UTC)
+    return {
+        "count": len(rows),
+        "samples": [
+            {
+                **dict(row),
+                # Stated rather than left to the reader to work out from a
+                # timestamp, because whether it is late is the thing that
+                # decides what they do next.
+                "overdue": row["verdict"] is None and row["due_at"] < now,
+            }
+            for row in rows
+        ],
+    }
+
+
+@router.post("/samples/{sample_id}/review", summary="Record a sample review")
+async def review_sample(sample_id: str, body: SampleReviewRequest, request: Request) -> dict[str, Any]:
+    """A verdict is written once. Reviewing again would let a disagreement be
+    quietly replaced by an agreement."""
+    async with session() as db:
+        row = (
+            (
+                await db.execute(
+                    text("""
+            SELECT decision_record_id, assigned_role, verdict
+              FROM ledger.sample_review WHERE sample_id = :id
+        """),
+                    {"id": sample_id},
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if row is None:
+            raise NotFound(f"no sample {sample_id!r}")
+        if row["verdict"] is not None:
+            raise Conflict(
+                f"sample {sample_id!r} was already reviewed",
+                verdict=row["verdict"],
+            )
+
+        # The header carries the sign-in role; the queue carries the authority
+        # the pack asked for. Comparing them directly rejects the very person
+        # the sample was assigned to, so the role is mapped to its authority
+        # first.
+        #
+        # The approval ladder is deliberately not used here. It orders who may
+        # approve how much financing, which is a different question from who
+        # may read a sample, and borrowing it would give an oversight check the
+        # meaning of an approval right. The two heads who own the autonomy
+        # programme may read any sample in it; everyone else reads their own.
+        role = (request.headers.get("x-principal-role") or "").lower()
+        assigned = str(row["assigned_role"]).upper()
+        if role:
+            authority = ROLES.get(role)
+            if authority is None or not (authority == assigned or authority in SAMPLE_OVERSIGHT):
+                raise Forbidden(
+                    f"sample {sample_id!r} is assigned to {row['assigned_role']}",
+                    assigned_role=row["assigned_role"],
+                    actor_authority=authority,
+                )
+
+        await db.execute(
+            text("""
+            UPDATE ledger.sample_review
+               SET reviewed_by = :reviewer, verdict = :verdict, notes = :notes
+             WHERE sample_id = :id
+        """),
+            {
+                "id": sample_id,
+                "reviewer": body.reviewer_id,
+                "verdict": body.verdict,
+                "notes": body.notes,
+            },
+        )
+
+        # The verdict joins the chain: a review that disagreed with an
+        # autonomous decision is part of that decision's history.
+        entry = await ledger.append(
+            db,
+            "SAMPLE_REVIEW",
+            {
+                "sample_id": sample_id,
+                "decision_record_id": row["decision_record_id"],
+                "reviewer_id": body.reviewer_id,
+                "verdict": body.verdict,
+                "notes": body.notes,
+            },
+        )
+
+    return {
+        "sample_id": sample_id,
+        "decision_record_id": row["decision_record_id"],
+        "verdict": body.verdict,
+        "entry_id": entry.entry_id,
+        "hash": entry.hash,
+    }
 
 
 @router.get("/decision-records/{record_id}", summary="One decision record")

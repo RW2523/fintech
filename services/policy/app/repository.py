@@ -15,8 +15,13 @@ from app.factors import FactorScore
 from app.sandbox import ReplayCase
 
 __all__ = [
+    "active_amendment",
+    "amendment_history",
     "kill_switch_active",
+    "kill_switch_state",
     "load_replay_cases",
+    "next_amendment_sequence",
+    "save_amendment",
     "save_replay_case",
     "save_sandbox_run",
     "set_kill_switch",
@@ -223,3 +228,145 @@ async def set_kill_switch(
 
 def _json(value: Any) -> Any:
     return json.loads(value) if isinstance(value, str) else value
+
+
+# ---------------------------------------------------------------------------
+# the Autonomy Dial (docs/05 §6)
+# ---------------------------------------------------------------------------
+async def active_amendment(db: AsyncSession, product_code: str) -> dict[str, Any] | None:
+    """The dial setting in force, or None when the pack's own stands.
+
+    Newest first and only one active: a change supersedes rather than layers,
+    so there is never a question of which of two amendments applies.
+    """
+    row = (
+        (
+            await db.execute(
+                text("""
+        SELECT version, body, approved_by, approved_at, effective_from
+          FROM app_policy.policy_version
+         WHERE product_code = :p AND kind = 'autonomy' AND status = 'ACTIVE'
+         ORDER BY approved_at DESC
+         LIMIT 1
+    """),
+                {"p": product_code},
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        return None
+    return {
+        "version": row["version"],
+        "body": _json(row["body"]),
+        "approved_by": list(row["approved_by"] or []),
+        "approved_at": row["approved_at"],
+        "effective_from": row["effective_from"],
+    }
+
+
+async def amendment_history(db: AsyncSession, product_code: str, limit: int = 50) -> list[dict[str, Any]]:
+    """Every dial change on this product, newest first.
+
+    A superseded setting is kept, not deleted: a decision made last Tuesday was
+    made under whatever the dial read last Tuesday, and an auditor asking what
+    that was deserves an answer.
+    """
+    rows = (
+        (
+            await db.execute(
+                text("""
+        SELECT version, body, approved_by, approved_at, status
+          FROM app_policy.policy_version
+         WHERE product_code = :p AND kind = 'autonomy'
+         ORDER BY approved_at DESC NULLS LAST
+         LIMIT :limit
+    """),
+                {"p": product_code, "limit": limit},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return [
+        {
+            "version": row["version"],
+            "setting": _json(row["body"]).get("setting"),
+            "approved_by": list(row["approved_by"] or []),
+            "approved_at": row["approved_at"],
+            "status": row["status"],
+        }
+        for row in rows
+    ]
+
+
+async def save_amendment(
+    db: AsyncSession,
+    *,
+    product_code: str,
+    version: str,
+    body: dict[str, Any],
+    approved_by: list[str],
+) -> None:
+    """Record a dial change and retire the one it replaces, in one statement
+    each so a failure cannot leave two active."""
+    await db.execute(
+        text("""
+        UPDATE app_policy.policy_version
+           SET status = 'SUPERSEDED'
+         WHERE product_code = :p AND kind = 'autonomy' AND status = 'ACTIVE'
+    """),
+        {"p": product_code},
+    )
+    await db.execute(
+        text("""
+        INSERT INTO app_policy.policy_version
+          (version, product_code, kind, body, approved_by, approved_at, effective_from, status)
+        VALUES (:version, :p, 'autonomy', :body, :approved_by, now(), now(), 'ACTIVE')
+    """),
+        {
+            "version": version,
+            "p": product_code,
+            "body": json.dumps(body),
+            "approved_by": approved_by,
+        },
+    )
+
+
+async def next_amendment_sequence(db: AsyncSession, product_code: str) -> int:
+    count = (
+        await db.execute(
+            text("""
+        SELECT count(*) FROM app_policy.policy_version
+         WHERE product_code = :p AND kind = 'autonomy'
+    """),
+            {"p": product_code},
+        )
+    ).scalar_one()
+    return int(count) + 1
+
+
+async def kill_switch_state(db: AsyncSession, product_code: str) -> dict[str, Any]:
+    """Whether the switch is on, and who pulled it when."""
+    row = (
+        (
+            await db.execute(
+                text("""
+        SELECT enabled, activated_by, activated_at, reason
+          FROM app_policy.kill_switch WHERE product_code = :p
+    """),
+                {"p": product_code},
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        return {"enabled": False, "activated_by": None, "activated_at": None, "reason": None}
+    return {
+        "enabled": bool(row["enabled"]),
+        "activated_by": row["activated_by"],
+        "activated_at": row["activated_at"],
+        "reason": row["reason"],
+    }
