@@ -47,6 +47,9 @@ COPY ai ./ai
 # a service must not depend on a mounted volume to know which rules it runs.
 COPY policy_packs ./policy_packs
 
+# Measured thresholds the longitudinal engine reads at runtime (docs/07 §4.3).
+COPY config ./config
+
 ARG SERVICE
 ENV SERVICE_NAME=${SERVICE}
 COPY services/${SERVICE}/app ./app

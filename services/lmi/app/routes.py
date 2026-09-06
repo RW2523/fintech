@@ -15,7 +15,10 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
+from app.anomaly import score_book
+from app.config import load_config
 from app.db import session
+from app.detect import latest_features, run_detection
 from app.materialise import materialise
 from cio_common.errors import NotFound
 
@@ -107,3 +110,83 @@ async def runs(limit: int = Query(default=30, ge=1, le=365)) -> dict[str, Any]:
             .all()
         )
     return {"count": len(rows), "runs": [dict(row) for row in rows]}
+
+
+class DetectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: str | None = None
+    member_ids: list[str] | None = Field(default=None, max_length=10_000)
+    #: Only announce changes that began on or after this day, so a nightly run
+    #: does not re-raise a drift that started last year and was dealt with.
+    since: str | None = None
+
+
+@router.post("/lmi/detect", summary="Find where members' behaviour changed")
+async def run_change_detection(body: DetectRequest) -> dict[str, Any]:
+    """docs/07 §4.3 — CUSUM, confirmed by PELT, emitted as events.
+
+    Nothing here decides what to do about a change. Keeping detection and
+    action apart is what lets a detection be reviewed without arguing about the
+    intervention it triggered.
+    """
+    as_of = date.fromisoformat(body.as_of) if body.as_of else _today()
+    since = date.fromisoformat(body.since) if body.since else None
+    async with session() as db:
+        run = await run_detection(db, as_of=as_of, member_ids=body.member_ids, since=since)
+        await db.commit()
+    return run.as_dict()
+
+
+@router.get("/lmi/anomaly", summary="How unlike the book each member looks")
+async def anomaly(
+    as_of: str | None = None, limit: int = Query(default=5000, ge=1, le=20000)
+) -> dict[str, Any]:
+    """Advisory only. It never raises a state change on its own, because nobody
+    can say what it objected to."""
+    cutoff = date.fromisoformat(as_of) if as_of else _today()
+    settings = load_config().anomaly
+    async with session() as db:
+        rows = await latest_features(db, as_of=cutoff, limit=limit)
+
+    scored = score_book(
+        rows,
+        contamination=float(settings.get("contamination", 0.02)),
+        min_members=int(settings.get("min_members", 200)),
+    )
+    ranked = sorted(scored.scores.items(), key=lambda item: -item[1])[:50]
+    return {
+        "as_of": cutoff.isoformat(),
+        **scored.as_dict(),
+        "advisory": True,
+        "most_unusual": [{"member_id": member, "anomaly_score": value} for member, value in ranked],
+    }
+
+
+@router.get("/lmi/config", summary="The parameters in force and what they were measured to do")
+async def configuration() -> dict[str, Any]:
+    """Served so an operator can see the thresholds without reading the image.
+
+    `measured` is what the parameters achieved on a held-out half of the
+    population, so a later run can be compared with a number rather than with
+    somebody's memory.
+    """
+    settings = load_config()
+    return {
+        "version": settings.version,
+        "signals": {
+            name: {
+                "drift": settings.signal(name).drift,
+                "threshold": settings.signal(name).threshold,
+                "direction": settings.signal(name).direction,
+                "min_scale": settings.min_scale(name),
+            }
+            for name in settings.signals
+        },
+        "confirmation": {
+            "window_days": settings.confirmation_window_days,
+            "observations": settings.confirmation_observations,
+        },
+        "anomaly": settings.anomaly,
+        "measured": settings.measured,
+    }

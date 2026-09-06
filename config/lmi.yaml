@@ -1,0 +1,90 @@
+# Longitudinal Member Intelligence configuration (docs/07 §4.3).
+#
+# The change-point parameters are not defaults somebody liked the look of.
+# They were chosen on half the synthetic population and the numbers reported on
+# the other half, by scripts/changepoint_eval.py. Re-run it after changing
+# anything here; a threshold moved by eye is a threshold nobody has measured.
+schema: lmi/1.0
+version: 2026.09.1
+
+signals:
+  days_to_pay:
+    # Payment timing, in days after the due date. The signal this engine was
+    # built for: it moves before anything else and it moves gradually.
+    drift: 0.5
+    threshold: 12.0
+    direction: up
+    # Whole days, and a member whose habit varies by one has no resolution
+    # below that. Without this the detector measures rounding and fires on a
+    # fifth of steady payers a year (measured, T-061).
+    min_scale: 2.0
+
+  deduction_received_ratio:
+    # What arrived against what was expected. A fall is the concern, and it is
+    # the earliest signal in a payroll-deduction book: the member does not
+    # choose to stop, their employer does.
+    #
+    # Measured against an event that is a fact rather than a label, two
+    # consecutive missed cycles: every one of the 372 members it happened to
+    # was seen a cycle in advance, median lead 31 days. The 2.3% of clean
+    # members that also fire are single missed cycles, which are real events
+    # rather than false alarms.
+    drift: 1.5
+    threshold: 12.0
+    direction: down
+    min_scale: 0.0
+
+  savings_balance:
+    # Saving stops before paying stops. A member under pressure protects the
+    # instalment and gives up the savings.
+    #
+    # Unmeasured: nothing in the data marks the day somebody decided to stop
+    # saving, so there is no event to score lead time against. The threshold is
+    # set to produce about the same share of members as payment timing does
+    # (11%), and this line is here so nobody reads it as a measured number.
+    drift: 0.5
+    threshold: 12.0
+    direction: down
+    min_scale: 0.0
+
+# docs/07 §4.3 — how close PELT has to land before it counts as agreement.
+# Stretched to three observations on a coarsely sampled series, because 30 days
+# on monthly instalments is a single observation and PELT routinely lands two
+# away from where a level shifted.
+confirmation:
+  window_days: 30
+  observations: 3
+
+# The advisory anomaly detector. Advisory means advisory: it never raises a
+# state change on its own, because nobody can say what it objected to.
+anomaly:
+  enabled: true
+  contamination: 0.02
+  # A member cannot be judged unusual against a book that has not been seen.
+  min_members: 200
+
+# What was measured, so a later run can be compared with it rather than with a
+# memory. From scripts/changepoint_eval.py on the held-out half.
+measured:
+  as_of: 2026-09-06
+  days_to_pay:
+    # scripts/changepoint_eval.py, reported on the half of the population the
+    # parameters were not chosen on.
+    holdout_members: 1993
+    slow_drift_seen_before_first_late: 0.831
+    median_lead_days: 92
+    steady_false_alarms_per_year: 0.0021
+  deduction_received_ratio:
+    stoppages_seen_in_advance: 1.0
+    median_lead_days: 31
+    single_missed_cycles_per_clean_member_year: 0.023
+  savings_balance:
+    measured: false
+    note: no event in the data marks the day somebody stopped saving
+
+# PELT confirms a change on a level series and cannot confirm one on a trend.
+# Payment timing shifts level and is confirmed about a fifth of the time; a
+# savings balance slopes, an RBF cost finds no break in it, and confirmation
+# never fires. An unconfirmed alarm is still reported: it is the confirmation
+# that is missing, not the change.
+confirmation_applies_to: [days_to_pay, deduction_received_ratio]

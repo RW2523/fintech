@@ -94,9 +94,25 @@ def test_a_member_who_always_pays_three_days_late_has_not_changed() -> None:
     assert abs(robust_z(3.0, habitual)) < 1.0
 
 
-def test_a_member_who_always_pays_on_the_day_has_changed_at_two_days_late() -> None:
+def test_a_member_who_always_pays_on_the_day_registers_a_move_at_two_days() -> None:
+    """One deviation, not several. Payment timing is recorded in whole days, so
+    a member whose habit varies by a day has no resolution below that: without
+    a floor on the scale, a two-day swing reads as a large departure and the
+    detector spends its time measuring rounding."""
     punctual = baseline_of("days_to_pay", [0, 0, 0, 1, 0, 0, 0, 0])
-    assert robust_z(2.0, punctual) > 2.0
+    assert robust_z(2.0, punctual) == 1.0
+    assert robust_z(8.0, punctual) == 4.0
+
+
+def test_the_floor_only_ever_makes_a_departure_smaller() -> None:
+    """A member whose habit varies more than the floor keeps their own scale."""
+    varied = baseline_of("days_to_pay", [0, 6, 0, 7, 0, 6, 1, 7])
+    assert varied.scale > 2.0
+    assert (
+        abs(robust_z(9.0, varied))
+        < abs(robust_z(9.0, baseline_of("days_to_pay", [0, 6, 0, 7, 0, 6, 1, 7], min_scale=0.0)))
+        or varied.scale == baseline_of("days_to_pay", [0, 6, 0, 7, 0, 6, 1, 7], min_scale=0.0).scale
+    )
 
 
 def test_a_member_with_no_variation_does_not_divide_by_zero() -> None:

@@ -21,9 +21,11 @@ from datetime import date, timedelta
 from typing import Any
 
 __all__ = [
+    "DEFAULT_MIN_SCALE",
     "EPSILON",
     "MAD_SCALE",
     "MAX_Z",
+    "MIN_SCALE",
     "WINDOWS",
     "Baseline",
     "DueEvent",
@@ -32,6 +34,7 @@ __all__ = [
     "late_streak",
     "recovery_features",
     "robust_z",
+    "rolling_z",
     "slope",
     "window_features",
 ]
@@ -114,6 +117,26 @@ def _percentile(values: list[float], q: float) -> float:
     return float(ordered[lower] * (1 - weight) + ordered[upper] * weight)
 
 
+#: The smallest dispersion a signal can meaningfully have, per signal.
+#:
+#: Payment timing is recorded in whole days, and a member whose habit varies by
+#: a single day has no resolution below that. Without a floor, a two-day swing
+#: on a one-day MAD reads as a large departure, and the detector spends its
+#: time measuring rounding: on this population that alone fired on 19% of
+#: steady payers a year. Two days is the smallest move anybody would call a
+#: change in when somebody pays.
+MIN_SCALE: dict[str, float] = {
+    "days_to_pay": 2.0,
+    "days_to_pay_median_30d": 2.0,
+    "days_to_pay_median_90d": 2.0,
+}
+
+#: Used when a signal is not listed above. Zero keeps the old behaviour for
+#: signals nobody has thought about, which is the safe default: it can only
+#: make a departure look larger, never smaller.
+DEFAULT_MIN_SCALE = 0.0
+
+
 @dataclass(frozen=True, slots=True)
 class Baseline:
     """What normal looks like for one member on one signal."""
@@ -122,6 +145,17 @@ class Baseline:
     median: float
     mad: float
     n: int
+    #: The floor under the dispersion, from MIN_SCALE.
+    min_scale: float = 0.0
+
+    @property
+    def scale(self) -> float:
+        """What a departure is divided by.
+
+        The member's own dispersion, or the signal's floor when their habit is
+        tighter than the signal can resolve.
+        """
+        return max(MAD_SCALE * self.mad, self.min_scale)
 
     @property
     def usable(self) -> bool:
@@ -141,16 +175,23 @@ class Baseline:
             "signal": self.signal,
             "median_365d": round(self.median, 4),
             "mad_365d": round(self.mad, 4),
+            "scale": round(self.scale, 4),
             "n": self.n,
             "usable": self.usable,
         }
 
 
-def baseline_of(signal: str, values: list[float]) -> Baseline:
+def baseline_of(signal: str, values: list[float], *, min_scale: float | None = None) -> Baseline:
     """A member's own median and dispersion on one signal."""
     median = _median(values)
     mad = _median([abs(value - median) for value in values])
-    return Baseline(signal=signal, median=median, mad=mad, n=len(values))
+    return Baseline(
+        signal=signal,
+        median=median,
+        mad=mad,
+        n=len(values),
+        min_scale=MIN_SCALE.get(signal, DEFAULT_MIN_SCALE) if min_scale is None else min_scale,
+    )
 
 
 def robust_z(value: float, baseline: Baseline) -> float:
@@ -163,7 +204,7 @@ def robust_z(value: float, baseline: Baseline) -> float:
     """
     if not baseline.usable:
         return 0.0
-    z = (value - baseline.median) / (MAD_SCALE * baseline.mad + EPSILON)
+    z = (value - baseline.median) / (baseline.scale + EPSILON)
     return round(max(-MAX_Z, min(MAX_Z, z)), 4)
 
 
@@ -288,3 +329,33 @@ def recovery_features(
         # Falls towards zero as a member proves the concern was answered.
         "risk_decay": round(math.exp(-RISK_DECAY_RATE * on_time), 4),
     }
+
+
+#: How many earlier observations a rolling baseline needs before it will judge
+#: the next one. The same six as `Baseline.usable`, restated here because this
+#: is the point at which the series starts producing values at all.
+MIN_HISTORY = 6
+
+
+def rolling_z(
+    points: list[tuple[Any, float]], signal: str, *, min_history: int = MIN_HISTORY
+) -> list[tuple[Any, float]]:
+    """A causal robust-z series: each point judged against what came before it.
+
+    A baseline computed over the whole series is lookahead, and on a drifting
+    member it is lookahead in the worst direction: their median is pulled up by
+    the very drift being looked for, so the early part of the drift reads as
+    normal and the change is found only once it is obvious. At the time each
+    payment arrived, the platform knew only the payments before it.
+
+    The first `min_history` points yield nothing rather than zero, because a
+    member with no history has not been judged rather than judged unremarkable.
+    """
+    out: list[tuple[Any, float]] = []
+    values: list[float] = []
+    for at, value in points:
+        if len(values) >= min_history:
+            baseline = baseline_of(signal, values)
+            out.append((at, robust_z(value, baseline)))
+        values.append(value)
+    return out
