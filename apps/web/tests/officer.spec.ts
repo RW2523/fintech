@@ -53,7 +53,8 @@ async function fetchRecord(request: APIRequestContext) {
 
   return {
     entry,
-    record: await fetched.json(),
+    // The service returns the record beside the ledger's own columns.
+    record: (await fetched.json()).record,
     explanation: await explained.json(),
   };
 }

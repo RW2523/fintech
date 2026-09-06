@@ -79,8 +79,11 @@ async def test_the_stored_record_keeps_its_ledger_link(client: AsyncClient) -> N
     await append_record(client)
     stored = (await client.get(f"/decision-records/{RECORD_ID}")).json()
     chain = (await client.get(f"/ledger?case_id={CASE}")).json()["entries"]
-    assert stored["hash"] == chain[0]["hash"]
-    cio_contracts.validate({k: v for k, v in stored.items() if k != "superseded_by"}, "DecisionRecord")
+    assert stored["record"]["hash"] == chain[0]["hash"]
+    assert stored["case_id"] == CASE
+    # Nothing is stripped before validating: what the endpoint calls a record
+    # has to be one.
+    cio_contracts.validate(stored["record"], "DecisionRecord")
 
 
 async def test_a_record_missing_a_required_field_is_refused(client: AsyncClient) -> None:

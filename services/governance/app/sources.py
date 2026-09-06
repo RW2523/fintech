@@ -85,13 +85,16 @@ class HttpExplainSource:
     async def gather(self, record_id: str) -> DecisionBundle:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             try:
-                decision = await self._get(client, f"{self._urls['decision']}/decision-records/{record_id}")
+                held = await self._get(client, f"{self._urls['decision']}/decision-records/{record_id}")
             except httpx.HTTPError as exc:
                 raise CioError("decision service unreachable", record_id=record_id) from exc
-            if decision is None:
+            if held is None:
                 raise NotFound(f"no decision record {record_id}")
 
-            case_id = decision.get("case_id") or decision.get("snapshot_id")
+            # The decision service returns the record beside what the ledger
+            # knows about it. The case id is the ledger's, not the record's.
+            decision = held["record"]
+            case_id = held.get("case_id") or decision.get("snapshot_id")
             model_run_id = (decision.get("model_versions") or {}).get("model_run_id")
 
             model_run, fraud, documents = await asyncio.gather(

@@ -144,11 +144,17 @@ async def get_record(record_id: str) -> dict[str, Any]:
         raise NotFound(f"no decision record {record_id!r}")
     body = row["body"]
     record = json.loads(body) if isinstance(body, str) else body
-    # The case id is the ledger's own column rather than part of the record
-    # contract, and it is returned alongside for the same reason superseded_by
-    # is: a reader holding a record id should not need a second query to find
-    # the case whose documents and findings the record rests on.
-    return {**record, "superseded_by": row["superseded_by"], "case_id": row["case_id"]}
+    # The record is returned under its own key rather than merged with the
+    # ledger's columns. `case_id` and `superseded_by` are facts the ledger
+    # holds about the record, not fields of it, and a flat merge produces a
+    # body that looks like a DecisionRecord and fails DecisionRecord
+    # validation. A consumer that checks what it was given should not be
+    # punished for it.
+    return {
+        "record": record,
+        "case_id": row["case_id"],
+        "superseded_by": row["superseded_by"],
+    }
 
 
 # ---------------------------------------------------------------------------

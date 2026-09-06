@@ -226,6 +226,61 @@ velocity window's inclusiveness depend on the database session's timezone.
 
 Whole suite at the end of P3: **1,124 tests**, all passing.
 
+### P4 (verified 2026-09-06, `scripts/verify_phase.sh P4`)
+
+13 pass, 0 fail.
+
+| Step | Result |
+|---|---|
+| make lint | PASS |
+| make typecheck | PASS |
+| llm gateway service | PASS |
+| agent runtime service | PASS |
+| committee service | PASS |
+| decision service | PASS |
+| agents and RAG | PASS |
+| workflow tests | PASS |
+| stack healthy | PASS |
+| every service serving its routes | PASS |
+| golden cases seeded through the real path | PASS |
+| workbench typechecks | PASS |
+| workbench Playwright smoke | PASS |
+
+Against `docs/14` P4 criteria: the gateway works on a local provider, the six
+agents produce valid opinions on the golden set, Tier 1 runs end to end, and
+the Officer Workbench renders S1.
+
+**The gateway is verified on `ai-local` only.** The `ai-remote` profile is
+built and its provider adapters are tested against a fake, but no hosted
+provider key exists in this build, so the hosted half of the P4 criterion is
+untested rather than passing. It is the one P4 line not met.
+
+**Council quality on the real model, measured over the five golden
+scenarios:** 22 of 25 agent invocations returned a valid AgentOpinion. The
+three that did not were reported DEGRADED rather than guessed: two lost the
+gateway mid-round and one cited an evidence id no tool in that run had
+produced, which the output screen refused. That refusal is the guardrail
+working, not a failure of it.
+
+**A new check joins the suite.** `scripts/check_routes.sh` compares the routes
+each service declares in its source against the routes it actually serves. It
+exists because five services ran for eleven hours reporting healthy while
+serving nothing: the scaffold registers `/health` before the routers are
+included, so an import error inside a router leaves a container that answers
+its health check and nothing else. The health probe cannot catch that by
+construction, and now something does.
+
+**A published contract stopped meaning what it said, and was fixed rather than
+excused.** `GET /decision-records/{id}` merged the ledger's own columns into
+the record body, so the response looked like a DecisionRecord and failed
+DecisionRecord validation; the service's own test stripped a field before
+validating, which hid it. The record is now returned under `record`, with
+`case_id` and `superseded_by` beside it, and nothing is stripped before the
+contract check.
+
+Whole suite at the end of P4: **1,371 Python tests** and **4 Playwright
+tests**, all passing.
+
 ## Blocked
 (none)
 

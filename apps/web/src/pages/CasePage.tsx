@@ -9,7 +9,7 @@ import { DecisionCard } from "../components/DecisionCard";
 import { EvidencePanel } from "../components/EvidencePanel";
 import { Card, Chip, Copyable, Empty, Figure, Problem } from "../components/primitives";
 import { NARRATIVE_AUDIENCES } from "../types";
-import type { DecisionRecord, Explanation, Opinion, Queue } from "../types";
+import type { DecisionRecord, Explanation, HeldRecord, Opinion, Queue } from "../types";
 
 /** docs/09 §3 — the case page.
  *
@@ -39,7 +39,9 @@ export function CasePage() {
   const record = useQuery({
     queryKey: ["record", recordId],
     enabled: Boolean(recordId),
-    queryFn: () => request<DecisionRecord>(`/api/decision/decision-records/${recordId}`),
+    // The service returns the record beside what the ledger knows about it,
+    // so the record stays exactly a DecisionRecord.
+    queryFn: () => request<HeldRecord>(`/api/decision/decision-records/${recordId}`),
   });
 
   const explanation = useQuery({
@@ -53,11 +55,11 @@ export function CasePage() {
   });
 
   const run = useQuery({
-    queryKey: ["run", record.data?.committee_run_id],
-    enabled: Boolean(record.data?.committee_run_id),
+    queryKey: ["run", record.data?.record.committee_run_id],
+    enabled: Boolean(record.data?.record.committee_run_id),
     queryFn: () =>
       request<{ opinions: { body: Opinion }[] }>(
-        `/api/committee/committee/runs/${record.data?.committee_run_id}/opinions`,
+        `/api/committee/committee/runs/${record.data?.record.committee_run_id}/opinions`,
       ),
   });
 
@@ -76,7 +78,7 @@ export function CasePage() {
     );
   }
 
-  const decision = record.data;
+  const decision = record.data?.record;
   const opinions = (run.data?.opinions ?? []).map((row) => row.body);
 
   // An audience with nothing written for it is left out rather than shown

@@ -89,6 +89,14 @@ export type DecisionRecord = {
   created_at?: string;
 };
 
+/** What the decision service returns for one record: the record itself, plus
+ *  the two things the ledger knows about it that are not fields of it. */
+export type HeldRecord = {
+  record: DecisionRecord;
+  case_id: string | null;
+  superseded_by: string | null;
+};
+
 export const NARRATIVE_AUDIENCES = ["officer", "member", "auditor"] as const;
 
 export type NarrativeAudience = (typeof NARRATIVE_AUDIENCES)[number];

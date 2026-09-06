@@ -111,7 +111,25 @@ case "$PHASE" in
       test -s "ml/fraud/artifacts/$(cat ml/fraud/artifacts/latest.txt)/card.md"'
     step "guarantor ring planted" bash -c 'test -s synthetic/out/rings.json'
     ;;
-  P4|P5|P6|P7|P8)
+  P4)
+    # docs/14 P4: the gateway works on a local and a hosted provider; the six
+    # agents produce valid opinions on the golden set; Tier 1 runs end to end;
+    # the Officer Workbench renders S1.
+    step "make lint"             make lint
+    step "make typecheck"        make typecheck
+    step "llm gateway"           bash -c 'cd services/llm_gateway && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "agent runtime"         bash -c 'cd services/agent_runtime && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "committee service"     bash -c 'cd services/committee && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "decision service"      bash -c 'cd services/decision && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "agents and rag"        uv run pytest ai -q
+    step "workflow tests"        uv run pytest workflows -q
+    step "stack healthy"         scripts/wait_healthy.sh 120
+    step "every service routed"  scripts/check_routes.sh
+    step "golden cases seeded"   uv run python scripts/seed_demo_case.py
+    step "workbench typechecks"  bash -c 'cd apps/web && npx --no-install tsc --noEmit'
+    step "workbench smoke"       bash -c 'cd apps/web && npx playwright test'
+    ;;
+  P5|P6|P7|P8)
     echo "  phase ${PHASE} verification not implemented yet" >&2
     exit 1
     ;;
