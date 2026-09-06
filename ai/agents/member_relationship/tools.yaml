@@ -1,0 +1,19 @@
+tools:
+- name: member.profile
+  version: '1.0'
+  max_calls: 1
+- name: savings.get
+  version: '1.0'
+  max_calls: 1
+- name: shares.get
+  version: '1.0'
+  max_calls: 1
+- name: interactions.get
+  version: '1.0'
+  max_calls: 1
+- name: hardship.get
+  version: '1.0'
+  max_calls: 1
+- name: member.commitment_score
+  version: '1.0'
+  max_calls: 1

@@ -1,0 +1,13 @@
+tools:
+- name: policy.evaluate
+  version: '1.0'
+  max_calls: 1
+- name: affordability.compute
+  version: '1.0'
+  max_calls: 2
+- name: limits.get
+  version: '1.0'
+  max_calls: 1
+- name: policy.lookup
+  version: '1.0'
+  max_calls: 3

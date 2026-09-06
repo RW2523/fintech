@@ -1,0 +1,13 @@
+tools:
+- name: history.get
+  version: '1.0'
+  max_calls: 1
+- name: bureau.get
+  version: '1.0'
+  max_calls: 1
+- name: risk.score
+  version: '1.0'
+  max_calls: 1
+- name: explain.get
+  version: '1.0'
+  max_calls: 1

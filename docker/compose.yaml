@@ -537,6 +537,30 @@ services:
       <<: *service-env
       SERVICE_NAME: llm_gateway
       SERVICE_PORT: "8020"
+      # Route configuration. Absent, every route falls back to the fake
+      # provider, which answers instantly and says nothing: useful in tests,
+      # wrong in a demo, and hard to notice because it does not fail.
+      LLM_DEFAULT_PROVIDER: ${LLM_DEFAULT_PROVIDER:-fake}
+      LLM_PROVIDER_AGENT: ${LLM_PROVIDER_AGENT:-}
+      LLM_BASE_URL_AGENT: ${LLM_BASE_URL_AGENT:-}
+      LLM_AGENT_MODEL: ${LLM_AGENT_MODEL:-}
+      LLM_PROVIDER_REASONING: ${LLM_PROVIDER_REASONING:-}
+      LLM_BASE_URL_REASONING: ${LLM_BASE_URL_REASONING:-}
+      LLM_REASONING_MODEL: ${LLM_REASONING_MODEL:-${LLM_AGENT_MODEL:-}}
+      LLM_PROVIDER_FAST: ${LLM_PROVIDER_FAST:-}
+      LLM_BASE_URL_FAST: ${LLM_BASE_URL_FAST:-}
+      LLM_FAST_MODEL: ${LLM_FAST_MODEL:-${LLM_AGENT_MODEL:-}}
+      LLM_PROVIDER_VISION: ${LLM_PROVIDER_VISION:-}
+      LLM_BASE_URL_VISION: ${LLM_BASE_URL_VISION:-}
+      LLM_VISION_MODEL: ${LLM_VISION_MODEL:-}
+      LLM_PROVIDER_EMBED: ${LLM_PROVIDER_EMBED:-}
+      LLM_BASE_URL_EMBED: ${LLM_BASE_URL_EMBED:-}
+      LLM_EMBED_MODEL: ${LLM_EMBED_MODEL:-}
+      LLM_PROVIDER_RERANK: ${LLM_PROVIDER_RERANK:-}
+      LLM_RERANK_MODEL: ${LLM_RERANK_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CIO_DEBUG_PROMPTS: ${CIO_DEBUG_PROMPTS:-0}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8020/health"]
       interval: 15s
@@ -569,7 +593,7 @@ services:
     image: ${VLLM_IMAGE:-vllm/vllm-openai:latest}
     restart: unless-stopped
     command: >
-      --model ${LLM_AGENT_MODEL}
+      --model ${VLLM_AGENT_CHECKPOINT:-Qwen/Qwen2.5-7B-Instruct}
       --served-model-name agent
       --gpu-memory-utilization ${VLLM_GPU_FRACTION:-0.55}
       --max-model-len 32768
@@ -603,7 +627,7 @@ services:
     image: ${VLLM_IMAGE:-vllm/vllm-openai:latest}
     restart: unless-stopped
     command: >
-      --model ${LLM_VISION_MODEL}
+      --model ${VLLM_VISION_CHECKPOINT:-Qwen/Qwen2.5-VL-7B-Instruct}
       --served-model-name vision
       --gpu-memory-utilization ${VLLM_VISION_GPU_FRACTION:-0.20}
       --max-model-len 16384

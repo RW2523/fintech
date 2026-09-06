@@ -1,0 +1,13 @@
+tools:
+- name: documents.list
+  version: '1.0'
+  max_calls: 1
+- name: extraction.get
+  version: '1.0'
+  max_calls: 6
+- name: forensics.get
+  version: '1.0'
+  max_calls: 3
+- name: reconciliation.get
+  version: '1.0'
+  max_calls: 1

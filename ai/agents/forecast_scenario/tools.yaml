@@ -1,0 +1,10 @@
+tools:
+- name: lmi.score
+  version: '1.0'
+  max_calls: 1
+- name: survival.get
+  version: '1.0'
+  max_calls: 1
+- name: explain.get
+  version: '1.0'
+  max_calls: 1

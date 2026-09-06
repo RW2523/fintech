@@ -1,0 +1,10 @@
+tools:
+- name: evidence.get
+  version: '1.0'
+  max_calls: 10
+- name: evidence.request
+  version: '1.0'
+  max_calls: 5
+- name: policy.lookup
+  version: '1.0'
+  max_calls: 3

@@ -1,0 +1,19 @@
+tools:
+- name: timeline.get
+  version: '1.0'
+  max_calls: 2
+- name: outages.get
+  version: '1.0'
+  max_calls: 1
+- name: arrangements.get
+  version: '1.0'
+  max_calls: 1
+- name: deductions.get
+  version: '1.0'
+  max_calls: 1
+- name: documents.list
+  version: '1.0'
+  max_calls: 1
+- name: employer.get
+  version: '1.0'
+  max_calls: 1

@@ -1,0 +1,13 @@
+tools:
+- name: fraud.assess
+  version: '1.0'
+  max_calls: 1
+- name: graph.neighbours
+  version: '1.0'
+  max_calls: 2
+- name: duplicates.find
+  version: '1.0'
+  max_calls: 1
+- name: forensics.get
+  version: '1.0'
+  max_calls: 3
