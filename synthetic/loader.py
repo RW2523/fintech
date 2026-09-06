@@ -31,7 +31,14 @@ LOAD_ORDER = (
     "outage_window",
     "arrangement",
     "outcome",
+    "application_ext",
 )
+
+#: Applications are written by the document programme, not the population one,
+#: so they live under `documents/`. They belong in the register all the same:
+#: without them `application_count_12m` is always zero and a velocity rule has
+#: nothing to count.
+ALTERNATE_SOURCE = {"application_ext": ("documents", "applications")}
 
 _BATCH = 2000
 
@@ -43,6 +50,33 @@ def _base_url() -> str:
 async def reset_core(client: httpx.AsyncClient, base_url: str | None = None) -> None:
     response = await client.post(f"{base_url or _base_url()}/core/admin/reset")
     response.raise_for_status()
+
+
+def _read(table: str, out: Path) -> list[dict[str, Any]]:
+    """The rows for a table, wherever the generator wrote them."""
+    if table not in ALTERNATE_SOURCE:
+        return read_table(table, out)
+    directory, name = ALTERNATE_SOURCE[table]
+    rows = read_table(name, out / directory)
+    return [_application_row(row) for row in rows]
+
+
+def _application_row(row: dict[str, Any]) -> dict[str, Any]:
+    """An application as the register holds it.
+
+    The generator's row carries the purpose and the planting marker, which the
+    register has no column for; keeping them would fail the insert rather than
+    be quietly dropped.
+    """
+    return {
+        "application_id": row["application_id"],
+        "member_id": row["member_id"],
+        "product_code": row["product_code"],
+        "amount": row["amount"],
+        "tenor_months": row["tenor_months"],
+        "status": row.get("status", "SUBMITTED"),
+        "created_at": row["created_at"],
+    }
 
 
 async def load_population(
@@ -62,7 +96,7 @@ async def load_population(
             await reset_core(client, url)
 
         for table in LOAD_ORDER:
-            rows: list[dict[str, Any]] = read_table(table, out)
+            rows: list[dict[str, Any]] = _read(table, out)
             if not rows:
                 loaded[table] = 0
                 continue

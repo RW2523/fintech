@@ -86,7 +86,32 @@ case "$PHASE" in
         psql -U "${POSTGRES_USER:-cio}" -d "${POSTGRES_DB:-cio}" -tAc \
         "select count(*) = 5000 from core.member" | grep -q t'
     ;;
-  P3|P4|P5|P6|P7|P8)
+  P3)
+    # docs/14 P3: features reproducible and purpose-scoped; models trained with
+    # cards; risk and fraud serving inside their budgets; explanations citing
+    # only what the run produced.
+    step "make lint"             make lint
+    step "make typecheck"        make typecheck
+    step "ml tests"              uv run pytest ml libs/cio_dff -q
+    step "feature service"       bash -c 'cd services/feature && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "risk service"          bash -c 'cd services/risk && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "fraud service"         bash -c 'cd services/fraud && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "governance service"    bash -c 'cd services/governance && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "credit-risk validated" bash -c '. scripts/database_url.sh; uv run python -m ml.credit_risk.validate --quiet >/dev/null'
+    step "fraud false findings"  bash -c 'uv run python -m synthetic.cli fraud --limit 600 >/dev/null'
+    step "migrations applied"    make migrate
+    step "feature registry"      bash -c '\
+      docker compose --env-file docker/.env -f docker/compose.yaml exec -T postgres \
+        psql -U "${POSTGRES_USER:-cio}" -d "${POSTGRES_DB:-cio}" -tAc \
+        "select count(*) = 23 from app_feature.feature_def" | grep -q t'
+    step "models trained"        bash -c '\
+      test -f ml/credit_risk/artifacts/latest.txt && test -f ml/fraud/artifacts/latest.txt'
+    step "model cards written"   bash -c '\
+      test -s "ml/credit_risk/artifacts/$(cat ml/credit_risk/artifacts/latest.txt)/card.md" && \
+      test -s "ml/fraud/artifacts/$(cat ml/fraud/artifacts/latest.txt)/card.md"'
+    step "guarantor ring planted" bash -c 'test -s synthetic/out/rings.json'
+    ;;
+  P4|P5|P6|P7|P8)
     echo "  phase ${PHASE} verification not implemented yet" >&2
     exit 1
     ;;

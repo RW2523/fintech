@@ -20,12 +20,15 @@ from app.db import session
 from app.models import (
     Account,
     ActivateRequest,
+    ApplicationsByMembers,
+    ApplicationWindow,
     Arrangement,
     BulkRequest,
     Bureau,
     Change,
     Deduction,
     Employer,
+    GuaranteeNeighbourhood,
     Guarantor,
     Member,
     OutageWindow,
@@ -182,6 +185,155 @@ async def get_guarantors(member_id: str) -> Any:
             f"SELECT {cols(Guarantor)} FROM core.guarantor WHERE guarantor_member_id = :m ORDER BY since",
             m=member_id,
         )
+
+
+#: A neighbourhood wider than this is a portfolio question, not a case
+#: question, and the walk would pull in most of the population.
+MAX_GUARANTEE_HOPS = 4
+
+#: A velocity rule asks about days, not quarters. A wider window would let one
+#: request scan the whole register.
+MAX_VELOCITY_WINDOW_DAYS = 90
+
+
+#: One request may ask about this many members. A guarantee neighbourhood is
+#: dozens of people; a request for thousands is a portfolio export.
+MAX_MEMBERS_PER_QUERY = 200
+
+
+@router.get("/applications/by-members", response_model=ApplicationsByMembers)
+async def get_applications_by_members(
+    members: str,
+    since: date | None = None,
+) -> Any:
+    """Applications for a set of members.
+
+    A guarantee cycle only means something if the people in it are borrowing at
+    the same time, and that is a question about several members at once.
+    """
+    wanted = sorted({m.strip() for m in members.split(",") if m.strip()})
+    if not wanted:
+        raise ValidationFailed("members must name at least one member")
+    if len(wanted) > MAX_MEMBERS_PER_QUERY:
+        raise ValidationFailed(f"at most {MAX_MEMBERS_PER_QUERY} members per request", asked=len(wanted))
+
+    async with session() as db:
+        rows = await _rows(
+            db,
+            """
+            SELECT a.application_id, a.member_id, m.employer_id, m.branch_id,
+                   a.product_code, a.amount, a.created_at
+              FROM core.application_ext a
+              JOIN core.member m ON m.member_id = a.member_id
+             WHERE a.member_id = ANY(:members)
+               AND (CAST(:since AS date) IS NULL
+                    OR (a.created_at AT TIME ZONE 'UTC')::date
+                       >= CAST(:since AS date))
+             ORDER BY a.created_at DESC, a.application_id
+            """,
+            members=wanted,
+            since=since,
+        )
+    return {"count": len(rows), "applications": rows}
+
+
+@router.get("/applications/velocity", response_model=ApplicationWindow)
+async def get_application_velocity(
+    employer_id: str,
+    date_from: date,
+    date_to: date,
+    branch_id: str | None = None,
+) -> Any:
+    """Applications from one employer and branch inside a date window.
+
+    The register knows who applied; the member record knows where they work.
+    Joining them here keeps the fraud service from having to fetch a member at
+    a time to answer one question about a week.
+    """
+    if date_to < date_from:
+        raise ValidationFailed("date_to is before date_from", date_from=str(date_from), date_to=str(date_to))
+    if (date_to - date_from).days > MAX_VELOCITY_WINDOW_DAYS:
+        raise ValidationFailed(
+            f"window must be at most {MAX_VELOCITY_WINDOW_DAYS} days", days=(date_to - date_from).days
+        )
+
+    async with session() as db:
+        rows = await _rows(
+            db,
+            """
+            SELECT a.application_id, a.member_id, m.employer_id, m.branch_id,
+                   a.product_code, a.amount, a.created_at
+              FROM core.application_ext a
+              JOIN core.member m ON m.member_id = a.member_id
+             WHERE m.employer_id = :employer_id
+               AND (CAST(:branch_id AS text) IS NULL
+                    OR m.branch_id = CAST(:branch_id AS text))
+               -- Compared as a UTC calendar date, not against a bare date
+               -- cast to a timestamp: that comparison is read in the session's
+               -- timezone, so a midnight application falls in or out of the
+               -- window depending on where the database thinks it is.
+               AND (a.created_at AT TIME ZONE 'UTC')::date
+                   BETWEEN CAST(:date_from AS date) AND CAST(:date_to AS date)
+             ORDER BY a.created_at, a.application_id
+            """,
+            employer_id=employer_id,
+            branch_id=branch_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    return {
+        "employer_id": employer_id,
+        "branch_id": branch_id,
+        "date_from": date_from,
+        "date_to": date_to,
+        "count": len(rows),
+        "applications": rows,
+    }
+
+
+@router.get("/guarantees/{member_id}/neighbourhood", response_model=GuaranteeNeighbourhood)
+async def get_guarantee_neighbourhood(member_id: str, hops: int = 2) -> Any:
+    """Who stands behind whom, within `hops` of this member.
+
+    A guarantee ring is invisible from one member's own record: it only shows
+    up when the walk comes back to where it started. The core stub owns the
+    guarantee data, so it answers the question rather than handing the table
+    over.
+    """
+    if not 1 <= hops <= MAX_GUARANTEE_HOPS:
+        raise ValidationFailed(f"hops must be 1..{MAX_GUARANTEE_HOPS}", hops=hops)
+
+    frontier = {member_id}
+    seen: set[str] = set()
+    edges: dict[tuple[str, str, str], dict[str, Any]] = {}
+
+    async with session() as db:
+        for _ in range(hops):
+            unseen = sorted(frontier - seen)
+            if not unseen:
+                break
+            seen.update(unseen)
+            rows = await _rows(
+                db,
+                """
+                SELECT g.guarantor_member_id, a.member_id AS borrower_member_id,
+                       g.account_id, g.since
+                  FROM core.guarantor g
+                  JOIN core.account a ON a.account_id = g.account_id
+                 WHERE g.guarantor_member_id = ANY(:members)
+                    OR a.member_id = ANY(:members)
+                """,
+                members=unseen,
+            )
+            frontier = set()
+            for row in rows:
+                key = (row["guarantor_member_id"], row["borrower_member_id"], row["account_id"])
+                edges[key] = row
+                frontier.update({row["guarantor_member_id"], row["borrower_member_id"]})
+
+    ordered = [edges[k] for k in sorted(edges)]
+    members = sorted({m for k in edges for m in k[:2]} | {member_id})
+    return {"member_id": member_id, "hops": hops, "members": members, "edges": ordered}
 
 
 @router.get("/bureau/{member_id}", response_model=Bureau)

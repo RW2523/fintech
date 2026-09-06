@@ -476,6 +476,33 @@ def _guarantors(
     return rows
 
 
+#: Share of members who changed a phone number or email in the recent past.
+#: Without any, the INT-06 rule in docs/07 §3 can never fire and the check is
+#: untestable against the population it is meant to run on.
+CONTACT_CHANGE_SHARE = 0.08
+
+#: How far back a recorded contact change can be. Wide enough that most are
+#: unremarkable, recent enough that some land inside the fourteen days before
+#: an application that the rule looks for.
+CONTACT_CHANGE_WINDOW_DAYS = 180
+
+
+def _apply_contact_updates(settings: Settings, members: list[dict[str, Any]]) -> None:
+    """Give some members a recent contact change, in place.
+
+    Drawn from its own generator, seeded independently and applied after every
+    other draw, so adding this leaves the rest of the population byte-identical
+    to what was generated before it existed.
+    """
+    rng = np.random.default_rng(settings.seed ^ 0xC0FFEE)
+    history_end = month_end(settings.history_start, settings.months)
+    for member in members:
+        if rng.random() >= CONTACT_CHANGE_SHARE:
+            continue
+        days = int(rng.integers(0, CONTACT_CHANGE_WINDOW_DAYS))
+        member["contact_updated_at"] = (history_end - timedelta(days=days)).isoformat()
+
+
 def _bureau(
     rng: np.random.Generator, settings: Settings, members: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -568,6 +595,8 @@ def generate(settings: Settings | None = None) -> Population:
     for account in accounts:
         accounts_by_member.setdefault(account["member_id"], []).append(account["account_id"])
         opened_month_by_account[account["account_id"]] = account["_opened_month"]
+
+    _apply_contact_updates(settings, members)
 
     profiles = {
         member["member_id"]: {

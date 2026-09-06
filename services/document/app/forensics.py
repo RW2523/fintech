@@ -51,6 +51,14 @@ _ARITHMETIC_SHARE_OF_GROSS = 0.02
 #: document that cannot be read is a DOC-04 problem, not a fraud finding.
 _MIN_INPUT_CONFIDENCE = 0.75
 
+#: A payslip's net cannot be a sliver of its gross: deductions do not consume
+#: nearly the whole pay packet, and a figure that says they did was misread,
+#: not forged. Measured on this corpus, two clean payslips were accused on the
+#: strength of a net read as 1.65 against a gross of 2,612 and 213 against
+#: 2,201. Reading failure is a DOC-04 question, so the arithmetic and income
+#: checks decline the comparison rather than making an accusation out of it.
+_MIN_NET_SHARE_OF_GROSS = 0.10
+
 _MONEY = re.compile(r"^-?[\d,]*\d(\.\d{2})?$")
 
 
@@ -89,6 +97,43 @@ def _amount(value: Any) -> float | None:
 # ---------------------------------------------------------------------------
 # arithmetic: the strongest signal that a figure was edited
 # ---------------------------------------------------------------------------
+def _declined(
+    document_id: str | None,
+    check: str,
+    fields: list[str],
+    *,
+    why: str | None = None,
+) -> Finding:
+    """A check that could not be run, reported as a request for a clearer copy.
+
+    DOC-04 asks the member for something legible. It is not an accusation, and
+    it is the honest outcome when the figures a check needs were not read well
+    enough to compare.
+    """
+    return Finding(
+        code="DOC-04",
+        severity="LOW",
+        document_id=document_id,
+        detail={
+            "check": check,
+            "declined_on": fields,
+            "threshold": _MIN_INPUT_CONFIDENCE,
+            "observed": why or ("the figures this check needs were not read confidently enough to compare"),
+        },
+    )
+
+
+def _plausible_net(gross: float | None, net: float | None) -> bool:
+    """Whether these two figures could have come off the same payslip.
+
+    A net below a tenth of gross, or above it, is a reading failure. Comparing
+    such a pair produces an accusation about the OCR rather than the document.
+    """
+    if gross is None or net is None or gross <= 0:
+        return False
+    return _MIN_NET_SHARE_OF_GROSS <= net / gross <= 1.0
+
+
 def check_arithmetic(
     fields: dict[str, Any],
     *,
@@ -106,12 +151,26 @@ def check_arithmetic(
     if gross is None or net is None or deductions is None:
         return []
 
-    # Never accuse a document on the strength of a badly read number.
-    if confidences and any(
-        confidences.get(name, 1.0) < _MIN_INPUT_CONFIDENCE
+    # Never accuse a document on the strength of a badly read number. Say so
+    # rather than falling silent: a check that could not run is a reason to
+    # ask for a clearer copy, and returning nothing would let the page pass as
+    # though it had been examined.
+    unreliable = sorted(
+        name
         for name in ("gross_salary", "net_salary", "total_deductions")
-    ):
-        return []
+        if (confidences or {}).get(name, 1.0) < _MIN_INPUT_CONFIDENCE
+    )
+    if unreliable:
+        return [_declined(document_id, "payslip_arithmetic", unreliable)]
+    if not _plausible_net(gross, net):
+        return [
+            _declined(
+                document_id,
+                "payslip_arithmetic",
+                ["net_salary"],
+                why="the stated net is not a plausible share of gross",
+            )
+        ]
 
     tolerance = max(_ARITHMETIC_FLOOR, _ARITHMETIC_SHARE_OF_GROSS * gross)
     deviation = round(net + deductions - gross, 2)

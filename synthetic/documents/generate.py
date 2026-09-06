@@ -108,6 +108,35 @@ def _periods(as_of_month: int, count: int = 3) -> list[str]:
     return [cycle_label(HISTORY_START, as_of_month - offset) for offset in range(count)]
 
 
+#: How far back the queue of applications reaches from the demo's "today".
+#: They used to share a single date, which made every time-based rule
+#: meaningless: a velocity check over a seven-day window fires on all six
+#: hundred at once, and a duplicate-application check cannot tell a repeat
+#: from a coincidence. Arriving over a quarter is both more realistic and
+#: what makes those rules testable at all.
+APPLICATION_SPREAD_DAYS = 90
+
+#: The forensics pass calls a confirmation letter stale beyond this many days
+#: before the application. Mirrored here so an injected stale letter is
+#: unambiguously past it and a clean one is unambiguously inside it: an anomaly
+#: planted at the threshold measures the threshold, not the detector.
+STALE_LETTER_DAYS = 45
+
+
+def _application_date(rng: np.random.Generator, as_of_month: int) -> tuple[date, int]:
+    """When this application arrived, and which pay month it saw.
+
+    Applications cluster toward the present, because a queue holds more recent
+    work than old work.
+    """
+    today = month_end(HISTORY_START, as_of_month)
+    offset = int(min(APPLICATION_SPREAD_DAYS - 1, abs(rng.normal(0.0, APPLICATION_SPREAD_DAYS / 2.2))))
+    created = today - timedelta(days=offset)
+    # The payslips an applicant could produce are the ones that existed then.
+    months_back = (today.year - created.year) * 12 + today.month - created.month
+    return created, as_of_month - months_back
+
+
 def _payslip_context(
     member: dict[str, Any],
     employer: dict[str, Any],
@@ -230,7 +259,6 @@ def generate_documents(
     }
 
     chosen = rng.choice(len(members), size=min(applications_wanted, len(members)), replace=False)
-    periods = _periods(as_of_month)
 
     files = out / "files"
     files.mkdir(parents=True, exist_ok=True)
@@ -246,6 +274,8 @@ def generate_documents(
             employer = employers[member["employer_id"]]
             salary = float(member["salary_monthly"])
             application_id = f"APP-{index + 1:05d}"
+            created_at, application_month = _application_date(rng, as_of_month)
+            periods = _periods(application_month)
 
             corpus.applications.append(
                 {
@@ -255,7 +285,7 @@ def generate_documents(
                     "amount": f"{round(salary * float(rng.uniform(0.5, 6.0)), 2):.2f}",
                     "tenor_months": int(rng.integers(12, 61)),
                     "purpose": str(rng.choice(_PURPOSES)),
-                    "created_at": month_end(HISTORY_START, as_of_month).isoformat(),
+                    "created_at": created_at.isoformat(),
                 }
             )
 
@@ -309,6 +339,7 @@ def generate_documents(
                     employer,
                     salary,
                     periods,
+                    created_at,
                     reported_net,
                     rng,
                     renderer,
@@ -370,6 +401,7 @@ def _build(
     employer: dict[str, Any],
     salary: float,
     periods: list[str],
+    application_date: date,
     reported_net: dict[tuple[str, str], float],
     rng: np.random.Generator,
     renderer: Renderer,
@@ -476,12 +508,23 @@ def _build(
         return result, truth, None, anomaly, None
 
     if document_type == "EMPLOYMENT_CONFIRMATION":
-        letter_date = f"{periods[0]}-05"
+        # Dated from the application, not from a period label. A letter is
+        # written to support an application, so its age is measured against
+        # that application; deriving it from the pay period made a letter
+        # look stale or post-dated purely by where in the month the
+        # application happened to fall.
+        letter_date = (application_date - timedelta(days=int(rng.integers(1, 21)))).isoformat()
         detail = {}
         if anomaly_kind is AnomalyKind.METADATA_MISMATCH:
-            # letter dated before the period it certifies (INT-01)
-            letter_date = f"{periods[2]}-01"
-            detail = {"letter_date": letter_date, "claimed_period": periods[0]}
+            # A letter written well before the application it supports (INT-01),
+            # comfortably beyond the staleness threshold rather than at it.
+            stale_days = STALE_LETTER_DAYS + int(rng.integers(20, 60))
+            letter_date = (application_date - timedelta(days=stale_days)).isoformat()
+            detail = {
+                "letter_date": letter_date,
+                "days_before_application": stale_days,
+                "claimed_period": periods[0],
+            }
             anomaly = anomaly_kind
 
         context = {

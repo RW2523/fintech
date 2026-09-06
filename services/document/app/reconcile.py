@@ -82,14 +82,31 @@ _NET_PERIODS = (
 )
 
 
+#: A net below this share of gross was misread, not earned: deductions do not
+#: consume nearly a whole pay packet. Comparing such a figure against the
+#: employer's record produces an accusation about the OCR rather than about
+#: the document, so the reading is dropped and the case routes on DOC-04
+#: instead. Measured on this corpus, two clean payslips were accused this way.
+MIN_NET_SHARE_OF_GROSS = 0.10
+
+
 def _payslip_nets(fields: dict[str, Any]) -> dict[str, float]:
-    """Net pay by cycle, so it is compared against the same cycles."""
+    """Net pay by cycle, so it is compared against the same cycles.
+
+    A reading that could not have come off this payslip is left out rather
+    than compared: the gross is on the same page, and a net that is a sliver
+    of it is a failure to read, not a discrepancy to report.
+    """
+    gross = _amount(fields.get("gross_salary"))
     found: dict[str, float] = {}
     for net_field, period_field in _NET_PERIODS:
         amount = _amount(fields.get(net_field))
         cycle = str(fields.get(period_field) or "").strip()
-        if amount is not None and re.match(r"^\d{4}-\d{2}$", cycle):
-            found[cycle] = amount
+        if amount is None or not re.match(r"^\d{4}-\d{2}$", cycle):
+            continue
+        if gross is not None and gross > 0 and not (MIN_NET_SHARE_OF_GROSS <= amount / gross <= 1.0):
+            continue
+        found[cycle] = amount
     return found
 
 

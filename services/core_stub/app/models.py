@@ -100,6 +100,59 @@ class Guarantor(Strict):
     since: date
 
 
+class ApplicationRow(Strict):
+    """An application as the register holds it, with who and where."""
+
+    application_id: str
+    member_id: str
+    employer_id: str | None
+    branch_id: str | None
+    product_code: str
+    amount: Money
+    created_at: datetime
+
+
+class ApplicationWindow(Strict):
+    """Applications from one employer and branch over a date window."""
+
+    employer_id: str
+    branch_id: str | None
+    date_from: date
+    date_to: date
+    count: int
+    applications: list[ApplicationRow]
+
+
+class ApplicationsByMembers(Strict):
+    """The register's applications for a set of members."""
+
+    count: int
+    applications: list[ApplicationRow]
+
+
+class GuaranteeEdge(Strict):
+    """One guarantee, as a relationship between two members.
+
+    `core.guarantor` records a guarantee against an account. What an analyst
+    reads is who stands behind whom, so the borrower's member id is joined in
+    here rather than being looked up one account at a time.
+    """
+
+    guarantor_member_id: str
+    borrower_member_id: str
+    account_id: str
+    since: date
+
+
+class GuaranteeNeighbourhood(Strict):
+    """The guarantees within a few hops of a member."""
+
+    member_id: str
+    hops: int
+    members: list[str]
+    edges: list[GuaranteeEdge]
+
+
 class Bureau(Strict):
     member_id: str
     grade: str

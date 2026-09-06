@@ -174,6 +174,7 @@ def integrity_score(
     *,
     open_findings: list[dict[str, Any]],
     evidence_refs: tuple[str, ...] = (),
+    derived: bool = False,
 ) -> FactorScore:
     """INTEGRITY — deductions per open finding; CRITICAL is a gate, not a score."""
     inputs = {"open_findings": open_findings}
@@ -188,7 +189,7 @@ def integrity_score(
     if not severities:
         level = "LOW"
 
-    return _finish("INTEGRITY", 100 - deduction, inputs, evidence_refs, level=level)
+    return _finish("INTEGRITY", 100 - deduction, inputs, evidence_refs, level=level, derived=derived)
 
 
 def conditions_score(

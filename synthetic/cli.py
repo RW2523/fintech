@@ -119,6 +119,49 @@ def _detection(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def _rings(args: argparse.Namespace) -> int:
+    from synthetic.rings import plant_rings
+
+    result = plant_rings(Path(args.out), seed=args.seed, count=args.count)
+    for ring in result.rings:
+        print(
+            f"  {ring.ring_id}: {len(ring.members)} members at {ring.employer_id}, "
+            f"{len(ring.guarantees)} guarantees, "
+            f"{len(ring.application_ids)} applications "
+            f"{ring.first_application} to {ring.last_application}"
+        )
+        print(f"    {' -> '.join(ring.members)} -> {ring.members[0]}")
+    print(
+        f"  added {result.as_dict()['guarantees_added']} guarantee rows and "
+        f"{result.as_dict()['applications_added']} applications"
+    )
+    print("  run `load` to put them in the core stub")
+    return 0
+
+
+def _fraud(args: argparse.Namespace) -> int:
+    from synthetic.fraud_check import measure_fraud
+
+    result = measure_fraud(Path(args.out), limit=args.limit).as_dict()
+    print(
+        f"  clean cases with findings   {result['clean_with_findings']}"
+        f"/{result['clean_cases']} = {result['false_finding_rate']:.2%}"
+        f"   (ceiling {result['ceiling']:.0%})"
+    )
+    print(f"  planted ring members found  {result['planted_found']}/{result['planted_cases']}")
+    print()
+    for rule, count in result["by_rule"].items():
+        print(f"    {rule:26s} {count:>4}")
+    if result["examples"]:
+        print("\n  examples:")
+        for example in result["examples"][:5]:
+            codes = ", ".join(f"{f['rule']}/{f['severity']}" for f in example["findings"])
+            print(f"    {example['member_id']}  {codes}")
+    ok = result["meets_threshold"]
+    print(f"\n  false-finding threshold {'met' if ok else 'BREACHED'}")
+    return 0 if ok else 1
+
+
 def _load(args: argparse.Namespace) -> int:
     from synthetic.loader import load_population
 
@@ -170,6 +213,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     detection.add_argument("--limit", type=int, default=320)
     detection.set_defaults(handler=_detection)
+
+    fraud = sub.add_parser("fraud", parents=[common], help="score the fraud rules against clean cases")
+    fraud.add_argument("--limit", type=int, default=600)
+    fraud.set_defaults(handler=_fraud)
+
+    rings = sub.add_parser("rings", parents=[common], help="plant guarantee rings (docs/10 §7, scenario S5)")
+    rings.add_argument("--count", type=int, default=1)
+    rings.add_argument("--seed", type=int, default=42)
+    rings.set_defaults(handler=_rings)
 
     load = sub.add_parser("load", parents=[common], help="load a generated population into the core stub")
     load.add_argument("--base-url", default=None)

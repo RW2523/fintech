@@ -68,7 +68,32 @@ def test_the_tolerance_scales_with_the_amounts() -> None:
 
 def test_a_badly_read_figure_is_never_used_to_accuse() -> None:
     """CLAUDE.md §2.7 — an unreadable document is a DOC-04 problem."""
-    assert check_arithmetic({**BALANCED, "net_salary": "2,700.00"}, confidences={"net_salary": 0.4}) == []
+    found = check_arithmetic({**BALANCED, "net_salary": "2,700.00"}, confidences={"net_salary": 0.4})
+    assert [f.code for f in found] == ["DOC-04"]
+    assert found[0].severity == "LOW"
+    assert found[0].detail["declined_on"] == ["net_salary"]
+
+
+def test_a_check_that_cannot_run_says_so_rather_than_falling_silent() -> None:
+    """Returning nothing would let the page pass as though it was examined.
+
+    Measured on this corpus, a payslip whose deduction line read at 0.52
+    confidence had its arithmetic check declined and nothing asked for a
+    clearer copy, so an inflated net passed unexamined.
+    """
+    found = check_arithmetic(
+        {"gross_salary": "1,890.00", "net_salary": "1,424.35", "total_deductions": "588.51"},
+        confidences={"gross_salary": 0.96, "net_salary": 0.96, "total_deductions": 0.52},
+    )
+    assert [f.code for f in found] == ["DOC-04"]
+    assert found[0].detail["declined_on"] == ["total_deductions"]
+
+
+def test_an_implausible_net_is_a_reading_failure_not_an_accusation() -> None:
+    """A net of a few units against a gross of thousands was misread."""
+    found = check_arithmetic({"gross_salary": "2,612.59", "net_salary": "1.65", "total_deductions": "829.05"})
+    assert [f.code for f in found] == ["DOC-04"]
+    assert "plausible share" in found[0].detail["observed"]
 
 
 def test_a_missing_figure_raises_nothing() -> None:

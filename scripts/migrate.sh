@@ -6,16 +6,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-if [ -z "${DATABASE_URL:-}" ]; then
-  if [ ! -f docker/.env ]; then
-    echo "  docker/.env missing — run 'make env' first" >&2
-    exit 1
-  fi
-  # shellcheck disable=SC1091
-  set -a; . docker/.env; set +a
-  HOST="${POSTGRES_HOST:-localhost}"
-  export DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${HOST}:${POSTGRES_PORT:-5432}/${POSTGRES_DB}"
-fi
+# shellcheck disable=SC1091
+. scripts/database_url.sh
 
 TARGET="${1:-}"
 FAILED=()

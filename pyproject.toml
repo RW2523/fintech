@@ -139,6 +139,9 @@ ignore = [
 # The only value interpolated into SQL here is the column list, asserted at
 # import to be bare identifiers. Every request value is a bound parameter.
 "services/risk/app/repository.py" = ["S608"]
+# Same here: the only interpolated values are the column lists, asserted at
+# import to be bare identifiers. Every request value is a bound parameter.
+"services/fraud/app/repository.py" = ["S608"]
 # The interpreter dispatches on `_<AstNodeName>`, following the stdlib
 # ast.NodeVisitor convention. Lowercasing them would break the dispatch.
 "services/policy/app/expr.py" = ["N802"]
