@@ -145,6 +145,37 @@ a blocked application ends with a ledger DecisionRecord routed per policy.
 
 Whole suite at the end of P1: **629 tests**, all passing.
 
+### P2 — verified 2026-09-05
+
+`scripts/verify_phase.sh P2` — 12 pass, 0 fail.
+
+| Step | Result |
+|---|---|
+| make lint | PASS |
+| make typecheck | PASS |
+| synthetic tests (55) | PASS |
+| population sanity ranges (6 of 6) | PASS |
+| extraction accuracy (classification 100%, critical fields 97.3%) | PASS |
+| anomaly detection (97.4% found, 1.12% false positives) | PASS |
+| document service (79 tests) | PASS |
+| member intelligence (40 tests) | PASS |
+| core stub (21 tests) | PASS |
+| migrations applied (18 services) | PASS |
+| timeline imported (453,195 events) | PASS |
+| population loaded (5,000 members) | PASS |
+
+Against `docs/14` P2 criteria: population and documents generated inside the
+sanity ranges, document accuracy above the 95% critical-field bar, every
+injected anomaly class detected with only two individual misses, and the
+timeline imported.
+
+Whole suite at the end of P2: **819 tests**, all passing.
+
+**Hazard found and fixed during verification:** the core-stub test fixtures
+truncate the whole `core` schema, so running the suite wiped the seeded demo
+population. Those tests now run against a separate `cio_test` database, which
+`docker/initdb` creates.
+
 ## Blocked
 (none)
 

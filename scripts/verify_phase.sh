@@ -64,7 +64,29 @@ case "$PHASE" in
         psql -U "${POSTGRES_USER:-cio}" -d "${POSTGRES_DB:-cio}" -tAc \
         "select count(*) from pg_trigger where tgname = '"'"'snapshot_immutable'"'"'" | grep -q 1'
     ;;
-  P2|P3|P4|P5|P6|P7|P8)
+  P2)
+    # docs/14 P2: population and documents generated within the sanity ranges;
+    # extraction accuracy; every injected anomaly detected; timeline imported.
+    step "make lint"             make lint
+    step "make typecheck"        make typecheck
+    step "synthetic tests"       uv run pytest synthetic -q
+    step "population sanity"     bash -c 'uv run python -m synthetic.cli stats >/dev/null'
+    step "extraction accuracy"   bash -c 'uv run python -m synthetic.cli accuracy --limit 200 >/dev/null'
+    step "anomaly detection"     bash -c 'uv run python -m synthetic.cli detection --limit 320 >/dev/null'
+    step "document service"      bash -c 'cd services/document && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "member intelligence"   bash -c 'cd services/member_intelligence && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "core stub"             bash -c 'cd services/core_stub && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "migrations applied"    make migrate
+    step "timeline imported"     bash -c '\
+      docker compose --env-file docker/.env -f docker/compose.yaml exec -T postgres \
+        psql -U "${POSTGRES_USER:-cio}" -d "${POSTGRES_DB:-cio}" -tAc \
+        "select count(*) > 100000 from app_member.member_event" | grep -q t'
+    step "population loaded"     bash -c '\
+      docker compose --env-file docker/.env -f docker/compose.yaml exec -T postgres \
+        psql -U "${POSTGRES_USER:-cio}" -d "${POSTGRES_DB:-cio}" -tAc \
+        "select count(*) = 5000 from core.member" | grep -q t'
+    ;;
+  P3|P4|P5|P6|P7|P8)
     echo "  phase ${PHASE} verification not implemented yet" >&2
     exit 1
     ;;

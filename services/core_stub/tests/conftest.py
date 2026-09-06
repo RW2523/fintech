@@ -18,9 +18,15 @@ from sqlalchemy import text
 ROOT = Path(__file__).resolve().parents[3]
 
 
+#: These fixtures truncate the whole `core` schema, so they run against a
+#: separate database. Pointing them at the demo database would wipe the seeded
+#: population every time the suite ran.
+TEST_DATABASE = "cio_test"
+
+
 @lru_cache(maxsize=1)
 def database_url() -> str:
-    if url := os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL"):
+    if url := os.environ.get("TEST_DATABASE_URL"):
         return url
     values: dict[str, str] = {}
     env = ROOT / "docker" / ".env"
@@ -32,7 +38,7 @@ def database_url() -> str:
     return (
         f"postgresql+asyncpg://{values.get('POSTGRES_USER', 'cio')}:"
         f"{values.get('POSTGRES_PASSWORD', 'change-me')}@localhost:"
-        f"{values.get('POSTGRES_PORT', '5432')}/{values.get('POSTGRES_DB', 'cio')}"
+        f"{values.get('POSTGRES_PORT', '5432')}/{TEST_DATABASE}"
     )
 
 
