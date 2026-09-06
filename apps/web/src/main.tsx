@@ -9,6 +9,7 @@ import { Shell } from "./components/Shell";
 import { LoginPage } from "./pages/LoginPage";
 import { OfficerQueuePage } from "./pages/OfficerQueuePage";
 import { CasePage } from "./pages/CasePage";
+import { CollectionsPage } from "./pages/CollectionsPage";
 import { CompliancePage } from "./pages/CompliancePage";
 import { LedgerPage } from "./pages/LedgerPage";
 
@@ -30,6 +31,7 @@ const router = createBrowserRouter([
       { index: true, element: <Navigate to="/officer" replace /> },
       { path: "officer", element: <OfficerQueuePage /> },
       { path: "officer/cases/:caseId", element: <CasePage /> },
+      { path: "collections", element: <CollectionsPage /> },
       { path: "compliance", element: <CompliancePage /> },
       { path: "ledger", element: <LedgerPage /> },
       { path: "ledger/:caseId", element: <LedgerPage /> },

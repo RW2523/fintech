@@ -326,3 +326,104 @@ test.describe("compliance view", () => {
     await expect(page.getByTestId("attention")).toBeVisible();
   });
 });
+
+test.describe("collections workbench", () => {
+  test("lists members worth a call, each with the line that says why", async ({
+    page,
+    request,
+  }) => {
+    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
+      data: { role: "collections" },
+    });
+    const token = (await minted.json()).access_token as string;
+    const queued = await request.get(`${GATEWAY}/api/lmi/lmi/alerts?limit=5`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const alerts = (await queued.json()).alerts as { member_id: string; why_now: string }[];
+    test.skip(alerts.length === 0, "no open alerts; run the nightly evaluation first");
+
+    await signIn(page, "collections");
+    await page.getByTestId("nav-collections").click();
+
+    const rows = page.getByTestId("watch-rows").getByRole("row");
+    await expect(rows.first()).toBeVisible();
+
+    // The why-now line is what an officer reads to choose which of
+    // twenty-five members to call first, so it has to be on the row.
+    await expect(page.getByText(alerts[0].why_now, { exact: false })).toBeVisible();
+  });
+
+  test("opening a member shows how they got there and what is expected", async ({
+    page,
+    request,
+  }) => {
+    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
+      data: { role: "collections" },
+    });
+    const token = (await minted.json()).access_token as string;
+    const queued = await request.get(`${GATEWAY}/api/lmi/lmi/alerts?limit=5`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const alerts = (await queued.json()).alerts as { member_id: string }[];
+    test.skip(alerts.length === 0, "no open alerts; run the nightly evaluation first");
+
+    await signIn(page, "collections");
+    await page.getByTestId("nav-collections").click();
+    await page.getByTestId(`watch-row-${alerts[0].member_id}`).click();
+
+    await expect(page.getByTestId("member-timeline")).toBeVisible();
+    await expect(page.getByTestId("member-state")).toBeVisible();
+    await expect(page.getByTestId("member-forecast")).toBeVisible();
+
+    // The forecast carries its interval, because quoting a point estimate
+    // alone claims a precision the model does not have.
+    await expect(page.getByTestId("horizon-30")).toContainText("%");
+  });
+
+  test("an officer writes an outreach and it reaches the member's inbox", async ({
+    page,
+    request,
+  }) => {
+    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
+      data: { role: "collections" },
+    });
+    const token = (await minted.json()).access_token as string;
+    const queued = await request.get(`${GATEWAY}/api/lmi/lmi/alerts?limit=5`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const alerts = (await queued.json()).alerts as { member_id: string }[];
+    test.skip(alerts.length === 0, "no open alerts; run the nightly evaluation first");
+
+    await signIn(page, "collections");
+    await page.getByTestId("nav-collections").click();
+    await page.getByTestId(`watch-row-${alerts[0].member_id}`).click();
+
+    await page
+      .getByTestId("outreach-body")
+      .fill("We noticed your instalments arriving later than usual and wanted to check in.");
+    await page.getByTestId("outreach-send").click();
+
+    await expect(page.getByTestId("outreach-sent")).toBeVisible();
+    await expect(page.getByTestId("member-inbox")).toContainText("wanted to check in");
+  });
+
+  test("the screen says what it cannot do", async ({ page, request }) => {
+    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
+      data: { role: "collections" },
+    });
+    const token = (await minted.json()).access_token as string;
+    const queued = await request.get(`${GATEWAY}/api/lmi/lmi/alerts?limit=5`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const alerts = (await queued.json()).alerts as { member_id: string }[];
+    test.skip(alerts.length === 0, "no open alerts; run the nightly evaluation first");
+
+    await signIn(page, "collections");
+    await page.getByTestId("nav-collections").click();
+    await page.getByTestId(`watch-row-${alerts[0].member_id}`).click();
+
+    // The constraint that makes this page safe, said on the page: this member
+    // has not applied for anything.
+    await expect(page.getByTestId("outreach")).toContainText("has not applied for anything");
+  });
+});

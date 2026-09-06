@@ -159,6 +159,10 @@ execution-drill:  ## turn an approval into a facility, then replay it (needs 'ma
 train-lmi:  ## train the early-warning and survival models (needs 'make up')
 	@$(UV) run python -m ml.lmi
 
+.PHONY: outreach-drill
+outreach-drill:  ## schedule reminders, cancel on payment, send an outreach (needs 'make up')
+	@$(UV) run python scripts/outreach_drill.py
+
 .PHONY: state-eval
 state-eval:  ## walk every member through the state machine and measure it (needs 'make up')
 	@$(UV) run python scripts/state_machine_eval.py

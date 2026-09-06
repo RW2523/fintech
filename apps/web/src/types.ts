@@ -174,3 +174,66 @@ export type Reconstruction = {
   chain: ChainVerification;
   unavailable: string[];
 };
+
+
+/** docs/09 §4 — the collections workbench. */
+export type WatchAlert = {
+  alert_id: string;
+  member_id: string;
+  account_id: string | null;
+  state: "WATCH" | "ELEVATED" | "CRITICAL" | "RECOVERY" | string;
+  signals: string[];
+  rank_value: number;
+  why_now: string;
+  p90: number | null;
+  exposure: number;
+  change_point: string | null;
+  corroboration: { confirms?: string[]; explains?: string[]; silent?: string[] };
+  opened_at: string | null;
+};
+
+export type MemberWatch = {
+  member_id: string;
+  state: string;
+  since: string | null;
+  rule?: string;
+  reason?: string;
+  evaluated: boolean;
+  transitions: {
+    at: string;
+    from_state: string;
+    to_state: string;
+    rule: string;
+    reason: string;
+  }[];
+};
+
+export type HorizonScore = {
+  horizon_days: number;
+  probability: number;
+  interval: { lower: number; upper: number; nominal: number; band: string; band_n: number };
+  drivers: { feature: string; value: number; direction: string; contribution: number; kind: string }[];
+  calibration_warning?: string;
+};
+
+export type MemberScore = {
+  member_id: string;
+  model_version: string;
+  stale_days: number;
+  features_missing: string[];
+  scores: HorizonScore[];
+};
+
+export type InboxMessage = {
+  message_id: string;
+  template_id: string;
+  language: string;
+  channel: string;
+  state: string;
+  subject: string | null;
+  body: string;
+  sent_at: string | null;
+  scheduled_at: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+};
