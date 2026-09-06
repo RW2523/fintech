@@ -142,6 +142,11 @@ ignore = [
 # Same here: the only interpolated values are the column lists, asserted at
 # import to be bare identifiers. Every request value is a bound parameter.
 "services/fraud/app/repository.py" = ["S608"]
+# The timeout is handed to httpx, which enforces it on the connection. Ruff
+# wants `asyncio.timeout()` around the await, which would add a second,
+# competing deadline over one the HTTP client already applies correctly.
+"services/llm_gateway/app/providers.py" = ["ASYNC109"]
+"services/llm_gateway/app/gateway.py" = ["ASYNC109"]
 # The interpreter dispatches on `_<AstNodeName>`, following the stdlib
 # ast.NodeVisitor convention. Lowercasing them would break the dispatch.
 "services/policy/app/expr.py" = ["N802"]

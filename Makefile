@@ -100,8 +100,8 @@ reset:  ## wipe and re-seed to the golden demo state
 	@$(MAKE) todo TASK=T-082
 
 .PHONY: warmup
-warmup:  ## one call per LLM route so JIT/compile is done before a demo
-	@$(MAKE) todo TASK=T-082
+warmup: $(ENV_FILE)  ## one call per LLM route so JIT/compile is done before a demo
+	@scripts/warmup_llm.sh
 
 # ---------------------------------------------------------------------------
 # quality
