@@ -342,6 +342,7 @@ def _deductions(
         employer_id = member["employer_id"]
         expected = round(member["_salary"] * 0.25, 2)
         archetype = member["_archetype"]
+        base_net = member["_salary"] * 0.72
 
         for month in range(1, settings.months + 1):
             counter += 1
@@ -362,6 +363,10 @@ def _deductions(
                     "cycle": cycle_label(settings.history_start, month),
                     "expected_amount": _money(expected),
                     "received_amount": _money(expected) if received else None,
+                    # The net pay the employer reports for this cycle. It is the
+                    # independent figure a payslip is reconciled against
+                    # (docs/07 §1.5).
+                    "net_salary": _money(base_net + float(rng.normal(0, member["_salary"] * 0.005))),
                     "received_at": datetime.combine(when, datetime.min.time(), UTC)
                     .isoformat()
                     .replace("+00:00", "Z")

@@ -220,11 +220,13 @@ def generate_documents(
     if not members:
         raise FileNotFoundError(f"no population in {population_dir}; run `synthetic.cli population` first")
 
-    # what the employer actually remitted, for the reconciliation anomaly
-    remitted: dict[tuple[str, str], float] = {
-        (row["member_id"], row["cycle"]): float(row["received_amount"])
+    # The net pay the employer reported for each cycle. The payslip is printed
+    # from this, so payslip and deduction record agree unless an anomaly is
+    # injected, which is what makes docs/07 §1.5's comparison meaningful.
+    reported_net: dict[tuple[str, str], float] = {
+        (row["member_id"], row["cycle"]): float(row["net_salary"])
         for row in deductions
-        if row["received_amount"] is not None
+        if row.get("net_salary") is not None
     }
 
     chosen = rng.choice(len(members), size=min(applications_wanted, len(members)), replace=False)
@@ -307,7 +309,7 @@ def generate_documents(
                     employer,
                     salary,
                     periods,
-                    remitted,
+                    reported_net,
                     rng,
                     renderer,
                     anomaly_kind,
@@ -368,7 +370,7 @@ def _build(
     employer: dict[str, Any],
     salary: float,
     periods: list[str],
-    remitted: dict[tuple[str, str], float],
+    reported_net: dict[tuple[str, str], float],
     rng: np.random.Generator,
     renderer: Renderer,
     anomaly_kind: AnomalyKind | None,
@@ -383,25 +385,28 @@ def _build(
     template_id: str | None = None
 
     if document_type == "PAYSLIP_LATEST_3":
-        net_by_period = {}
-        for label in periods:
-            expected = remitted.get((member["member_id"], label), salary * 0.25)
-            net_by_period[label] = round(salary * 0.72 + float(rng.normal(0, salary * 0.005)), 2)
-            del expected
+        net_by_period = {
+            label: round(reported_net.get((member["member_id"], label), salary * 0.72), 2)
+            for label in periods
+        }
 
         net_style = ""
         detail: dict[str, Any] = {}
 
+        edited_net: tuple[str, float] | None = None
         if anomaly_kind is AnomalyKind.EDITED_TOTAL:
             original = net_by_period[periods[0]]
             inflated = round(original * float(rng.uniform(1.08, 1.20)), 2)
-            net_by_period[periods[0]] = inflated
-            # re-typeset in another face, which is what the forensics look for
+            # A forger raises the net and re-typesets it. They do not recompute
+            # the deduction total, so the page stops adding up. That arithmetic
+            # break is what forensics detects, with the font change as support.
+            edited_net = (periods[0], inflated)
             net_style = "font-family: 'Liberation Serif', serif; letter-spacing: .06em;"
             detail = {
                 "original_net": original,
                 "stated_net": inflated,
                 "inflation": round(inflated / original - 1, 4),
+                "arithmetic_breaks": True,
             }
             anomaly = anomaly_kind
 
@@ -422,6 +427,14 @@ def _build(
         context = _payslip_context(
             member, employer, net_by_period, rng, template_id=template_id, net_style=net_style
         )
+        if edited_net is not None:
+            # overwrite only the printed net; the deduction total keeps the
+            # value computed from the true figure
+            label, inflated_value = edited_net
+            for block in context["periods"]:
+                if block["period"] == label:
+                    block["net_salary"] = _money(inflated_value)
+
         result = renderer.render(f"payslip_{template_id}.html.j2", context)
         truth = {
             "employer_name": employer["name"],

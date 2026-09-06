@@ -47,6 +47,16 @@ class FieldSpec:
     allow_next_line: bool = False
     #: Only consider lines that appear before the first line containing this.
     before_marker: str = ""
+    #: Give up rather than search the whole page when the marker is not found.
+    #: Without this a letter's start date gets read as its issue date.
+    require_marker: bool = False
+    #: Take the last match rather than the first. A letter's issue date sits
+    #: immediately above the salutation, after the letterhead.
+    take_last: bool = False
+    #: Upper-case the reading before matching. Identity and reference numbers
+    #: are upper-case by convention, and OCR reads a capital Z as a lower-case
+    #: one often enough to lose a match that matters.
+    uppercase: bool = False
     #: Values must look like this, if given.
     pattern: re.Pattern[str] | None = None
     #: Which matching occurrence to take, for repeated sections.
@@ -107,7 +117,7 @@ FIELD_SPECS: dict[str, tuple[FieldSpec, ...]] = {
     ),
     "IDENTITY": (
         FieldSpec("name", label="Name", stop_labels=("ID number",)),
-        FieldSpec("id_number", label="ID number", pattern=_ID_NUMBER),
+        FieldSpec("id_number", label="ID number", pattern=_ID_NUMBER, uppercase=True),
         FieldSpec("dob", label="Date of birth", pattern=_DATE),
         FieldSpec("expiry", label="Expires", pattern=_DATE),
     ),
@@ -184,6 +194,11 @@ def _rejoin_thousands(words: list[Word], index: int, value: str) -> tuple[str, l
     return value, [words[index]]
 
 
+def _case(text: str, spec: FieldSpec) -> str:
+    """Upper-case a reading when the field is upper-case by convention."""
+    return text.upper() if spec.uppercase else text
+
+
 def _labels(spec: FieldSpec) -> tuple[str, ...]:
     return (spec.label, *spec.aliases) if spec.label else spec.aliases
 
@@ -211,7 +226,7 @@ def _value_after_label(line: Line, spec: FieldSpec, label: str) -> tuple[str, li
             position += 1
             if spec.pattern is not None and collected:
                 # a pattern field is a single token; stop as soon as one matches
-                candidate = _clean(collected[-1].text)
+                candidate = _case(_clean(collected[-1].text), spec)
                 if spec.pattern.match(candidate):
                     absolute = index + consumed + position - 1
                     if spec.pattern is _MONEY:
@@ -220,7 +235,7 @@ def _value_after_label(line: Line, spec: FieldSpec, label: str) -> tuple[str, li
 
         if not collected:
             continue
-        text = _clean(" ".join(w.text for w in collected))
+        text = _case(_clean(" ".join(w.text for w in collected)), spec)
         if spec.pattern is not None and not spec.pattern.match(text):
             continue
         return text, collected
@@ -260,33 +275,41 @@ def extract_fields(document_type: str, lines: list[Line], *, method: str = "ocr"
     for spec in specs:
         hits: list[tuple[str, list[Word]]] = []
 
+        # A marker narrows the search for every kind of field, not just the
+        # labelled ones: a letter's issue date is the one above the salutation,
+        # and its start date sits below.
+        searchable = lines
+        if spec.before_marker:
+            marker = next(
+                (
+                    i
+                    for i, line in enumerate(lines)
+                    if fuzz.partial_ratio(spec.before_marker.casefold(), line.text.casefold()) >= 88
+                ),
+                None,
+            )
+            if marker is None and spec.require_marker:
+                found.append(ExtractedField(spec.name, None, None, 0.0, None, method))
+                continue
+            searchable = lines[:marker] if marker is not None else lines
+
         if spec.first_line:
-            hit = _first_line_value(lines)
+            hit = _first_line_value(searchable)
             if hit:
                 hits.append(hit)
         elif not spec.label:
-            # positional: the first token anywhere matching the pattern
-            for line in lines:
+            # positional: every token matching the pattern, in reading order
+            for line in searchable:
                 for word in line.words:
-                    candidate = _clean(word.text)
+                    candidate = _case(_clean(word.text), spec)
                     if spec.pattern is not None and spec.pattern.match(candidate):
                         hits.append((candidate, [word]))
                         break
-                if hits:
+                if hits and not spec.take_last:
                     break
+            if spec.take_last and hits:
+                hits = [hits[-1]]
         else:
-            searchable = lines
-            if spec.before_marker:
-                marker = next(
-                    (
-                        i
-                        for i, line in enumerate(lines)
-                        if fuzz.partial_ratio(spec.before_marker.casefold(), line.text.casefold()) >= 88
-                    ),
-                    len(lines),
-                )
-                searchable = lines[:marker]
-
             for position, line in enumerate(searchable):
                 for label in _labels(spec):
                     hit = _value_after_label(line, spec, label)
@@ -300,6 +323,8 @@ def extract_fields(document_type: str, lines: list[Line], *, method: str = "ocr"
                     if hit:
                         hits.append(hit)
                         break
+            if spec.take_last and hits:
+                hits = [hits[-1]]
 
         if len(hits) <= spec.occurrence:
             found.append(ExtractedField(spec.name, None, None, 0.0, None, method))

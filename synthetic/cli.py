@@ -91,6 +91,34 @@ def _accuracy(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def _detection(args: argparse.Namespace) -> int:
+    from synthetic.detection import measure_detection
+
+    result = measure_detection(Path(args.out) / "documents", limit=args.limit).as_dict()
+    print(
+        f"  injected {result['injected']}, detected {result['detected']}"
+        f"  -> {result['detection_rate']:.1%}   (target 100%)"
+    )
+    print(
+        f"  integrity false positives   {result['clean_with_findings']}"
+        f"/{result['clean_documents']} = {result['false_positive_rate']:.2%}"
+        f"   (target <= 3%)"
+    )
+    print(
+        f"  routed for more information {result['unreadable']}"
+        f"/{result['clean_documents']} = {result['unreadable_rate']:.1%}"
+        f"   (DOC-04, not an accusation)"
+    )
+    print()
+    for kind, stats in result["by_kind"].items():
+        mark = "  " if stats["rate"] >= 1.0 else "<-"
+        print(f"  {mark} {kind:22s} {stats['detected']}/{stats['injected']}")
+
+    ok = result["false_positive_rate"] <= 0.03
+    print(f"\n  false-positive threshold {'met' if ok else 'BREACHED'}")
+    return 0 if ok else 1
+
+
 def _load(args: argparse.Namespace) -> int:
     from synthetic.loader import load_population
 
@@ -136,6 +164,12 @@ def main(argv: list[str] | None = None) -> int:
     accuracy = sub.add_parser("accuracy", parents=[common], help="score extraction against the ground truth")
     accuracy.add_argument("--limit", type=int, default=300)
     accuracy.set_defaults(handler=_accuracy)
+
+    detection = sub.add_parser(
+        "detection", parents=[common], help="score forensics against the anomaly manifest"
+    )
+    detection.add_argument("--limit", type=int, default=320)
+    detection.set_defaults(handler=_detection)
 
     load = sub.add_parser("load", parents=[common], help="load a generated population into the core stub")
     load.add_argument("--base-url", default=None)

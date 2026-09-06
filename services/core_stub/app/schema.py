@@ -85,6 +85,9 @@ CREATE TABLE IF NOT EXISTS core.deduction (
   cycle           text NOT NULL,
   expected_amount numeric(18,2) NOT NULL,
   received_amount numeric(18,2),
+  -- what the employer reports as the member's net pay for this cycle; the
+  -- independent figure a payslip is reconciled against (docs/07 §1.5)
+  net_salary      numeric(18,2),
   received_at     timestamptz,
   UNIQUE (member_id, cycle)
 );
