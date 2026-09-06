@@ -1,0 +1,171 @@
+{
+  "case_id": "case_S3TAMPER",
+  "expected": {
+    "fraud_level": "HIGH",
+    "recommendation": "COMPLIANCE_REVIEW",
+    "weighted_score": null
+  },
+  "scenario": "S3",
+  "snapshot": {
+    "amount": "18000.00",
+    "autonomy_version": "autonomy/PF-STD/2026.09.1",
+    "case_id": "case_S3TAMPER",
+    "dff_version": "dff/PF-STD/2026.09.1",
+    "documents": [
+      {
+        "confidence": 0.96,
+        "document_id": "doc_identity",
+        "status": "EXTRACTED",
+        "type": "IDENTITY"
+      },
+      {
+        "confidence": 0.94,
+        "document_id": "doc_payslip",
+        "status": "EXTRACTED",
+        "type": "PAYSLIP_LATEST_3"
+      },
+      {
+        "confidence": 0.92,
+        "document_id": "doc_letter",
+        "status": "EXTRACTED",
+        "type": "EMPLOYMENT_CONFIRMATION"
+      }
+    ],
+    "member": {
+      "branch_id": "BR-01",
+      "employer_sector": "PUBLIC_ADMIN",
+      "member_ref": "\u00abMEMBER_1\u00bb",
+      "tenure_months": 54
+    },
+    "model_versions": {
+      "fraud": "fraud-rules/1.0",
+      "risk": "2026.09.1"
+    },
+    "policy_version": "policy/PF-STD/2026.09.1",
+    "product_code": "PF-STD",
+    "purpose": "HOME_IMPROVEMENT",
+    "snapshot_id": "snap_000000000000000000S3TAMPER",
+    "tenor_months": 36
+  },
+  "title": "Altered document and reused image",
+  "tool_results": {
+    "documents.list": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000015"
+        },
+        {
+          "evidence_id": "ev_00000000000000000000000016"
+        }
+      ],
+      "result": [
+        {
+          "classified_conf": 0.91,
+          "document_id": "doc_payslip",
+          "pages": 1,
+          "status": "EXTRACTED",
+          "type": "PAYSLIP_LATEST_3"
+        },
+        {
+          "classified_conf": 0.88,
+          "document_id": "doc_bank",
+          "pages": 3,
+          "status": "EXTRACTED",
+          "type": "BANK_STATEMENT_3M"
+        }
+      ],
+      "tool": "documents.list"
+    },
+    "forensics.get": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000017"
+        },
+        {
+          "evidence_id": "ev_00000000000000000000000018"
+        }
+      ],
+      "result": [
+        {
+          "code": "INT-01",
+          "detail": {
+            "check": "payslip_arithmetic",
+            "deviation": 214.6
+          },
+          "document_id": "doc_payslip",
+          "severity": "HIGH"
+        },
+        {
+          "code": "INT-02",
+          "detail": {
+            "check": "reused_image",
+            "confirmed": true
+          },
+          "document_id": "doc_bank",
+          "severity": "HIGH"
+        }
+      ],
+      "tool": "forensics.get"
+    },
+    "fraud.assess": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_0000000000000000000000001A"
+        }
+      ],
+      "result": {
+        "calc_id": "calc_S3INTEGRITY",
+        "findings": [
+          {
+            "code": "INT-01",
+            "rule": "document_metadata",
+            "severity": "HIGH"
+          },
+          {
+            "code": "INT-02",
+            "rule": "reused_image",
+            "severity": "HIGH"
+          }
+        ],
+        "integrity_score": 10,
+        "level": "HIGH"
+      },
+      "tool": "fraud.assess"
+    },
+    "policy.evaluate": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_0000000000000000000000001B"
+        }
+      ],
+      "result": {
+        "blockers": [],
+        "flags": [],
+        "gates": [
+          {
+            "result": "ROUTE",
+            "route": "COMPLIANCE_REVIEW",
+            "rule_id": "RT-01"
+          }
+        ]
+      },
+      "tool": "policy.evaluate"
+    },
+    "reconciliation.get": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000019"
+        }
+      ],
+      "result": [
+        {
+          "code": "INT-01",
+          "document_id": "doc_payslip",
+          "finding_id": "fnd_S3",
+          "severity": "HIGH"
+        }
+      ],
+      "tool": "reconciliation.get"
+    }
+  }
+}

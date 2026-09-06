@@ -1,5 +1,5 @@
 family: council
 route: reasoning
 output_schema: agent_opinion/1.3
-max_output_tokens: 900
+max_output_tokens: 1400
 temperature: 0.1

@@ -16,11 +16,20 @@ from typing import Any
 
 import httpx
 
-__all__ = ["Completion", "Provider", "ProviderError", "provider_for"]
+__all__ = ["Completion", "Provider", "ProviderError", "ProviderRejectedError", "provider_for"]
 
 
 class ProviderError(RuntimeError):
     """The provider could not be reached, or refused."""
+
+
+class ProviderRejectedError(ProviderError):
+    """The provider understood the request and refused it.
+
+    A different failure from an outage, and it must not count toward the
+    circuit breaker: one caller sending a schema the grammar engine cannot
+    compile would otherwise take the route down for everybody.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +67,14 @@ class Provider(ABC):
 
     async def close(self) -> None:
         return None
+
+
+def _detail(response: httpx.Response) -> str:
+    """The provider's own words about why it refused."""
+    try:
+        return str(response.json()["error"]["message"])[:300]
+    except Exception:
+        return f"{response.status_code} {response.text[:200]}"
 
 
 def _json_instruction(schema: dict[str, Any]) -> str:
@@ -128,6 +145,10 @@ class OpenAICompatible(Provider):
                 )
                 response.raise_for_status()
                 payload = response.json()
+        except httpx.HTTPStatusError as exc:
+            if 400 <= exc.response.status_code < 500:
+                raise ProviderRejectedError(f"{self.name}: {_detail(exc.response)}") from exc
+            raise ProviderError(f"{self.name}: {exc}") from exc
         except httpx.HTTPError as exc:
             raise ProviderError(f"{self.name}: {exc}") from exc
 

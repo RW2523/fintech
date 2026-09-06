@@ -13,7 +13,7 @@ from app.breaker import CircuitOpenError, breaker_for
 from app.budget import Budget, BudgetExceededError
 from app.config import ROUTES, route_config
 from app.config import routes as route_configs
-from app.gateway import GatewayError, SchemaViolationError
+from app.gateway import BadRequestError, GatewayError, SchemaViolationError
 from app.providers import Provider, ProviderError
 from cio_common.errors import LlmUnavailable, ValidationFailed
 
@@ -101,6 +101,10 @@ async def _complete(**kwargs: Any) -> dict[str, Any]:
         # The model answered, wrongly, twice. That is not the provider being
         # down, so it is a 422: the caller degrades rather than retries.
         raise ValidationFailed(str(exc), errors=exc.errors[:5], attempts=exc.attempts) from exc
+    except BadRequestError as exc:
+        # The provider refused the request itself. That is the caller's to fix,
+        # so it is a 422 and the route stays up.
+        raise ValidationFailed(str(exc)) from exc
     except (GatewayError, ProviderError) as exc:
         raise LlmUnavailable(str(exc)) from exc
     return result.as_contract()

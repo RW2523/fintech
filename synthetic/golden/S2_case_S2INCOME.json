@@ -1,0 +1,170 @@
+{
+  "case_id": "case_S2INCOME",
+  "expected": {
+    "finding": "INT-03",
+    "fraud_level": "MEDIUM",
+    "recommendation": "APPROVE",
+    "tier": "EXTENDED"
+  },
+  "scenario": "S2",
+  "snapshot": {
+    "amount": "25000.00",
+    "autonomy_version": "autonomy/PF-STD/2026.09.1",
+    "case_id": "case_S2INCOME",
+    "dff_version": "dff/PF-STD/2026.09.1",
+    "documents": [
+      {
+        "confidence": 0.96,
+        "document_id": "doc_identity",
+        "status": "EXTRACTED",
+        "type": "IDENTITY"
+      },
+      {
+        "confidence": 0.94,
+        "document_id": "doc_payslip",
+        "status": "EXTRACTED",
+        "type": "PAYSLIP_LATEST_3"
+      },
+      {
+        "confidence": 0.92,
+        "document_id": "doc_letter",
+        "status": "EXTRACTED",
+        "type": "EMPLOYMENT_CONFIRMATION"
+      }
+    ],
+    "member": {
+      "branch_id": "BR-01",
+      "employer_sector": "PUBLIC_ADMIN",
+      "member_ref": "\u00abMEMBER_1\u00bb",
+      "tenure_months": 120
+    },
+    "model_versions": {
+      "fraud": "fraud-rules/1.0",
+      "risk": "2026.09.1"
+    },
+    "policy_version": "policy/PF-STD/2026.09.1",
+    "product_code": "PF-STD",
+    "purpose": "HOME_IMPROVEMENT",
+    "snapshot_id": "snap_000000000000000000S2INCOME",
+    "tenor_months": 48
+  },
+  "title": "Income discrepancy",
+  "tool_results": {
+    "affordability.compute": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_0000000000000000000000000E"
+        }
+      ],
+      "result": {
+        "calc_id": "calc_S2CAPACITY",
+        "capacity_score": 62,
+        "dsr": 0.41,
+        "dsr_limit": 0.5,
+        "headroom": 0.09,
+        "instalment": 651.04,
+        "residual": 1980.0
+      },
+      "tool": "affordability.compute"
+    },
+    "documents.list": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_0000000000000000000000000B"
+        }
+      ],
+      "result": [
+        {
+          "classified_conf": 0.93,
+          "document_id": "doc_payslip",
+          "pages": 1,
+          "status": "EXTRACTED",
+          "type": "PAYSLIP_LATEST_3"
+        }
+      ],
+      "tool": "documents.list"
+    },
+    "fraud.assess": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000010"
+        }
+      ],
+      "result": {
+        "calc_id": "calc_S2INTEGRITY",
+        "findings": [
+          {
+            "code": "INT-03",
+            "rule": "income_variance",
+            "severity": "MEDIUM"
+          }
+        ],
+        "integrity_score": 80,
+        "level": "MEDIUM"
+      },
+      "tool": "fraud.assess"
+    },
+    "policy.evaluate": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_0000000000000000000000000D"
+        }
+      ],
+      "result": {
+        "blockers": [],
+        "flags": [
+          "THIN_HEADROOM"
+        ],
+        "gates": [
+          {
+            "result": "PASS",
+            "rule_id": "AFF-01"
+          }
+        ]
+      },
+      "tool": "policy.evaluate"
+    },
+    "reconciliation.get": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_0000000000000000000000000C"
+        }
+      ],
+      "result": [
+        {
+          "code": "INT-03",
+          "detail": {
+            "deduction_record_median": 2201.15,
+            "payslip_net_median": 2070.0,
+            "variance": 0.0596
+          },
+          "document_id": "doc_payslip",
+          "finding_id": "fnd_S2",
+          "severity": "MEDIUM"
+        }
+      ],
+      "tool": "reconciliation.get"
+    },
+    "risk.score": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_0000000000000000000000000F"
+        }
+      ],
+      "result": {
+        "champion": {
+          "grade": "B",
+          "ood_score": 0.31,
+          "pd_12m": 0.0244
+        },
+        "conduct_calc_id": "calc_S2CONDUCT",
+        "conduct_score": 79,
+        "model_run_id": "mr_S2",
+        "reason_codes": [
+          "CON-01"
+        ]
+      },
+      "tool": "risk.score"
+    }
+  }
+}

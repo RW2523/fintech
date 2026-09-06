@@ -189,6 +189,26 @@ def test_the_forbidden_terms_cover_the_protected_characteristics() -> None:
         assert word in lowered
 
 
+def test_a_window_named_in_a_field_counts_as_a_source() -> None:
+    """`ontime_rate_24m` makes 24 available.
+
+    An agent saying "over 24 months" is naming the window it was given, not
+    computing one, and rejecting that punished ordinary phrasing.
+    """
+    tools = [{"tool": "history.get", "result": {"ontime_rate_24m": 0.96, "arrears_12m": 0}}]
+    result = screen_opinion(
+        opinion("The on-time rate is 0.96 over 24 months, no arrears in 12."),
+        tool_results=tools,
+        evidence_ids=EVIDENCE,
+    )
+    assert result.passed
+
+
+def test_a_field_name_does_not_licence_an_unrelated_figure() -> None:
+    tools = [{"tool": "history.get", "result": {"ontime_rate_24m": 0.96}}]
+    assert not screen_opinion(opinion("The ratio is 0.73."), tool_results=tools, evidence_ids=EVIDENCE).passed
+
+
 def test_an_opinion_with_no_claims_passes_the_screen() -> None:
     """A degraded opinion has none, and must not be rejected for that."""
     assert screen_opinion({"claims": []}, tool_results=TOOLS).passed

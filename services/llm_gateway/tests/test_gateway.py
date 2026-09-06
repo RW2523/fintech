@@ -14,6 +14,9 @@ from app.providers import FakeProvider, ProviderError
 from tests.conftest import OPINION_SCHEMA
 
 GOOD = '{"stance": "SUPPORT", "confidence": 0.8}'
+#: Comfortably above the agent route's output ceiling, which the budget is
+#: checked against before a call rather than after it.
+BUDGET = 8000
 BAD = '{"stance": "MAYBE", "confidence": 0.8}'
 
 
@@ -90,28 +93,30 @@ async def test_tokens_are_counted_across_the_retry() -> None:
 # budgets
 # ---------------------------------------------------------------------------
 async def test_a_call_within_budget_is_allowed() -> None:
-    result = await ask(FakeProvider(replies=[GOOD]), run_id="run_1", budget=Budget(tokens=1000))
+    result = await ask(FakeProvider(replies=[GOOD]), run_id="run_1", budget=Budget(tokens=BUDGET))
     assert result.run_usage["tokens"] == 60
 
 
 async def test_a_call_that_would_exceed_the_budget_is_refused_before_it_runs() -> None:
     """Refusing after the tokens are spent would not be a budget."""
     fake = FakeProvider(replies=[GOOD])
-    usage_ledger().record("run_2", 990)
+    usage_ledger().record("run_2", BUDGET - 10)
     with pytest.raises(BudgetExceededError):
-        await ask(fake, run_id="run_2", budget=Budget(tokens=1000))
+        await ask(fake, run_id="run_2", budget=Budget(tokens=BUDGET))
     assert fake.calls == []
 
 
 async def test_spending_accumulates_across_calls_in_a_run() -> None:
     for _ in range(3):
-        await ask(FakeProvider(replies=[GOOD]), run_id="run_3", budget=Budget(tokens=1000))
-    assert usage_ledger().report("run_3") == {"tokens": 180, "calls": 3}
+        await ask(FakeProvider(replies=[GOOD]), run_id="run_3", budget=Budget(tokens=BUDGET))
+    report = usage_ledger().report("run_3")
+    assert report["calls"] == 3
+    assert report["tokens"] == 3 * 60
 
 
 async def test_a_failed_schema_still_costs_the_run() -> None:
     with pytest.raises(SchemaViolationError):
-        await ask(FakeProvider(replies=[BAD, BAD]), run_id="run_4", budget=Budget(tokens=1000))
+        await ask(FakeProvider(replies=[BAD, BAD]), run_id="run_4", budget=Budget(tokens=BUDGET))
     assert usage_ledger().report("run_4")["tokens"] > 0
 
 
@@ -222,4 +227,6 @@ async def test_the_route_ceiling_caps_what_a_caller_asks_for(client: AsyncClient
         "/llm/complete",
         json={"route": "fast", "max_tokens": 8000, "messages": [{"role": "user", "content": "narrate"}]},
     )
-    assert fake.calls[0]["max_tokens"] == 300
+    from app.config import DEFAULT_MAX_TOKENS
+
+    assert fake.calls[0]["max_tokens"] == DEFAULT_MAX_TOKENS["fast"]

@@ -19,7 +19,11 @@ ROUTES = ("agent", "reasoning", "fast", "vision", "embed", "rerank")
 
 #: Output ceilings per route, so a runaway generation cannot spend a run's
 #: whole budget. `fast` is deliberately small: it narrates, it does not reason.
-DEFAULT_MAX_TOKENS = {"agent": 700, "reasoning": 1200, "fast": 300, "vision": 900, "embed": 0, "rerank": 0}
+#: Measured on this build: a Council opinion with five claims runs about 370
+#: output tokens and one with the eight the prompt allows runs past a thousand.
+#: A ceiling below that truncates the JSON mid-object, which the caller then
+#: sees as "the answer was not JSON" rather than as the limit it is.
+DEFAULT_MAX_TOKENS = {"agent": 1600, "reasoning": 2000, "fast": 400, "vision": 1200, "embed": 0, "rerank": 0}
 
 #: A route that has not answered in this long is treated as down. Generous
 #: enough for a large local model's first token, short enough that a hung

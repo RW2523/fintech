@@ -232,9 +232,13 @@ async def invoke(
 
         opinion = _finish(invocation, answer.value or {}, answer.tool_calls)
         problems = _runtime_rules(opinion)
-        result = screen_opinion(
-            opinion, tool_results=invocation.tool_results, evidence_ids=context.evidence_ids
-        )
+        # Everything the runtime put in front of the agent counts as a source
+        # for the numbers rule, not the tool results alone. The case summary
+        # comes from the frozen snapshot, so an agent quoting a tenure it was
+        # shown is reading rather than computing; screening against tools only
+        # punished it for using what it was given.
+        shown = [*invocation.tool_results, {"case_summary": invocation.snapshot}]
+        result = screen_opinion(opinion, tool_results=shown, evidence_ids=context.evidence_ids)
         screening = result.as_dict()
         problems += [f"{r['where']}: {r['detail']}" for r in result.rejections]
 

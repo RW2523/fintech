@@ -1,0 +1,231 @@
+{
+  "case_id": "case_S5RING",
+  "expected": {
+    "cycle_length": 7,
+    "finding": "INT-05",
+    "fraud_level": "HIGH",
+    "route": "COMPLIANCE_REVIEW"
+  },
+  "scenario": "S5",
+  "snapshot": {
+    "amount": "9000.00",
+    "autonomy_version": "autonomy/PF-STD/2026.09.1",
+    "case_id": "case_S5RING",
+    "dff_version": "dff/PF-STD/2026.09.1",
+    "documents": [
+      {
+        "confidence": 0.96,
+        "document_id": "doc_identity",
+        "status": "EXTRACTED",
+        "type": "IDENTITY"
+      },
+      {
+        "confidence": 0.94,
+        "document_id": "doc_payslip",
+        "status": "EXTRACTED",
+        "type": "PAYSLIP_LATEST_3"
+      },
+      {
+        "confidence": 0.92,
+        "document_id": "doc_letter",
+        "status": "EXTRACTED",
+        "type": "EMPLOYMENT_CONFIRMATION"
+      }
+    ],
+    "member": {
+      "branch_id": "BR-01",
+      "employer_sector": "PUBLIC_ADMIN",
+      "member_ref": "\u00abMEMBER_1\u00bb",
+      "tenure_months": 66
+    },
+    "model_versions": {
+      "fraud": "fraud-rules/1.0",
+      "risk": "2026.09.1"
+    },
+    "policy_version": "policy/PF-STD/2026.09.1",
+    "product_code": "PF-STD",
+    "purpose": "DEBT_CONSOLIDATION",
+    "snapshot_id": "snap_00000000000000000000S5RING",
+    "tenor_months": 36
+  },
+  "title": "Guarantor ring",
+  "tool_results": {
+    "documents.list": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000029"
+        }
+      ],
+      "result": [
+        {
+          "classified_conf": 0.95,
+          "document_id": "doc_identity",
+          "pages": 1,
+          "status": "EXTRACTED",
+          "type": "IDENTITY"
+        }
+      ],
+      "tool": "documents.list"
+    },
+    "fraud.assess": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_0000000000000000000000002A"
+        }
+      ],
+      "result": {
+        "calc_id": "calc_S5INTEGRITY",
+        "findings": [
+          {
+            "code": "INT-05",
+            "detail": {
+              "concurrent_applications": 4,
+              "cycle_length": 7,
+              "window_days": 49
+            },
+            "members": [
+              "M-001200",
+              "M-001201",
+              "M-001202",
+              "M-001203",
+              "M-001204",
+              "M-001205",
+              "M-001206"
+            ],
+            "rule": "guarantor_cycle",
+            "severity": "HIGH"
+          }
+        ],
+        "integrity_score": 55,
+        "level": "HIGH"
+      },
+      "tool": "fraud.assess"
+    },
+    "graph.neighbours": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_0000000000000000000000002B"
+        }
+      ],
+      "result": {
+        "depth": 2,
+        "edges": [
+          {
+            "kind": "guarantees",
+            "source": "member:M-001200",
+            "target": "member:M-001201"
+          },
+          {
+            "kind": "guarantees",
+            "source": "member:M-001201",
+            "target": "member:M-001202"
+          },
+          {
+            "kind": "guarantees",
+            "source": "member:M-001202",
+            "target": "member:M-001203"
+          },
+          {
+            "kind": "guarantees",
+            "source": "member:M-001203",
+            "target": "member:M-001204"
+          },
+          {
+            "kind": "guarantees",
+            "source": "member:M-001204",
+            "target": "member:M-001205"
+          },
+          {
+            "kind": "guarantees",
+            "source": "member:M-001205",
+            "target": "member:M-001206"
+          },
+          {
+            "kind": "guarantees",
+            "source": "member:M-001206",
+            "target": "member:M-001200"
+          }
+        ],
+        "graph_ref": "ev_S5GRAPH",
+        "nodes": [
+          {
+            "id": "member:M-001200",
+            "kind": "member",
+            "ref": "M-001200"
+          },
+          {
+            "id": "member:M-001201",
+            "kind": "member",
+            "ref": "M-001201"
+          },
+          {
+            "id": "member:M-001202",
+            "kind": "member",
+            "ref": "M-001202"
+          },
+          {
+            "id": "member:M-001203",
+            "kind": "member",
+            "ref": "M-001203"
+          },
+          {
+            "id": "member:M-001204",
+            "kind": "member",
+            "ref": "M-001204"
+          },
+          {
+            "id": "member:M-001205",
+            "kind": "member",
+            "ref": "M-001205"
+          },
+          {
+            "id": "member:M-001206",
+            "kind": "member",
+            "ref": "M-001206"
+          }
+        ]
+      },
+      "tool": "graph.neighbours"
+    },
+    "policy.evaluate": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_0000000000000000000000002C"
+        }
+      ],
+      "result": {
+        "blockers": [],
+        "flags": [],
+        "gates": [
+          {
+            "result": "ROUTE",
+            "route": "COMPLIANCE_REVIEW",
+            "rule_id": "RT-01"
+          }
+        ]
+      },
+      "tool": "policy.evaluate"
+    },
+    "risk.score": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_0000000000000000000000002D"
+        }
+      ],
+      "result": {
+        "champion": {
+          "grade": "C",
+          "ood_score": 0.44,
+          "pd_12m": 0.0318
+        },
+        "conduct_calc_id": "calc_S5CONDUCT",
+        "conduct_score": 74,
+        "model_run_id": "mr_S5",
+        "reason_codes": [
+          "CON-01"
+        ]
+      },
+      "tool": "risk.score"
+    }
+  }
+}

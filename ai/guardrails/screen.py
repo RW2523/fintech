@@ -97,7 +97,15 @@ def _tool_numbers(tool_results: Any) -> set[str]:
     elif isinstance(tool_results, str):
         found |= _numbers_in(tool_results)
     elif isinstance(tool_results, dict):
-        for value in tool_results.values():
+        for key, value in tool_results.items():
+            # Keys count as well as values. A tool named `ontime_rate_24m`
+            # makes 24 available: an agent saying "over 24 months" is naming
+            # the window it was given, not computing one.
+            if isinstance(key, str):
+                # A field name runs its digits into the unit, as in
+                # `ontime_rate_24m`, so the digits are taken directly rather
+                # than through the prose matcher.
+                found |= set(re.findall(r"\d+", key))
             found |= _tool_numbers(value)
     elif isinstance(tool_results, list):
         for item in tool_results:

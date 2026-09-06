@@ -39,6 +39,9 @@ _STRIP = {
     "x-internal-key",
 }
 
+#: Upstreams whose work is a model call rather than a query.
+_SLOW_SERVICES = frozenset({"llm_gateway", "agent_runtime", "committee"})
+
 _client: httpx.AsyncClient | None = None
 
 
@@ -103,12 +106,18 @@ async def proxy(service: str, path: str, request: Request) -> Response:
     headers["X-Internal-Key"] = settings().internal_key
 
     assert _client is not None, "gateway client not started"
+    # Services that run a model get the longer deadline; everything else keeps
+    # the reader's, so one slow upstream cannot hold a connection open.
+    timeout = (
+        settings().llm_timeout_seconds if service in _SLOW_SERVICES else settings().upstream_timeout_seconds
+    )
     upstream = await _client.request(
         request.method,
         f"{base}/{path}",
         params=request.query_params,
         content=await request.body(),
         headers=headers,
+        timeout=timeout,
     )
 
     passthrough = {k: v for k, v in upstream.headers.items() if k.lower() not in _STRIP}

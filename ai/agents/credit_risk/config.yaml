@@ -1,5 +1,5 @@
 family: council
 route: agent
 output_schema: agent_opinion/1.3
-max_output_tokens: 700
+max_output_tokens: 1400
 temperature: 0.1

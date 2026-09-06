@@ -22,9 +22,15 @@ from app import pii
 from app.breaker import breaker_for
 from app.budget import Budget, usage_ledger
 from app.config import RouteConfig, route_config
-from app.providers import Completion, Provider, ProviderError, provider_for
+from app.providers import (
+    Completion,
+    Provider,
+    ProviderError,
+    ProviderRejectedError,
+    provider_for,
+)
 
-__all__ = ["GatewayError", "Result", "SchemaViolationError", "complete", "embed"]
+__all__ = ["BadRequestError", "GatewayError", "Result", "SchemaViolationError", "complete", "embed"]
 
 #: A model asked for JSON sometimes wraps it in a fence or a sentence. Pulling
 #: the object out is not leniency about the schema, only about the packaging.
@@ -38,6 +44,10 @@ CORRECTIVE_TURNS = 1
 
 class GatewayError(RuntimeError):
     """The gateway could not produce an answer."""
+
+
+class BadRequestError(GatewayError):
+    """The provider refused the request as malformed."""
 
 
 class SchemaViolationError(GatewayError):
@@ -180,6 +190,11 @@ async def complete(
                 json_schema=json_schema,
                 timeout=config.timeout,
             )
+        except ProviderRejectedError as exc:
+            # The provider answered: it understood and refused. Counting that
+            # toward the breaker would let one bad request take the route down
+            # for every caller.
+            raise BadRequestError(str(exc)) from exc
         except ProviderError as exc:
             breaker.record_failure(str(exc))
             raise GatewayError(str(exc)) from exc

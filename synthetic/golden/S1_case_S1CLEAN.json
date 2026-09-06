@@ -1,0 +1,276 @@
+{
+  "case_id": "case_S1CLEAN",
+  "expected": {
+    "blockers": [],
+    "fraud_level": "LOW",
+    "recommendation": "APPROVE",
+    "tier": "FAST"
+  },
+  "scenario": "S1",
+  "snapshot": {
+    "amount": "8000.00",
+    "autonomy_version": "autonomy/PF-STD/2026.09.1",
+    "case_id": "case_S1CLEAN",
+    "dff_version": "dff/PF-STD/2026.09.1",
+    "documents": [
+      {
+        "confidence": 0.96,
+        "document_id": "doc_identity",
+        "status": "EXTRACTED",
+        "type": "IDENTITY"
+      },
+      {
+        "confidence": 0.94,
+        "document_id": "doc_payslip",
+        "status": "EXTRACTED",
+        "type": "PAYSLIP_LATEST_3"
+      },
+      {
+        "confidence": 0.92,
+        "document_id": "doc_letter",
+        "status": "EXTRACTED",
+        "type": "EMPLOYMENT_CONFIRMATION"
+      }
+    ],
+    "member": {
+      "branch_id": "BR-01",
+      "employer_sector": "PUBLIC_ADMIN",
+      "member_ref": "\u00abMEMBER_1\u00bb",
+      "tenure_months": 108
+    },
+    "model_versions": {
+      "fraud": "fraud-rules/1.0",
+      "risk": "2026.09.1"
+    },
+    "policy_version": "policy/PF-STD/2026.09.1",
+    "product_code": "PF-STD",
+    "purpose": "HOME_IMPROVEMENT",
+    "snapshot_id": "snap_0000000000000000000S1CLEAN",
+    "tenor_months": 36
+  },
+  "title": "Clean application, fast path",
+  "tool_results": {
+    "affordability.compute": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000006"
+        }
+      ],
+      "result": {
+        "calc_id": "calc_S1CAPACITY",
+        "capacity_score": 84,
+        "dsr": 0.24,
+        "dsr_limit": 0.5,
+        "headroom": 0.26,
+        "instalment": 262.22,
+        "residual": 3210.0
+      },
+      "tool": "affordability.compute"
+    },
+    "bureau.get": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000038"
+        }
+      ],
+      "result": {
+        "adverse_flags": [],
+        "as_of": "2026-08-31",
+        "grade": "A"
+      },
+      "tool": "bureau.get"
+    },
+    "documents.list": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000001"
+        },
+        {
+          "evidence_id": "ev_00000000000000000000000002"
+        },
+        {
+          "evidence_id": "ev_00000000000000000000000003"
+        }
+      ],
+      "result": [
+        {
+          "classified_conf": 0.96,
+          "document_id": "doc_identity",
+          "pages": 1,
+          "status": "EXTRACTED",
+          "type": "IDENTITY"
+        },
+        {
+          "classified_conf": 0.94,
+          "document_id": "doc_payslip",
+          "pages": 1,
+          "status": "EXTRACTED",
+          "type": "PAYSLIP_LATEST_3"
+        },
+        {
+          "classified_conf": 0.92,
+          "document_id": "doc_letter",
+          "pages": 1,
+          "status": "EXTRACTED",
+          "type": "EMPLOYMENT_CONFIRMATION"
+        }
+      ],
+      "tool": "documents.list"
+    },
+    "fraud.assess": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000008"
+        }
+      ],
+      "result": {
+        "calc_id": "calc_S1INTEGRITY",
+        "findings": [],
+        "integrity_score": 100,
+        "level": "LOW"
+      },
+      "tool": "fraud.assess"
+    },
+    "hardship.get": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000036"
+        }
+      ],
+      "result": {
+        "active_arrangement": null,
+        "prior_requests": []
+      },
+      "tool": "hardship.get"
+    },
+    "history.get": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000037"
+        }
+      ],
+      "result": {
+        "arrears_12m": 0,
+        "facilities": [],
+        "months_since_last_arrears": null,
+        "ontime_rate_24m": 0.96,
+        "restructures_36m": 0
+      },
+      "tool": "history.get"
+    },
+    "interactions.get": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000035"
+        }
+      ],
+      "result": [],
+      "tool": "interactions.get"
+    },
+    "member.commitment_score": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000009"
+        }
+      ],
+      "result": {
+        "calc_id": "calc_S1COMMITMENT",
+        "score": 88
+      },
+      "tool": "member.commitment_score"
+    },
+    "member.profile": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_0000000000000000000000000A"
+        }
+      ],
+      "result": {
+        "branch_id": "BR-01",
+        "employer_sector": "PUBLIC_ADMIN",
+        "member_id": "\u00abMEMBER_1\u00bb",
+        "status": "ACTIVE",
+        "tenure_months": 108
+      },
+      "tool": "member.profile"
+    },
+    "policy.evaluate": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000005"
+        }
+      ],
+      "result": {
+        "blockers": [],
+        "flags": [],
+        "gates": [
+          {
+            "result": "PASS",
+            "rule_id": "ELG-02"
+          },
+          {
+            "result": "PASS",
+            "rule_id": "AFF-01"
+          }
+        ]
+      },
+      "tool": "policy.evaluate"
+    },
+    "reconciliation.get": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000004"
+        }
+      ],
+      "result": [],
+      "tool": "reconciliation.get"
+    },
+    "risk.score": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000007"
+        }
+      ],
+      "result": {
+        "champion": {
+          "grade": "A",
+          "ood_score": 0.14,
+          "pd_12m": 0.0121
+        },
+        "conduct_calc_id": "calc_S1CONDUCT",
+        "conduct_score": 85,
+        "model_run_id": "mr_S1",
+        "reason_codes": [
+          "CON-01"
+        ]
+      },
+      "tool": "risk.score"
+    },
+    "savings.get": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000033"
+        }
+      ],
+      "result": {
+        "balance": 7400.0,
+        "paused_months": 0,
+        "slope_180d": 8.4
+      },
+      "tool": "savings.get"
+    },
+    "shares.get": {
+      "evidence_refs": [
+        {
+          "evidence_id": "ev_00000000000000000000000034"
+        }
+      ],
+      "result": {
+        "min_required": 100,
+        "ratio": 0.07,
+        "units": 380
+      },
+      "tool": "shares.get"
+    }
+  }
+}

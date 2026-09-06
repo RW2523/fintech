@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ai.agents.bundle import list_bundles, load_bundle
 from app.gateway_client import GatewayClient, HttpGatewayClient
+from app.guided import prune_defs, simplify
 from app.invoke import OPINION_SCHEMA_ID, Invocation, invoke
 from cio_common.errors import NotFound, ValidationFailed
 from cio_contracts import bundle as contract_bundle
@@ -65,24 +66,32 @@ def model_output_schema() -> dict[str, Any]:
     """The part of an opinion the model is responsible for."""
     full = opinion_schema()
     opinion = full["$defs"]["AgentOpinion"]
-    return {
-        "$schema": full["$schema"],
-        "type": "object",
-        "additionalProperties": False,
-        "required": [
-            "stance",
-            "confidence",
-            "reason_codes",
-            "claims",
-            "contradictions",
-            "unresolved",
-            "proposed_actions",
-        ],
-        "properties": {
-            name: opinion["properties"][name] for name in MODEL_FIELDS if name in opinion["properties"]
-        },
-        "$defs": full["$defs"],
-    }
+    # Simplified for the grammar engine: a decoder cannot compile
+    # `propertyNames`, and the runtime revalidates the real contract anyway.
+    return prune_defs(
+        simplify(
+            {
+                "$schema": full["$schema"],
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "stance",
+                    "confidence",
+                    "reason_codes",
+                    "claims",
+                    "contradictions",
+                    "unresolved",
+                    "proposed_actions",
+                ],
+                "properties": {
+                    name: opinion["properties"][name]
+                    for name in MODEL_FIELDS
+                    if name in opinion["properties"]
+                },
+                "$defs": full["$defs"],
+            }
+        )
+    )
 
 
 class InvokeRequest(BaseModel):
