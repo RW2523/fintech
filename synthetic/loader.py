@@ -30,6 +30,7 @@ LOAD_ORDER = (
     "bureau",
     "outage_window",
     "arrangement",
+    "outcome",
 )
 
 _BATCH = 2000

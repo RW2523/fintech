@@ -59,6 +59,15 @@ def write_population(population: Any, out: Path = DEFAULT_OUT, *, seed: int, mon
     profiles = [{"member_id": k, **v} for k, v in sorted(population.profiles.items())]
     tables["profile"] = _write_table(out / "profile.jsonl", profiles)
 
+    # Outcome labels are derived from the payment history, never from the
+    # archetype that produced it (docs/10 §5).
+    from synthetic.labels import label_accounts
+
+    outcomes = label_accounts(population.schedules, population.payments, population.arrangements)
+    tables["outcome"] = _write_table(
+        out / "outcome.jsonl", [month.as_row() for outcome in outcomes for month in outcome.months]
+    )
+
     manifest = Manifest(
         seed=seed,
         members=len(population.members),

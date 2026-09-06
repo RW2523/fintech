@@ -107,8 +107,13 @@ def summarise(out: Path = DEFAULT_OUT) -> dict[str, Any]:
     for profile in profiles:
         archetype_mix[profile["archetype"]] += 1
 
+    from synthetic.labels import label_accounts, summarise_labels
+
+    labels = summarise_labels(label_accounts(schedules, payments, read_table("arrangement", out)))
+
     return {
         "members": len(profiles),
+        "labels": labels,
         "accounts": len(accounts),
         "due_events": total,
         "late_threshold_days": LATE_THRESHOLD_DAYS,
