@@ -1,0 +1,14 @@
+# Aggregates only. Nothing here can return a member, a case or an account.
+tools:
+- name: metrics.catalogue
+  version: '1.0'
+  max_calls: 1
+- name: metrics.query
+  version: '1.0'
+  max_calls: 6
+- name: governance.overrides
+  version: '1.0'
+  max_calls: 1
+- name: governance.models
+  version: '1.0'
+  max_calls: 1

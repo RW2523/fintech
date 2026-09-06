@@ -592,3 +592,90 @@ test.describe("member assistant", () => {
     await expect(limits).toContainText("does not give financial advice");
   });
 });
+
+/** T-072 — the management cockpit.
+ *
+ *  The assertion that matters is that a tile shows what the API returned, not
+ *  something the page computed from it. Every value here is compared with a
+ *  fresh read of the same endpoint. */
+test.describe("management cockpit", () => {
+  test.setTimeout(180_000);
+
+  async function metric(request: APIRequestContext, name: string, days = 90) {
+    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
+      data: { role: "manager" },
+    });
+    const token = (await minted.json()).access_token as string;
+    const response = await request.get(
+      `${GATEWAY}/api/governance/governance/metrics/${name}?days=${days}`,
+      { headers: { authorization: `Bearer ${token}` } },
+    );
+    expect(response.ok(), `the ${name} metric must answer`).toBeTruthy();
+    return (await response.json()) as {
+      totals?: Record<string, number | null>;
+      rows: Record<string, unknown>[];
+      means: string;
+    };
+  }
+
+  test("a tile shows what the metrics endpoint returned", async ({ page, request }) => {
+    const routing = await metric(request, "routing");
+    await signIn(page, "manager");
+    await page.getByTestId("nav-manager").click();
+    await expect(page).toHaveURL(/\/manager$/);
+
+    const tile = page.getByTestId("tile-routing");
+    await expect(tile).toBeVisible({ timeout: 60_000 });
+
+    // Every total, character for character. A tile that rounded, reformatted
+    // or recomputed would differ here, which is the whole point.
+    for (const [name, value] of Object.entries(routing.totals ?? {})) {
+      await expect(page.getByTestId(`total-routing-${name}`)).toHaveText(
+        value === null ? "—" : String(value),
+      );
+    }
+
+    // And every cell of the table.
+    for (const [index, row] of routing.rows.entries()) {
+      for (const [key, value] of Object.entries(row)) {
+        await expect(page.getByTestId(`cell-routing-${index}-${key}`)).toHaveText(
+          value === null || value === undefined ? "—" : String(value),
+        );
+      }
+    }
+  });
+
+  test("a tile publishes what its number means", async ({ page, request }) => {
+    const delinquency = await metric(request, "delinquency");
+    await signIn(page, "manager");
+    await page.getByTestId("nav-manager").click();
+    await expect(page.getByTestId("means-delinquency")).toContainText(
+      delinquency.means.slice(0, 40),
+    );
+  });
+
+  test("the portfolio copilot answers from the metrics and names them", async ({ page }) => {
+    await signIn(page, "manager");
+    await page.getByTestId("nav-manager").click();
+
+    await page.getByTestId("portfolio-input").fill("What is the autonomous share?");
+    await page.getByTestId("portfolio-submit").click();
+
+    const answer = page.getByTestId("portfolio-answer");
+    await expect(answer).toBeVisible({ timeout: 150_000 });
+    await expect(page.getByTestId("portfolio-metrics")).toContainText("routing");
+  });
+
+  test("a question about one member is refused", async ({ page }) => {
+    await signIn(page, "manager");
+    await page.getByTestId("nav-manager").click();
+
+    await page.getByTestId("portfolio-input").fill("Tell me about member M-000042");
+    await page.getByTestId("portfolio-submit").click();
+
+    // Fast, because no model is involved: the rule decides this one.
+    const refusal = page.getByTestId("portfolio-refusal");
+    await expect(refusal).toBeVisible({ timeout: 30_000 });
+    await expect(refusal).toContainText("aggregates");
+  });
+});

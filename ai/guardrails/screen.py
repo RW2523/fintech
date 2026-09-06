@@ -207,8 +207,53 @@ def _language_rejections(text: str, where: str) -> list[dict[str, Any]]:
     return out
 
 
+#: Words that assert a movement over time. An answer using one is claiming the
+#: numbers changed, which is a claim about a series rather than about a figure.
+_TREND = re.compile(
+    r"\b(fell|fall(en|ing)?|rose|risen|rising|increase[ds]?|increasing|"
+    r"decrease[ds]?|decreasing|dropp?(ed|ing)?|declin(e|ed|ing)|"
+    r"grew|grown|growing|improv(ed|ing)|worsen(ed|ing)?|"
+    r"trend(ing)?|up from|down from|compared with last|month on month)\b",
+    re.IGNORECASE,
+)
+
+
+def _series_points(tool_results: Any) -> int:
+    """The shortest series any metric in this run returned, or 0 if none did.
+
+    The shortest rather than the longest, deliberately. An answer claiming a
+    movement does not say which metric it moved, so the run is only safe for
+    trend claims when every series in it has something to move between. Taking
+    the longest let a claim about approvals ride on delinquency's three months
+    while the approvals series held a single point.
+
+    Asked why approvals had fallen when every decision on file was from one
+    month, the manager copilot reported a fall from 0.5 to 0.25, where 0.25 was
+    the autonomous share, and then explained it. Both numbers were in the
+    context, so the numeric screen passed: the invention was the relationship,
+    not the figures.
+    """
+    lengths: list[int] = []
+    for entry in tool_results or []:
+        if not isinstance(entry, dict):
+            continue
+        result = entry.get("result")
+        if not isinstance(result, dict):
+            continue
+        series = result.get("series")
+        if isinstance(series, list):
+            lengths.append(len(series))
+    return min(lengths) if lengths else 0
+
+
 def screen_answer(
-    answer: dict[str, Any], *, tool_results: Any = None, evidence_ids: set[str] | None = None
+    answer: dict[str, Any],
+    *,
+    tool_results: Any = None,
+    evidence_ids: set[str] | None = None,
+    # Set by callers whose metrics carry a time series. A movement claimed
+    # without two points to move between is rejected rather than believed.
+    require_series: bool = False,
 ) -> Screening:
     """Check one copilot answer against the output policy (docs/06 §9).
 
@@ -279,6 +324,19 @@ def screen_answer(
         return screening
 
     screening.rejections.extend(_language_rejections(text, "answer"))
+
+    if require_series and _TREND.search(text) and _series_points(tool_results) < 2:
+        match = _TREND.search(text)
+        screening.rejections.append(
+            {
+                "where": "answer",
+                "reason": (
+                    "claims a movement over time, and no metric in this run returned "
+                    "two periods to move between"
+                ),
+                "detail": [match.group(0) if match else ""],
+            }
+        )
 
     known_numbers: set[str] = set()
     for value in _tool_numbers(tool_results or []):

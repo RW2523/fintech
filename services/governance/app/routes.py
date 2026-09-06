@@ -310,3 +310,45 @@ async def _read(client: httpx.AsyncClient, url: str, **params: Any) -> dict[str,
     if response.status_code >= 400:
         return None
     return dict(response.json())
+
+
+# ---------------------------------------------------------------------------
+# the governed metrics (T-072, docs/08 §6, docs/09 §7.1)
+# ---------------------------------------------------------------------------
+# Under /governance rather than at /metrics, which docs/08 §6 uses as
+# shorthand. `/metrics` is the Prometheus scrape path: the collector polls it
+# on every service, and a business endpoint there would answer a scrape with
+# JSON the collector cannot parse.
+@router.get("/governance/metrics", summary="Every metric the platform publishes")
+async def metrics_index() -> dict[str, Any]:
+    """What can be asked for, and what each one means.
+
+    The meaning is published with the name. A manager reading "autonomous
+    share 0.12" cannot use it without knowing whether it is of all decisions
+    or of the ones eligible to be automatic, and a dashboard that shows the
+    number without the definition invites the wrong reading.
+    """
+    from app.metrics import METRICS
+
+    return {
+        "metrics": [
+            {"name": m.name, "means": m.means, "dimensions": list(m.dimensions)}
+            for m in sorted(METRICS.values(), key=lambda m: m.name)
+        ]
+    }
+
+
+@router.get("/governance/metrics/{name}", summary="One governed metric")
+async def metric(name: str, days: int = 90, product: str | None = None) -> dict[str, Any]:
+    """docs/09 §7.1 — the number behind a cockpit tile.
+
+    The tile and the manager copilot read this same endpoint, so a tile cannot
+    drift from the figure the copilot quotes: they are one number, not two
+    calculations that happen to agree.
+
+    Aggregates only. Nothing here returns a member, a case or an account, and
+    that is what makes it safe to hand to a copilot.
+    """
+    from app.metrics import compute
+
+    return await compute(name, days=max(1, min(days, 3650)), product=product)

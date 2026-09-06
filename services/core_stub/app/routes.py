@@ -392,6 +392,77 @@ async def get_arrangements(member_id: str | None = None, account_id: str | None 
         raise ValidationFailed("member_id or account_id is required")
 
 
+@router.get("/portfolio/monthly", summary="The book month by month")
+async def portfolio_monthly(months: int = Query(default=24, ge=1, le=120)) -> dict[str, Any]:
+    """Delinquency and the rates that move between its buckets (T-072).
+
+    One query rather than a page of them. The cockpit needs this over eighty
+    thousand account-months, and asking per account would take longer than the
+    screen has.
+
+    A roll rate is the share of accounts thirty days late in one month that are
+    sixty days late in the next, and a cure rate is the share that are not late
+    at all. They are computed here, over the outcome panel, because this is the
+    service that owns it: a rate assembled in a dashboard from two counts it
+    fetched separately is a rate nobody can reproduce.
+    """
+    async with session() as db:
+        rows = await _rows(
+            db,
+            """
+            WITH panel AS (
+              SELECT account_id, month, late7, late30, late60, late90,
+                     cure, restructure, charge_off,
+                     LEAD(late60) OVER w AS next_late60,
+                     LEAD(late30) OVER w AS next_late30,
+                     LEAD(late7)  OVER w AS next_late7
+                FROM core.outcome
+              WINDOW w AS (PARTITION BY account_id ORDER BY month)
+            )
+            SELECT month,
+                   count(*)                                     AS accounts,
+                   count(*) FILTER (WHERE late7)                AS late7,
+                   count(*) FILTER (WHERE late30)               AS late30,
+                   count(*) FILTER (WHERE late60)               AS late60,
+                   count(*) FILTER (WHERE late90)               AS late90,
+                   count(*) FILTER (WHERE cure)                 AS cured,
+                   count(*) FILTER (WHERE restructure)          AS restructured,
+                   count(*) FILTER (WHERE charge_off)           AS charged_off,
+                   count(*) FILTER (WHERE late30 AND next_late60 IS NOT NULL)
+                                                                AS late30_with_next,
+                   count(*) FILTER (WHERE late30 AND next_late60)
+                                                                AS rolled_to_60,
+                   count(*) FILTER (WHERE late30 AND next_late30 IS NOT NULL
+                                          AND NOT next_late7)   AS cured_from_30
+              FROM panel
+             GROUP BY month
+             ORDER BY month DESC
+             LIMIT :months
+        """,
+            months=months,
+        )
+
+    series = []
+    for row in reversed(rows):
+        accounts = row["accounts"] or 0
+        base = row["late30_with_next"] or 0
+        series.append(
+            {
+                **row,
+                "month": str(row["month"]),
+                "late30_rate": round(row["late30"] / accounts, 4) if accounts else None,
+                "late90_rate": round(row["late90"] / accounts, 4) if accounts else None,
+                # Reported as None rather than 0 when no account was thirty days
+                # late that month. A roll rate of zero and no accounts to roll
+                # are different facts and a chart that draws both as zero says
+                # the book is healthy when it says nothing at all.
+                "roll_30_to_60": round(row["rolled_to_60"] / base, 4) if base else None,
+                "cure_from_30": round(row["cured_from_30"] / base, 4) if base else None,
+            }
+        )
+    return {"months": len(series), "series": series}
+
+
 @router.get("/changes", response_model=list[Change], summary="Change feed for CDC import")
 async def get_changes(
     since: int = Query(default=0, ge=0),

@@ -1,11 +1,14 @@
-"""T-071 — what a member may say, and what a member may be told.
+"""T-071, T-072 — what a member may say, and what a copilot may be asked.
 
-Two rule sets, both deterministic, both running before a model is called.
+Three rule sets, all deterministic, all running before a model is called.
 
-The hardship classifier decides whether this is a question at all. The member
-refusals decide whether the answer is one an assistant may give. Neither
-depends on a model's judgement, because a control that depends on a model's
-mood is not a control.
+The hardship classifier decides whether a member's message is a question at
+all. The member refusals decide whether the answer is one an assistant may
+give. The manager refusals decide whether a question about the book is really a
+question about somebody in it.
+
+None of them depends on a model's judgement, because a control that depends on
+a model's mood is not a control.
 """
 
 from __future__ import annotations
@@ -13,7 +16,7 @@ from __future__ import annotations
 import pytest
 
 from ai.guardrails.hardship import SIGNALS, classify
-from ai.guardrails.questions import check_member_question
+from ai.guardrails.questions import check_manager_question, check_member_question
 
 MEMBER = "M-000123"
 
@@ -159,3 +162,49 @@ def test_a_refusal_tells_the_member_what_happens_instead() -> None:
     assert refusal is not None
     assert "policy" in refusal.reason
     assert "write to you" in refusal.reason
+
+
+# ---------------------------------------------------------------------------
+# the manager copilot (T-072)
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "question,code",
+    [
+        ("Tell me about member M-000042", "ANOTHER_CASE"),
+        ("Which members are in CRITICAL? Name them.", "ANOTHER_CASE"),
+        ("Show me the cases that were overridden", "ANOTHER_CASE"),
+        ("Who is the applicant on case_01ARZ3NDEKTSV4RRFFQ69G5FAW?", "ANOTHER_CASE"),
+        ("What will delinquency be next quarter?", "WOULD_PREDICT_DECISION"),
+        ("Forecast approvals for December", "WOULD_PREDICT_DECISION"),
+        ("Break the approval rate down by ethnicity", "PROTECTED_CHARACTERISTIC"),
+        ("What is the weather in the capital?", "OUT_OF_SCOPE"),
+    ],
+)
+def test_a_manager_is_not_answered_these(question: str, code: str) -> None:
+    refusal = check_manager_question(question)
+    assert refusal is not None, f"not refused: {question!r}"
+    assert refusal.code == code
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "What is the autonomous share?",
+        "How many cases are still waiting for a person?",
+        "List the branches by approval rate",
+        "How many members are in each early-warning state?",
+        "Why did approvals fall this quarter?",
+        "What is the approval rate by product?",
+        "How is the book performing on delinquency?",
+        "What is the override rate?",
+    ],
+)
+def test_a_manager_question_about_the_book_reaches_the_model(question: str) -> None:
+    """A refusal rule that fires here has taken the cockpit away.
+
+    "List the branches by approval rate" is exactly what a management cockpit
+    is for. An earlier pattern refused it, because it matched "list the"
+    without asking what was being listed, and a branch is a dimension rather
+    than a person.
+    """
+    assert check_manager_question(question) is None

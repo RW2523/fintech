@@ -111,6 +111,14 @@ def evidence_in(tool_results: list[dict[str, Any]]) -> set[str]:
     # they are collected separately: an answer citing AFF-01 is citing the rule
     # it read, which is exactly what it should do.
     found |= set(re.findall(r"\b[A-Z]{3}-\d{2}\b", str(tool_results)))
+    # A metric's name is its identifier. Without this the manager copilot has
+    # nothing it is allowed to cite: `routing` matches no id pattern, so every
+    # citation was rejected and every answer collapsed into a bare refusal
+    # while all eight metrics sat in front of it.
+    for entry in tool_results:
+        result = entry.get("result")
+        if isinstance(result, dict) and isinstance(result.get("metric"), str):
+            found.add(result["metric"])
     return found
 
 
@@ -122,6 +130,7 @@ async def answer_question(
     output_schema: dict[str, Any],
     guard: Guard | None = None,
     fallback_reason: str = "",
+    require_series: bool = False,
 ) -> CopilotResult:
     """One question, answered from the case or refused."""
     import time
@@ -210,7 +219,12 @@ async def answer_question(
         body = dict(completion.value or {})
         body.setdefault("schema", ANSWER_SCHEMA_ID)
 
-        result = screen_answer(body, tool_results=question.tool_results, evidence_ids=available)
+        result = screen_answer(
+            body,
+            tool_results=question.tool_results,
+            evidence_ids=available,
+            require_series=require_series,
+        )
         screening = result.as_dict()
         if result.passed:
             return CopilotResult(

@@ -13,6 +13,11 @@ cannot answer is worse than no tool at all.
 `self_service` arrived with the member assistant (T-071). Its tools are the
 only ones in this package a member's own words can reach, which is why they
 read nothing but that member's record and return no score of any kind.
+
+`metrics` arrived with the manager copilot (T-072). Everything in it is an
+aggregate, and no path through it can return a member, a case or an account:
+a copilot told not to name members will eventually name one, and a copilot
+whose tools cannot return one cannot.
 """
 
 from __future__ import annotations
@@ -24,6 +29,7 @@ from ai.tools import (  # noqa: F401
     evidence,
     longitudinal,
     member,
+    metrics,
     self_service,
 )
 from cio_tools.registry import registry

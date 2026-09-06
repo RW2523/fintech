@@ -487,3 +487,133 @@ async def assistant_conversation(conversation_id: str, request: Request) -> dict
     if member and any(turn["member_id"] != member for turn in turns):
         raise Forbidden("that conversation is not yours")
     return {"conversation_id": conversation_id, "turns": turns, "count": len(turns)}
+
+
+# ---------------------------------------------------------------------------
+# manager copilot (T-072, docs/09 §7.2)
+# ---------------------------------------------------------------------------
+class PortfolioRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=2000)
+    agent_id: str = Field(default="manager_copilot", min_length=1, max_length=64)
+    days: int = Field(default=90, ge=1, le=3650)
+    product: str | None = None
+    run_id: str = ""
+    budget_tokens: int = 0
+
+
+#: What the copilot reads before answering. Fixed, and read in full: a manager
+#: asking why approvals fell needs the metrics that could account for it, and a
+#: model choosing which to fetch would fetch the one the question named and
+#: answer from that alone.
+PORTFOLIO_METRICS = (
+    "applications",
+    "routing",
+    "recommendations",
+    "tiers",
+    "authority",
+    "delinquency",
+    "early_warning",
+)
+
+
+async def _portfolio(days: int, product: str | None) -> list[dict[str, Any]]:
+    from ai.tools import registry as tool_registry
+
+    grants = GrantRegistry(
+        [
+            Grant(agent_id="manager_copilot", tool="metrics.query", max_calls=len(PORTFOLIO_METRICS)),
+            Grant(agent_id="manager_copilot", tool="governance.overrides", max_calls=1),
+        ]
+    )
+    scoped = tool_registry.with_grants(grants)
+    context = ToolContext(
+        agent_id="manager_copilot",
+        run_id=f"portfolio:{days}",
+        purpose=PermittedUse.ANALYTICS,
+        principal="manager_copilot",
+    )
+
+    # An optional input is one that may be absent, not one that may be null.
+    # Passing `product: None` fails the tool's own schema, and every metric came
+    # back "unavailable" while the model dutifully refused for want of evidence
+    # it had never been given.
+    scope = {"product": product} if product else {}
+    wanted: list[tuple[str, dict[str, Any]]] = [
+        ("metrics.query", {"metric": name, "days": days, **scope}) for name in PORTFOLIO_METRICS
+    ]
+    wanted.append(("governance.overrides", {"days": days, **({"product_code": product} if product else {})}))
+
+    gathered: list[dict[str, Any]] = []
+    for name, args in wanted:
+        label = f"{name}:{args.get('metric', 'overrides')}"
+        try:
+            result = await scoped.call(name, args, context)
+        except Exception as exc:
+            # Named rather than dropped. An answer that could not read
+            # delinquency should be able to say so instead of answering as
+            # though the book were clean.
+            gathered.append({"tool": label, "unavailable": str(exc)})
+            continue
+        gathered.append({"tool": label, "result": result, "evidence_refs": []})
+    return gathered
+
+
+@router.post("/copilot/portfolio", summary="Answer a manager's question about the book")
+async def ask_portfolio(body: PortfolioRequest, request: Request) -> dict[str, Any]:
+    """docs/09 §7.2 — ask the portfolio.
+
+    Every figure comes from the same metrics endpoint the cockpit tiles read,
+    so a tile and this answer cannot disagree: they are one number rather than
+    two calculations that happen to match.
+    """
+    from ai.guardrails.questions import check_manager_question
+
+    if request.headers.get("X-Principal-Role") == "member":
+        raise Forbidden("the portfolio copilot is for staff")
+
+    try:
+        bundle = load_bundle(body.agent_id)
+    except FileNotFoundError as exc:
+        raise NotFound(f"no agent bundle {body.agent_id!r}") from exc
+    if bundle.family != "copilot":
+        raise ValidationFailed(
+            f"{body.agent_id} is a {bundle.family} agent, not a copilot",
+            agent_id=body.agent_id,
+        )
+
+    tool_results = await _portfolio(body.days, body.product)
+    result = await answer_question(
+        CopilotQuestion(
+            agent_id=body.agent_id,
+            question=body.question,
+            case_id="",
+            tool_results=tool_results,
+            run_id=body.run_id or f"portfolio:{body.days}",
+            budget_tokens=body.budget_tokens,
+        ),
+        bundle=bundle,
+        client=gateway_client(),
+        output_schema=simplify(prune_defs(answer_schema())),
+        guard=lambda text: check_manager_question(text),
+        require_series=True,
+    )
+
+    return {
+        **result.as_contract(),
+        "agent_id": body.agent_id,
+        "agent_version": bundle.agent_version,
+        "window_days": body.days,
+        "product": body.product,
+        # The tables the answer rests on, returned so the cockpit can render
+        # them beside the narrative. A paragraph of prose about a book, with no
+        # table under it, is a claim rather than a report.
+        "metrics": [
+            {"metric": entry["tool"].split(":", 1)[-1], "result": entry["result"]}
+            for entry in tool_results
+            if "result" in entry
+        ],
+        "tools_read": [entry["tool"] for entry in tool_results if "result" in entry],
+        "tools_unavailable": [entry["tool"] for entry in tool_results if "unavailable" in entry],
+    }

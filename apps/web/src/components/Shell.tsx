@@ -74,6 +74,15 @@ export function Shell() {
             Ledger
           </NavLink>
           <NavLink
+            to="/manager"
+            data-testid="nav-manager"
+            className={({ isActive }) =>
+              isActive ? "font-semibold text-[--color-accent]" : "text-[--color-muted]"
+            }
+          >
+            Manager
+          </NavLink>
+          <NavLink
             to="/member"
             data-testid="nav-member"
             className={({ isActive }) =>

@@ -12,6 +12,7 @@ import { CasePage } from "./pages/CasePage";
 import { CollectionsPage } from "./pages/CollectionsPage";
 import { CompliancePage } from "./pages/CompliancePage";
 import { LedgerPage } from "./pages/LedgerPage";
+import { ManagerPage } from "./pages/ManagerPage";
 import { MemberPage } from "./pages/MemberPage";
 
 /** Retries are off by default. A failed read on a decision screen should say
@@ -36,6 +37,7 @@ const router = createBrowserRouter([
       { path: "compliance", element: <CompliancePage /> },
       { path: "ledger", element: <LedgerPage /> },
       { path: "ledger/:caseId", element: <LedgerPage /> },
+      { path: "manager", element: <ManagerPage /> },
       { path: "member", element: <MemberPage /> },
     ],
   },

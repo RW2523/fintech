@@ -175,6 +175,10 @@ changepoint-eval:  ## measure detection lead time and false alarms (needs 'make 
 member-drill:  ## walk a member through S10 and grade what they were told (needs 'make up')
 	@$(UV) run python scripts/member_assistant_eval.py
 
+.PHONY: cockpit-eval
+cockpit-eval:  ## grade the cockpit and the manager copilot (needs 'make up')
+	@$(UV) run python scripts/cockpit_eval.py
+
 .PHONY: copilot-eval
 copilot-eval:  ## ask the officer copilot 25 questions and grade them (needs 'make up')
 	@$(UV) run python scripts/copilot_eval.py

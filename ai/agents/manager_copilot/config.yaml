@@ -1,0 +1,11 @@
+family: copilot
+# The reasoning route (docs/06 §2.3). A manager's question is not a lookup:
+# "why did approvals fall at Branch B" needs several metrics read and set
+# against each other, which is the one copilot job that earns the slower route.
+route: reasoning
+output_schema: copilot_answer/1.0
+# Longer than the other copilots, because the answer carries a short narrative
+# over several metric tables rather than a single figure. Still well under the
+# reasoning route's 2000 ceiling.
+max_output_tokens: 1200
+temperature: 0.0

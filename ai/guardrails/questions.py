@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["Refusal", "check_member_question", "check_question"]
+__all__ = ["Refusal", "check_manager_question", "check_member_question", "check_question"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,6 +202,82 @@ def check_member_question(question: str, *, member_id: str | None = None) -> Ref
         return Refusal(
             "OUT_OF_SCOPE",
             "I can only help with your accounts and your application here.",
+        )
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# the manager copilot (T-072)
+# ---------------------------------------------------------------------------
+#: A question about one member, one case or one account. The manager copilot's
+#: tools cannot return any of them, so this leaks nothing; it is refused early
+#: so the manager gets a sentence saying why rather than an empty answer.
+#: The things a manager may not ask this copilot to enumerate. A branch and a
+#: product are dimensions and stay off the list: "list the branches by approval
+#: rate" is exactly what a cockpit is for, and a rule that refused it would
+#: make the copilot useless to the person it is built for.
+_ONE_OF_US = r"(members?|cases?|accounts?|applicants?|people|names?|customers?)"
+
+_INDIVIDUAL = re.compile(
+    rf"\b(this member|that member|member \w+|members? (in|with|who)\b|the applicant|"
+    rf"case \w+|this case|that case|account \w+|"
+    rf"who (is|was|are|were)\b|which members?\b|"
+    # "Name them" and "list them" ask for the individuals behind an aggregate,
+    # which is the same request as naming a member.
+    rf"(name|list|identify|show me) (them|the {_ONE_OF_US}|which {_ONE_OF_US}|"
+    rf"each {_ONE_OF_US}|every {_ONE_OF_US})|"
+    rf"tell me about (M-|case_))\b",
+    re.IGNORECASE,
+)
+
+
+#: Asking the book to predict. A manager may reasonably want a forecast and
+#: this is not the thing that gives them one: every number here is something
+#: that already happened, and extrapolating it would be a model's opinion
+#: wearing a metric's clothes.
+_FORECAST = re.compile(
+    r"\b(forecast|predict|project(ion|ed)?|next (month|quarter|year)|"
+    r"will (it|we|approvals?|delinquenc\w+|the book)\b|"
+    r"what happens if|expect(ed)? (to|next)|going to (rise|fall|go up|go down))\b",
+    re.IGNORECASE,
+)
+
+
+def check_manager_question(question: str) -> Refusal | None:
+    """The refusal a manager's question earns, or None.
+
+    Narrower than the officer's rules in one direction and wider in another. A
+    manager may ask about anything in the book and may not ask about anybody in
+    it, which is the opposite of the officer copilot's scope.
+    """
+    text = question.strip()
+
+    if _MEMBER_ID.search(text) or _CASE_ID.search(text) or _INDIVIDUAL.search(text):
+        return Refusal(
+            "ANOTHER_CASE",
+            "I only read aggregates. For anything about one member or one case, open it in the workbench.",
+        )
+
+    if _PROTECTED.search(text):
+        return Refusal(
+            "PROTECTED_CHARACTERISTIC",
+            "No service in this platform collects that, so no metric can be cut by "
+            "it. The fairness position is structural and is on the model card.",
+        )
+
+    if _FORECAST.search(text):
+        return Refusal(
+            "WOULD_PREDICT_DECISION",
+            "I report what the metrics show, which is what has already happened. "
+            "I do not forecast. The policy sandbox is where a change is tried "
+            "against the record.",
+        )
+
+    if _OUT_OF_SCOPE.search(text):
+        return Refusal(
+            "OUT_OF_SCOPE",
+            "I only answer questions about this book's metrics.",
         )
 
     return None
