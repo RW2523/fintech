@@ -134,5 +134,10 @@ def ddl_statements(ddl: str = DDL) -> list[str]:
 
 
 async def apply_ddl(connection: Any) -> None:
-    for statement in ddl_statements():
+    from cio_common.outbox import DDL as OUTBOX_DDL
+
+    # The outbox travels with this schema: decision emits the events the audit
+    # trail is built from, and a service that cannot write its outbox cannot
+    # record what it did.
+    for statement in ddl_statements() + ddl_statements(OUTBOX_DDL):
         await connection.execute(text(statement))

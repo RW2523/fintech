@@ -143,3 +143,34 @@ export type Explanation = {
   unavailable: string[];
   sources: Record<string, string>;
 };
+
+
+/** docs/09 §6 — a case reconstructed end to end. */
+export type TimelineEvent = {
+  source: "ledger" | "committee" | "audit";
+  kind: string;
+  at: string | null;
+  seq?: number;
+  entry_id?: string;
+  hash?: string;
+  prev_hash?: string;
+  agent_id?: string;
+  stance?: string;
+  payload?: unknown;
+};
+
+export type ChainVerification = {
+  verified: boolean | null;
+  entries_checked?: number;
+  breaks?: { seq: number; entry_id: string; reason: string; expected: string; found: string }[];
+};
+
+export type Reconstruction = {
+  case_id: string;
+  timeline: TimelineEvent[];
+  documents: { document_id: string; type: string; status?: string }[];
+  findings: { code?: string; severity?: string; detail?: unknown }[];
+  actions: { action_id: string; state: string; type?: string; core_refs?: unknown[] }[];
+  chain: ChainVerification;
+  unavailable: string[];
+};

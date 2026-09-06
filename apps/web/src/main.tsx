@@ -9,6 +9,7 @@ import { Shell } from "./components/Shell";
 import { LoginPage } from "./pages/LoginPage";
 import { OfficerQueuePage } from "./pages/OfficerQueuePage";
 import { CasePage } from "./pages/CasePage";
+import { LedgerPage } from "./pages/LedgerPage";
 
 /** Retries are off by default. A failed read on a decision screen should say
  *  so rather than quietly try again: an officer who cannot see the evidence
@@ -28,6 +29,8 @@ const router = createBrowserRouter([
       { index: true, element: <Navigate to="/officer" replace /> },
       { path: "officer", element: <OfficerQueuePage /> },
       { path: "officer/cases/:caseId", element: <CasePage /> },
+      { path: "ledger", element: <LedgerPage /> },
+      { path: "ledger/:caseId", element: <LedgerPage /> },
     ],
   },
 ]);

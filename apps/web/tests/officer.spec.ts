@@ -196,3 +196,49 @@ test.describe("officer workbench", () => {
     await expect(page.getByTestId("role-officer")).toBeVisible();
   });
 });
+
+test.describe("ledger viewer", () => {
+  test("reconstructs a case with its chain badge", async ({ page, request }) => {
+    const { entry } = await fetchRecord(request);
+
+    await signIn(page);
+    await page.getByTestId("nav-ledger").click();
+    await page.getByTestId("ledger-search-input").fill(entry.case_id!);
+    await page.getByTestId("ledger-search-submit").click();
+
+    await expect(page).toHaveURL(new RegExp(`/ledger/${entry.case_id}$`));
+
+    // The badge is the point of this screen: a timeline without one asks the
+    // reader to trust it on sight.
+    const verdict = page.getByTestId("chain-verdict");
+    await expect(verdict).toBeVisible();
+    await expect(verdict).toContainText("chain verified");
+
+    const events = page.getByTestId("timeline-events").getByRole("listitem");
+    await expect(events.first()).toBeVisible();
+
+    // Every entry the timeline shows carries the hash it was chained with.
+    await expect(page.getByTestId("timeline-DECISION_RECORD").first()).toBeVisible();
+  });
+
+  test("a case reached from the workbench keeps its identity", async ({ page, request }) => {
+    const { entry } = await fetchRecord(request);
+    await signIn(page);
+    await openCase(page, entry.case_id!);
+
+    await page.getByTestId("reconstruct-link").getByRole("link").click();
+    await expect(page).toHaveURL(new RegExp(`/ledger/${entry.case_id}$`));
+    await expect(page.getByTestId("chain-verdict")).toBeVisible();
+  });
+
+  test("a case with nothing recorded says so rather than showing an empty page", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.getByTestId("nav-ledger").click();
+    await page.getByTestId("ledger-search-input").fill("case_01ARZ3NDEKTSV4RRFFQ69G5FZZ");
+    await page.getByTestId("ledger-search-submit").click();
+
+    await expect(page.getByTestId("problem")).toBeVisible();
+  });
+});

@@ -46,6 +46,15 @@ export function Shell() {
           >
             Officer queue
           </NavLink>
+          <NavLink
+            to="/ledger"
+            data-testid="nav-ledger"
+            className={({ isActive }) =>
+              isActive ? "font-semibold text-[--color-accent]" : "text-[--color-muted]"
+            }
+          >
+            Ledger
+          </NavLink>
         </nav>
 
         <div className="ml-auto flex items-center gap-3 text-xs text-[--color-muted]">

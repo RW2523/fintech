@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { useApi } from "../api";
 import { AUTHORITY, useAuth } from "../auth";
@@ -97,6 +97,18 @@ export function CasePage() {
           <Figure label="Member" value={
             <span className="font-mono text-xs">{entry.member_id ?? "not recorded"}</span>} />
           <Figure label="Tier" value={entry.tier ?? "unknown"} />
+          <Figure
+            label="Reconstruct"
+            testId="reconstruct-link"
+            value={
+              <Link
+                to={`/ledger/${encodeURIComponent(caseId)}`}
+                className="text-xs text-[--color-accent] underline decoration-dotted"
+              >
+                open the ledger
+              </Link>
+            }
+          />
           <Figure
             label="Snapshot"
             value={entry.snapshot_id ? <Copyable value={entry.snapshot_id} label="snapshot id" /> : "none"}

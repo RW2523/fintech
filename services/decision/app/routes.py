@@ -22,6 +22,7 @@ from app.settings import settings
 from cio_common.auth import ROLES
 from cio_common.errors import Conflict, Forbidden, NotFound, ValidationFailed
 from cio_common.ids import derived_id, new_id
+from cio_common.outbox import emit
 
 router = APIRouter(tags=["decision"])
 
@@ -71,6 +72,27 @@ async def append_recommendation(body: RecommendationRequest) -> dict[str, Any]:
         # can be missed, and the one decision nobody looked at would be the one
         # the platform made on its own.
         sample = await _queue_sample(db, record, body.sampling)
+
+        await emit(
+            db,
+            "decision.recorded",
+            {
+                "decision_record_id": record["decision_record_id"],
+                "case_id": body.case_id,
+                "committee_run_id": record.get("committee_run_id"),
+                "before": None,
+                "after": {
+                    "recommendation": record["recommendation"],
+                    "route": record["route"],
+                    "sampled": bool(record.get("sampled")),
+                },
+                "policy_version": record.get("policy_version"),
+                "model_versions": record.get("model_versions") or {},
+            },
+            key=str(record["decision_record_id"]),
+            producer="decision",
+            case_id=body.case_id,
+        )
 
     return {
         "decision_record_id": record["decision_record_id"],
@@ -302,6 +324,21 @@ async def review_sample(sample_id: str, body: SampleReviewRequest, request: Requ
             },
         )
 
+        await emit(
+            db,
+            "sample.reviewed",
+            {
+                "sample_id": sample_id,
+                "decision_record_id": row["decision_record_id"],
+                "reviewer_id": body.reviewer_id,
+                "actor_role": row["assigned_role"],
+                "before": {"verdict": None},
+                "after": {"verdict": body.verdict},
+            },
+            key=str(sample_id),
+            producer="decision",
+        )
+
     return {
         "sample_id": sample_id,
         "decision_record_id": row["decision_record_id"],
@@ -355,7 +392,7 @@ async def record_human_decision(body: HumanDecisionRequest) -> dict[str, Any]:
             (
                 await db.execute(
                     text("""
-            SELECT required_authority, superseded_by FROM app_decision.decision_record
+            SELECT required_authority, superseded_by, route, recommendation FROM app_decision.decision_record
             WHERE decision_record_id = :id
         """),
                     {"id": body.decision_record_id},
@@ -409,6 +446,27 @@ async def record_human_decision(body: HumanDecisionRequest) -> dict[str, Any]:
                 "override": body.override,
                 "body": json.dumps(decision, default=str),
             },
+        )
+
+        # The audit trail carries who decided and what changed, which the
+        # ledger entry does not: the ledger says what was decided, the trail
+        # says who did it and what the case looked like either side.
+        await emit(
+            db,
+            "human_decision.recorded",
+            {
+                "human_decision_id": decision["human_decision_id"],
+                "decision_record_id": body.decision_record_id,
+                "case_id": body.case_id,
+                "actor_id": body.actor_id,
+                "actor_role": authority,
+                "before": {"route": row["route"], "recommendation": row["recommendation"]},
+                "after": {"final_action": body.final_action, "override": body.override},
+                "policy_version": None,
+            },
+            key=str(body.decision_record_id),
+            producer="decision",
+            case_id=body.case_id,
         )
 
     return decision

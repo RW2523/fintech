@@ -53,6 +53,31 @@ async def propose(body: ActionProposalRequest) -> dict[str, Any]:
     }
 
 
+@router.get("/actions", summary="Actions on a case")
+async def actions(case_id: str | None = None, state: str | None = None) -> dict[str, Any]:
+    """Declared before the single-action route, which would otherwise treat
+    "actions" as an id."""
+    from sqlalchemy import text
+
+    async with session() as db:
+        rows = (
+            (
+                await db.execute(
+                    text("""
+            SELECT * FROM app_execution.action
+             WHERE (CAST(:case_id AS text) IS NULL OR case_id = CAST(:case_id AS text))
+               AND (CAST(:state AS text) IS NULL OR state = CAST(:state AS text))
+             ORDER BY created_at ASC
+        """),
+                    {"case_id": case_id, "state": state},
+                )
+            )
+            .mappings()
+            .all()
+        )
+    return {"count": len(rows), "actions": [_public(dict(row)) for row in rows]}
+
+
 @router.get("/actions/{action_id}", summary="One action and what happened to it")
 async def get_action(action_id: str) -> dict[str, Any]:
     async with session() as db:
