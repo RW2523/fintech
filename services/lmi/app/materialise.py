@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cio_common.hashing import canonical_json, sha256
 from cio_common.ids import new_id
+from ml.lmi.dataset import features_at
 from ml.lmi.families import (
     Deduction,
     Interaction,
@@ -30,12 +31,10 @@ from ml.lmi.families import (
     baselines_for,
     capacity_features,
     deduction_features,
-    departures,
     interaction_features,
-    savings_features,
 )
 from ml.lmi.seasonal import adjust
-from ml.lmi.temporal import DueEvent, days_to_pay, late_streak, window_features
+from ml.lmi.temporal import DueEvent, days_to_pay, window_features
 
 __all__ = ["Materialisation", "MemberHistory", "compute_for", "load_histories", "materialise"]
 
@@ -212,9 +211,26 @@ async def load_histories(
 def compute_for(
     history: MemberHistory, *, as_of: date, employer_cycles: dict[str, dict[date, float]]
 ) -> dict[str, Any]:
-    """One member's feature set, with its baselines and its season."""
-    features: dict[str, float] = {}
-    features.update(window_features(history.due_events, as_of=as_of))
+    """One member's feature set, with its baselines and its season.
+
+    The core of the vector comes from `ml.lmi.dataset.features_at`, which is
+    the same function the models were trained on. Two implementations of "a
+    member's features" is exactly the thing that drifts silently: the first
+    version of this function computed twenty-three of the twenty-seven the
+    model expects, and the four it missed were filled with zeros at serving
+    time without anybody being told.
+    """
+    features = features_at(history.due_events, history.deductions, history.savings, as_of=as_of)
+    if features is None:
+        # Too little history for a baseline. The window features are still
+        # true and worth storing; what cannot be computed is any statement
+        # about departure from a habit.
+        features = dict(window_features(history.due_events, as_of=as_of))
+
+    # Everything the trainer does not have to hand. The employer's own missed
+    # cycles need the whole book, and the model does not use the flag; it is
+    # here because the state machine does, to tell an employer's problem from
+    # a member's.
     features.update(
         deduction_features(
             history.deductions,
@@ -224,7 +240,6 @@ def compute_for(
             ),
         )
     )
-    features.update(savings_features(history.savings, as_of=as_of))
     features.update(interaction_features(history.interactions, as_of=as_of))
     features.update(
         capacity_features(
@@ -234,7 +249,6 @@ def compute_for(
         )
     )
 
-    # The baselines are the member's own history on the signals that have one.
     timings = [float(value) for value in days_to_pay(history.due_events)]
     baselines = baselines_for(
         {
@@ -242,23 +256,6 @@ def compute_for(
             "days_to_pay_median_90d": timings,
             "deduction_amount_delta_90d": [d.shortfall for d in history.deductions],
         }
-    )
-    features.update(departures(features, baselines))
-
-    # `late_streak` counts due events settled after the due date, which in this
-    # book is 42% of members: paying two or three days on is a habit here, not
-    # a deterioration. The streak that matters for an alert is the one measured
-    # against the member's own habit, so both are reported.
-    #
-    # It is not called a late streak, because for a member who habitually pays
-    # three days early, paying on the due date is beyond habit and is not late.
-    # That is a real signal and a different one.
-    habit = baselines["days_to_pay_median_30d"]
-    features["streak_beyond_habit"] = float(
-        late_streak(
-            history.due_events,
-            tolerance_days=round(habit.median) if habit.usable else 0,
-        )
     )
 
     seasonal = adjust(

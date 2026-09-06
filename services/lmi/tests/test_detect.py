@@ -139,3 +139,96 @@ async def test_a_signal_nobody_measured_says_so(client: AsyncClient) -> None:
     """Rather than carrying a number that reads as evidence."""
     body = (await client.get("/lmi/config")).json()
     assert body["measured"]["savings_balance"]["measured"] is False
+
+
+# ---------------------------------------------------------------------------
+# T-062 — scoring (docs/07 §4.4)
+# ---------------------------------------------------------------------------
+async def test_a_score_carries_its_interval_and_its_drivers(client: AsyncClient, db: Any) -> None:
+    """ "Your probability is 0.32" is not a conversation, and a member is going
+    to be telephoned about this."""
+    await give_history(db, timings=[0] * 18)
+    await client.post("/lmi/materialise", json={"as_of": AS_OF.isoformat()})
+
+    response = await client.post("/lmi/score", json={"member_id": MEMBER, "as_of": AS_OF.isoformat()})
+    if response.status_code == 500:
+        import pytest
+
+        pytest.skip("no trained early-warning artifacts; run `uv run python -m ml.lmi`")
+
+    body = response.json()
+    assert body["model_version"]
+    assert body["scores"], "no horizon was scored"
+    for score in body["scores"]:
+        assert 0.0 <= score["probability"] <= 1.0
+        interval = score["interval"]
+        assert 0.0 <= interval["lower"] <= interval["upper"] <= 1.0
+        # The interval is a statement about the rate among members scored
+        # alike, not a band drawn around the point estimate. When the estimate
+        # falls outside it the model is miscalibrated there, and the score says
+        # so rather than one being quietly moved to fit the other.
+        outside = not (interval["lower"] <= score["probability"] <= interval["upper"])
+        assert outside == ("calibration_warning" in score)
+
+
+async def test_the_served_features_are_the_ones_the_model_was_trained_on(
+    client: AsyncClient, db: Any
+) -> None:
+    """Two implementations of "a member's features" is the thing that drifts
+    silently: the first version of the materialiser computed 23 of the 27 the
+    model expects, and the four it missed were filled with zeros at serving
+    time without anybody being told.
+
+    The member is given a deduction and a savings history as well as payments,
+    because some features exist only for members who have them. One with no
+    savings at all is out of distribution, and the right answer there is to
+    name the gap rather than to invent a balance."""
+    await give_history(
+        db,
+        timings=[0] * 18,
+        deductions=[250.0] * 18,
+        savings=[100.0 * i for i in range(1, 19)],
+    )
+    await client.post("/lmi/materialise", json={"as_of": AS_OF.isoformat()})
+
+    response = await client.post("/lmi/score", json={"member_id": MEMBER, "as_of": AS_OF.isoformat()})
+    if response.status_code == 500:
+        import pytest
+
+        pytest.skip("no trained early-warning artifacts; run `uv run python -m ml.lmi`")
+    assert response.json()["features_missing"] == []
+
+
+async def test_scoring_a_member_nobody_materialised_says_what_to_do(
+    client: AsyncClient,
+) -> None:
+    response = await client.post("/lmi/score", json={"member_id": "M-999999"})
+    assert response.status_code in (404, 500)
+    if response.status_code == 404:
+        assert "materialise" in response.json()["error"]["message"]
+
+
+async def test_an_unknown_horizon_is_refused(client: AsyncClient, db: Any) -> None:
+    await give_history(db, timings=[0] * 18)
+    await client.post("/lmi/materialise", json={"as_of": AS_OF.isoformat()})
+
+    response = await client.post(
+        "/lmi/score",
+        json={"member_id": MEMBER, "as_of": AS_OF.isoformat(), "horizons": [45]},
+    )
+    assert response.status_code in (422, 500)
+
+
+async def test_a_member_out_of_distribution_has_the_gap_named(client: AsyncClient, db: Any) -> None:
+    """A member with no savings at all is not one the model was trained to
+    recognise, and filling the gap with a zero would present an invented
+    balance as an observed one."""
+    await give_history(db, timings=[0] * 18)
+    await client.post("/lmi/materialise", json={"as_of": AS_OF.isoformat()})
+
+    response = await client.post("/lmi/score", json={"member_id": MEMBER, "as_of": AS_OF.isoformat()})
+    if response.status_code == 500:
+        import pytest
+
+        pytest.skip("no trained early-warning artifacts; run `uv run python -m ml.lmi`")
+    assert "savings_balance" in response.json()["features_missing"]

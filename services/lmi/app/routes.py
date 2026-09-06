@@ -20,7 +20,7 @@ from app.config import load_config
 from app.db import session
 from app.detect import latest_features, run_detection
 from app.materialise import materialise
-from cio_common.errors import NotFound
+from cio_common.errors import NotFound, ValidationFailed
 
 router = APIRouter(tags=["lmi"])
 
@@ -189,4 +189,143 @@ async def configuration() -> dict[str, Any]:
         },
         "anomaly": settings.anomaly,
         "measured": settings.measured,
+    }
+
+
+# ---------------------------------------------------------------------------
+# scoring (docs/07 §4.4)
+# ---------------------------------------------------------------------------
+_model: Any = None
+
+
+def early_warning_model() -> Any:
+    """The loaded model.
+
+    Loaded once and kept: four boosted models plus their calibrators is tens of
+    megabytes, and reloading per request would put that on the read path for no
+    benefit.
+    """
+    global _model
+    if _model is None:
+        from ml.lmi.predict import EarlyWarningModel
+
+        _model = EarlyWarningModel.load()
+    return _model
+
+
+def set_early_warning_model(replacement: Any) -> None:
+    global _model
+    _model = replacement
+
+
+class ScoreRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    member_id: str = Field(min_length=1, max_length=64)
+    as_of: str | None = None
+    horizons: list[int] | None = None
+    #: Supplied by a caller that has already computed them. Otherwise the
+    #: materialised set for this member is used.
+    features: dict[str, float] | None = None
+
+
+async def stored_features(member_id: str, *, cutoff: date) -> tuple[dict[str, float], int]:
+    """The materialised features at or before a day, and how stale they are."""
+    async with session() as db:
+        row = (
+            (
+                await db.execute(
+                    text("""
+            SELECT as_of, features FROM app_lmi.temporal_features
+             WHERE member_id = :member_id AND as_of <= :cutoff
+             ORDER BY as_of DESC LIMIT 1
+        """),
+                    {"member_id": member_id, "cutoff": cutoff},
+                )
+            )
+            .mappings()
+            .first()
+        )
+    if row is None:
+        raise NotFound(
+            f"no temporal features for {member_id!r} at or before {cutoff.isoformat()}; "
+            "run /lmi/materialise first",
+            member_id=member_id,
+        )
+    body = row["features"]
+    return (
+        json.loads(body) if isinstance(body, str) else dict(body),
+        (cutoff - row["as_of"]).days,
+    )
+
+
+@router.post("/lmi/score", summary="A member's probability of going late, by horizon")
+async def score_member(body: ScoreRequest) -> dict[str, Any]:
+    """docs/07 §4.4 — the number, its interval and what moved it.
+
+    The drivers are not decoration. A member is going to be telephoned about
+    this, and "your probability is 0.32" is not a conversation.
+    """
+    cutoff = date.fromisoformat(body.as_of) if body.as_of else _today()
+
+    if body.features is not None:
+        features, stale_days = dict(body.features), 0
+    else:
+        features, stale_days = await stored_features(body.member_id, cutoff=cutoff)
+
+    model = early_warning_model()
+    if body.horizons:
+        unknown = sorted(set(body.horizons) - set(model.horizons))
+        if unknown:
+            raise ValidationFailed(f"no model for horizon(s) {unknown}", horizons=model.horizons)
+
+    scores = model.score(features, horizons=body.horizons)
+    missing = model.missing(features)
+
+    return {
+        "member_id": body.member_id,
+        "as_of": cutoff.isoformat(),
+        "model_version": model.version,
+        # Stated rather than left implicit: a score computed from a feature set
+        # that is a fortnight old is a score about a fortnight ago, and the
+        # reader has to know which.
+        "stale_days": stale_days,
+        # A vector assembled from half the features is a different member from
+        # the one the model was trained to recognise, so the gap is named.
+        "features_missing": missing,
+        "scores": [score.as_dict() for score in scores],
+    }
+
+
+@router.get("/lmi/model", summary="Which early-warning model is serving")
+async def model_version() -> dict[str, Any]:
+    """What is loaded and what it was measured to do."""
+    model = early_warning_model()
+    metrics = model.metrics or {}
+    horizons = metrics.get("horizons") or {}
+    return {
+        "family": "lmi_early_warning",
+        "version": model.version,
+        "horizons": model.horizons,
+        "features": model.features,
+        "measured": {
+            horizon: {
+                "auc": (body.get("test") or {}).get("auc"),
+                "calibration_slope": (body.get("test") or {}).get("calibration_slope"),
+                "interval_coverage": body.get("interval_coverage"),
+                # The number that matters: discrimination among members who are
+                # not already late, which is what early warning means.
+                "auc_not_currently_late": (body.get("clean_only") or {}).get("auc"),
+            }
+            for horizon, body in horizons.items()
+        },
+        "survival": {
+            name: {
+                "concordance": (model.survival.get(name) or {}).get("concordance"),
+                "events": (model.survival.get(name) or {}).get("events"),
+                "hazard_ratios": (model.survival.get(name) or {}).get("hazard_ratios"),
+            }
+            for name in ("time_to_first_late", "time_to_cure")
+            if model.survival.get(name)
+        },
     }

@@ -155,6 +155,10 @@ autonomy-drill:  ## turn the dial up, act alone, then stop (needs 'make up')
 execution-drill:  ## turn an approval into a facility, then replay it (needs 'make up')
 	@$(UV) run python scripts/execution_drill.py
 
+.PHONY: train-lmi
+train-lmi:  ## train the early-warning and survival models (needs 'make up')
+	@$(UV) run python -m ml.lmi
+
 .PHONY: changepoint-eval
 changepoint-eval:  ## measure detection lead time and false alarms (needs 'make up')
 	@$(UV) run python scripts/changepoint_eval.py

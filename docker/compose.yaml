@@ -28,6 +28,20 @@ x-service-defaults: &service-defaults
     INTERNAL_KEY: ${INTERNAL_KEY:-change-me-internal}
     OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     OTEL_TRACES_EXPORTER: otlp
+  # Trained model artifacts, mounted read-only.
+  #
+  # The image would carry them, and in a deployment it should: a service must
+  # not depend on a mount to know what model it is serving. But .dockerignore
+  # excludes them, because they are large binaries that do not belong in git or
+  # in a build context, and the result was that every service reported "no
+  # trained artifacts" while four trained models sat on disk beside them.
+  # Mounting is what lets somebody retrain and serve it without rebuilding four
+  # images, which is the difference between a demo you can iterate on and one
+  # you can only watch.
+  volumes: &model-artifacts
+    - ../ml/credit_risk/artifacts:/srv/ml/credit_risk/artifacts:ro
+    - ../ml/fraud/artifacts:/srv/ml/fraud/artifacts:ro
+    - ../ml/lmi_early_warning/artifacts:/srv/ml/lmi_early_warning/artifacts:ro
   profiles: [services]
   networks: [cio]
 
