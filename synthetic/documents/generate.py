@@ -22,7 +22,7 @@ from PIL import Image
 from synthetic.config import DEMO_AS_OF_MONTH, HISTORY_START, Settings
 from synthetic.documents.anomalies import INJECTED_SHARE, Anomaly, AnomalyKind
 from synthetic.documents.noise import ScanProfile, apply_scan_noise, clean_digital_share
-from synthetic.documents.render import Renderer
+from synthetic.documents.render import CARD_VIEWPORT, Renderer
 from synthetic.population.calendar import cycle_label, month_end
 from synthetic.writer import read_table
 
@@ -456,7 +456,7 @@ def _build(
             anomaly = anomaly_kind
 
         context = _identity_context(member, rng, id_number=id_number, name=name)
-        result = renderer.render("identity_card.html.j2", context)
+        result = renderer.render("identity_card.html.j2", context, viewport=CARD_VIEWPORT)
         truth = {k: v for k, v in context.items() if k != "avatar"}
         if detail:
             truth["_anomaly"] = detail

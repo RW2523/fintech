@@ -71,6 +71,26 @@ def _documents(args: argparse.Namespace) -> int:
     return 0
 
 
+def _accuracy(args: argparse.Namespace) -> int:
+    from synthetic.accuracy import measure
+
+    result = measure(Path(args.out) / "documents", limit=args.limit).as_dict()
+    print(f"  documents            {result['documents']}")
+    print(f"  classification       {result['classification_accuracy']:.1%}   (target >= 98%)")
+    print(f"  critical fields      {result['critical_field_accuracy']:.1%}   (target >= 95%)")
+    print(f"  all fields           {result['field_accuracy']:.1%}")
+    print(f"  bbox coverage        {result['bbox_coverage']:.1%}")
+    print(f"  confidence coverage  {result['confidence_coverage']:.1%}")
+    print()
+    for name, stats in result["by_field"].items():
+        mark = "  " if stats["accuracy"] >= 0.95 else "<-"
+        print(f"  {mark} {name:24s} {stats['accuracy']:6.1%}  {stats['exact']}/{stats['total']}")
+
+    ok = result["classification_accuracy"] >= 0.98 and result["critical_field_accuracy"] >= 0.95
+    print(f"\n  {'meets' if ok else 'BELOW'} the T-023 thresholds")
+    return 0 if ok else 1
+
+
 def _load(args: argparse.Namespace) -> int:
     from synthetic.loader import load_population
 
@@ -112,6 +132,10 @@ def main(argv: list[str] | None = None) -> int:
     documents.add_argument("--seed", type=int, default=42)
     documents.add_argument("--no-pdf", action="store_true", help="skip PDF rendering (faster, PNG only)")
     documents.set_defaults(handler=_documents)
+
+    accuracy = sub.add_parser("accuracy", parents=[common], help="score extraction against the ground truth")
+    accuracy.add_argument("--limit", type=int, default=300)
+    accuracy.set_defaults(handler=_accuracy)
 
     load = sub.add_parser("load", parents=[common], help="load a generated population into the core stub")
     load.add_argument("--base-url", default=None)
