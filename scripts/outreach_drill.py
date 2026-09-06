@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import time
 from datetime import date, timedelta
 from typing import Any
 
@@ -25,7 +26,13 @@ import httpx
 
 BASE = "http://localhost:8000"
 MEMBER = "M-000042"
-ACCOUNT = "A-000042"
+
+#: A fresh account and due date each run. A reminder somebody cancelled stays
+#: cancelled, which is the behaviour under test, so a drill that reused the
+#: same instalment would schedule nothing on its second run and report the
+#: service broken.
+RUN = f"{int(time.time()) % 100_000:05d}"
+ACCOUNT = f"A-DRILL{RUN}"
 
 
 async def main() -> int:
@@ -78,8 +85,13 @@ async def main() -> int:
         ).json()
         inbox = (await c.get(f"{BASE}/api/notification/members/{MEMBER}/inbox")).json()
         queued = [m for m in inbox["messages"] if m["state"] == "QUEUED"]
-        print(f"  after a rebuild: {len(queued)} queued (not {len(queued) * 2})")
-        ok &= len(queued) == again.get("scheduled")
+        print(
+            f"  after a rebuild: {len(queued)} queued, "
+            f"{again.get('already_scheduled')} already scheduled (not {len(queued) * 2})"
+        )
+        ok &= len(queued) == body.get("scheduled")
+        ok &= again.get("scheduled") == 0
+        ok &= again.get("already_scheduled") == len(queued)
 
         # --- 2. the money arrives ------------------------------------------
         cancelled = await c.post(

@@ -151,7 +151,30 @@ case "$PHASE" in
     step "tamper drill"          uv run python scripts/tamper_drill.py
     step "workbench smoke"       bash -c 'cd apps/web && npx playwright test'
     ;;
-  P6|P7|P8)
+  P6)
+    # docs/14 P6: S8 and S9 pass, the nightly LMI run is inside its budget, the
+    # state machine holds its properties, and the collections workbench and
+    # notifications work.
+    step "make lint"              make lint
+    step "make typecheck"         make typecheck
+    step "longitudinal maths"     uv run pytest ml/tests/test_lmi_temporal.py ml/tests/test_lmi_families.py ml/tests/test_lmi_seasonal.py ml/tests/test_lmi_dataset.py ml/tests/test_lmi_conformal.py -q
+    step "lmi service"            bash -c 'cd services/lmi && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "notification service"   bash -c 'cd services/notification && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "policy service"         bash -c 'cd services/policy && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "workflow tests"         uv run pytest workflows -q
+    step "stack healthy"          scripts/wait_healthy.sh 120
+    step "every service routed"   scripts/check_routes.sh
+    step "features materialised"  bash -c '\
+      curl -fsS -X POST http://localhost:8000/api/lmi/lmi/materialise \
+        -H "authorization: Bearer $(scripts/dev_token.sh system)" \
+        -H "content-type: application/json" -d "{}" > /dev/null'
+    step "S8 drift seen early"    uv run python scripts/state_machine_eval.py
+    step "S9 outage suppressed"   uv run python scripts/state_machine_eval.py
+    step "change-point measured"  uv run python scripts/changepoint_eval.py
+    step "outreach drill"         uv run python scripts/outreach_drill.py
+    step "workbench smoke"        bash -c 'cd apps/web && npx playwright test'
+    ;;
+  P7|P8)
     echo "  phase ${PHASE} verification not implemented yet" >&2
     exit 1
     ;;

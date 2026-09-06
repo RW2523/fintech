@@ -335,6 +335,63 @@ either way, and the browser test asserts both halves.
 Whole suite at the end of P5: **1,466 Python tests** and **10 Playwright
 tests**, all passing.
 
+### P6 (verified 2026-09-06, `scripts/verify_phase.sh P6`)
+
+15 pass, 0 fail.
+
+| Step | Result |
+|---|---|
+| make lint | PASS |
+| make typecheck | PASS |
+| longitudinal maths | PASS |
+| lmi service | PASS |
+| notification service | PASS |
+| policy service | PASS |
+| workflow tests | PASS |
+| stack healthy | PASS |
+| every service serving its routes | PASS |
+| features materialised | PASS |
+| S8 drift seen early | PASS |
+| S9 outage suppressed | PASS |
+| change-point measured | PASS |
+| outreach drill | PASS |
+| workbench Playwright smoke (14 tests) | PASS |
+
+Against `docs/14` P6 criteria: S8 and S9 pass, the nightly run is inside its
+budget, the state machine holds its properties, and the collections workbench
+and notifications work.
+
+**The measurements, all on the whole generated population rather than a
+fixture.** Features for 5,000 members materialise in 2.9 seconds against a
+ten-minute budget. Change-point detection sees 83.1% of drifting members before
+their first late payment with a median lead of 92 days, on the half of the
+population its parameters were not chosen on, and produces 0.21% false alarms
+per steady member-year against a 1.5% ceiling. The state machine, walked month
+by month over 4,840 members, escalates nobody during either outage window,
+never changes a member's state twice inside 28 days, and says something about
+70% of drifting members before their first late payment. The early-warning
+model reaches AUC 0.9598 at 30 days, and 0.8096 among members who are not
+already late, which is the number that means early warning.
+
+**Six defects were found by measuring rather than by testing, and each one had
+been passing its tests.** A baseline computed over a member's whole history is
+lookahead, and on a drifting member it is lookahead in the worst direction. A
+detector whose scale is one day is measuring rounding. "Late" meaning any
+positive day count makes early warning impossible in a book where half the
+members pay a day or two on. Two rungs of the state machine were specified in a
+way this population cannot reach. Split conformal covers a coin flip and needs
+an interval nearly a point wide to do it. And no service could see any trained
+model, because `.dockerignore` excluded the artifacts.
+
+**One acceptance number is not met.** The early-warning calibration slope at 30
+days is 1.118 against a band of 0.9-1.1, and it moves between 0.81 and 1.28
+across reasonable train/calibration splits because the population's event rate
+rises across the panel. It is in the model card, and monitoring must
+recalibrate on a rolling window rather than trust this one.
+
+Whole suite at the end of P6: **1,687 Python tests** and **14 Playwright
+tests**, all passing.
+
 ## Blocked
 (none)
 

@@ -276,3 +276,18 @@ async def test_every_template_is_listed_for_review(client: AsyncClient) -> None:
     body = (await client.get("/templates")).json()
     assert body["count"] >= 7
     assert any(t["template_id"] == "OVERDUE_1" for t in body["templates"])
+
+
+async def test_a_cancelled_reminder_is_not_quietly_revived(client: AsyncClient) -> None:
+    """Re-running the scheduler must not undo somebody's decision not to
+    contact a member. The result says which ones already existed, so a caller
+    sees it happened rather than wondering why nothing was queued."""
+    await schedule(client)
+    await client.post(
+        "/notifications/cancel-schedule", params={"account_id": ACCOUNT, "event": "PAYMENT_RECEIVED"}
+    )
+
+    again = await schedule(client)
+    assert again["scheduled"] == 0
+    assert again["already_scheduled"] == 5
+    assert all(r.get("existing") == "CANCELLED" for r in again["reminders"])

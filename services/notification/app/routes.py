@@ -313,6 +313,21 @@ async def schedule(body: ScheduleRequest) -> dict[str, Any]:
                 written.append({**reminder.as_dict(), "skipped": f"needs {', '.join(absent)}"})
                 continue
             subject, rendered = render(template, variables)
+            # ON CONFLICT DO NOTHING, deliberately. A reminder somebody
+            # cancelled stays cancelled: re-running the scheduler must not
+            # quietly undo a decision not to contact a member. The result says
+            # which ones already existed, so a caller can see it happened
+            # rather than wonder why nothing was queued.
+            existing = (
+                await db.execute(
+                    text("SELECT state FROM app_notification.message WHERE message_id = :id"),
+                    {"id": reminder.message_id},
+                )
+            ).scalar_one_or_none()
+            if existing is not None:
+                written.append({**reminder.as_dict(), "existing": existing})
+                continue
+
             await db.execute(
                 text("""
                 INSERT INTO app_notification.message
@@ -343,7 +358,9 @@ async def schedule(body: ScheduleRequest) -> dict[str, Any]:
         "member_id": body.member_id,
         "account_id": body.account_id,
         "due_date": due.isoformat(),
-        "scheduled": len([r for r in written if "skipped" not in r]),
+        "scheduled": len([r for r in written if "skipped" not in r and "existing" not in r]),
+        "already_scheduled": len([r for r in written if "existing" in r]),
+        "skipped": len([r for r in written if "skipped" in r]),
         "reminders": written,
     }
 
