@@ -23,6 +23,7 @@ my payment was fine", the answer has to be a row saying what it actually said.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -237,7 +238,7 @@ async def answer_member(
     )
 
     return AssistantReply(
-        answer=result.answer,
+        answer=_readable(result.answer),
         grounded=result.grounded,
         attempts=result.attempts,
         tools_read=tuple(entry["tool"] for entry in tool_results if "result" in entry),
@@ -245,6 +246,34 @@ async def answer_member(
         screening=result.screening,
         latency_ms=(time.perf_counter() - started) * 1000,
     )
+
+
+#: A refusal reason that is a machine's word rather than a person's. The model
+#: put the bare enum in the field a member reads, and it reached the screen
+#: unchanged because a refusal passes the output screen trivially: refusing is
+#: always allowed and never needs evidence.
+_NOT_A_SENTENCE = re.compile(r"^[A-Z][A-Z_ ]*$")
+
+
+def _readable(answer: dict[str, Any]) -> dict[str, Any]:
+    """Make sure what a member reads is a sentence.
+
+    Measured: a member asking for their balance was shown the word
+    "NO_EVIDENCE". An officer seeing that knows what it means and can open the
+    file; a member has been handed a symbol from inside the machine and has no
+    idea what to do next.
+
+    Only the wording is replaced. The refusal stands, the code stands, and
+    nothing is turned into an answer: what changes is that somebody can read
+    it.
+    """
+    refusal = answer.get("refusal")
+    if not isinstance(refusal, dict):
+        return answer
+    reason = str(refusal.get("reason") or "").strip()
+    if reason and " " in reason and not _NOT_A_SENTENCE.match(reason):
+        return answer
+    return {**answer, "refusal": {**refusal, "reason": UNGROUNDED_REPLY}}
 
 
 def _member_guard(member_id: str) -> Callable[[str], Refusal | None]:

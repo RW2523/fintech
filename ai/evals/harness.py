@@ -83,22 +83,16 @@ def numbers_in(text: str) -> set[str]:
 
 
 def rounded_forms(value: str) -> set[str]:
-    """A figure and the ways a sentence may legitimately write it.
+    """The ways a tool's number may legitimately be written, as the screen counts them.
 
-    0.25 said as "25%" is the same number. 0.25 said as 0.3 is not.
+    The screen's own rule, not a third copy. The copy that lived here did not
+    generate the two-decimal money form, so an agent quoting a product ceiling
+    of 150000.00 exactly as the pack states it was reported as having invented
+    the number.
     """
-    forms = {value}
-    try:
-        number = float(value)
-    except ValueError:
-        return forms
-    forms |= {str(round(number, digits)) for digits in range(4)}
-    if number == int(number):
-        forms.add(str(int(number)))
-    if 0 <= number <= 1:
-        forms |= {str(round(number * 100, digits)) for digits in range(3)}
-    trimmed = {f.rstrip("0").rstrip(".") if "." in f else f for f in forms}
-    return forms | trimmed
+    from ai.guardrails.screen import rounded_forms as canonical
+
+    return canonical(value)
 
 
 @dataclass

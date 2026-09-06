@@ -24,6 +24,7 @@ __all__ = [
     "Screening",
     "numbers_a_tool_supplied",
     "numbers_in_prose",
+    "rounded_forms",
     "screen_answer",
     "screen_opinion",
 ]
@@ -142,11 +143,17 @@ def _normalise(value: float) -> str:
     return text[:-2] if text.endswith(".0") else text
 
 
-def _rounded_forms(value: str) -> set[str]:
+def rounded_forms(value: str) -> set[str]:
     """The ways a tool's number may legitimately be written in prose.
 
-    A tool returning 0.4775 may be quoted as 0.48 or 0.477. Rounding is not
-    computing, so those forms are accepted; anything else is not.
+    A tool returning 0.4775 may be quoted as 0.48 or 0.477, and 12000 written
+    as money is 12000.00. Rounding and formatting are not computing, so those
+    forms are accepted; anything else is not.
+
+    Public because the evaluation harness grades the same thing. Its own copy
+    did not generate the two-decimal money form, so an agent quoting a product
+    ceiling of 150000.00 exactly as the pack states it was reported as having
+    invented the number.
     """
     forms = {value}
     try:
@@ -172,7 +179,7 @@ def screen_opinion(
     screening = Screening()
     known_numbers: set[str] = set()
     for value in numbers_a_tool_supplied(tool_results or []):
-        known_numbers |= _rounded_forms(value)
+        known_numbers |= rounded_forms(value)
 
     # None means the caller cannot check. An empty set means the run produced
     # no evidence, which is not the same thing and is not permission to cite
@@ -342,7 +349,7 @@ def screen_answer(
 
         refusal_numbers: set[str] = set()
         for value in numbers_a_tool_supplied(tool_results or []):
-            refusal_numbers |= _rounded_forms(value)
+            refusal_numbers |= rounded_forms(value)
 
         # A refusal that quotes a figure the tools produced is an answer filed
         # under the wrong heading. Measured on the golden set: "The decision was
@@ -398,7 +405,7 @@ def screen_answer(
 
     known_numbers: set[str] = set()
     for value in numbers_a_tool_supplied(tool_results or []):
-        known_numbers |= _rounded_forms(value)
+        known_numbers |= rounded_forms(value)
     invented = _numbers_in(text) - known_numbers
     if invented:
         screening.rejections.append(

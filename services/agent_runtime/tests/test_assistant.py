@@ -212,3 +212,46 @@ async def test_an_ungrounded_answer_is_not_shown_to_a_member(tools: list[dict[st
     assert not reply.grounded
     assert reply.answer["refusal"]["reason"] == UNGROUNDED_REPLY
     assert "grounded" not in reply.answer["refusal"]["reason"]
+
+
+# ---------------------------------------------------------------------------
+# what a member actually reads (P8)
+# ---------------------------------------------------------------------------
+async def test_a_member_is_never_shown_a_machine_code(tools: list[dict[str, Any]]) -> None:
+    """Measured: a member asking for their balance was shown "NO_EVIDENCE".
+
+    A refusal passes the output screen trivially, because refusing is always
+    allowed and never needs evidence, so the model's own wording reached the
+    member unchanged. An officer seeing that code knows what it means and can
+    open the file; a member has been handed a symbol from inside the machine.
+    """
+    gateway = Gateway(
+        answer={
+            "schema": "copilot_answer/1.0",
+            "answer": "",
+            "citations": [],
+            "refusal": {"reason": "NO_EVIDENCE", "code": "NO_EVIDENCE"},
+        }
+    )
+    reply = await ask("What is my balance?", gateway=gateway)
+
+    assert reply.answer["refusal"]["reason"] == UNGROUNDED_REPLY
+    # The refusal stands and so does its code. Only the wording changed.
+    assert reply.answer["refusal"]["code"] == "NO_EVIDENCE"
+
+
+async def test_a_refusal_a_member_can_read_is_left_alone(tools: list[dict[str, Any]]) -> None:
+    gateway = Gateway(
+        answer={
+            "schema": "copilot_answer/1.0",
+            "answer": "",
+            "citations": [],
+            "refusal": {
+                "reason": "I cannot see your application at the moment. A colleague can check it.",
+                "code": "NO_EVIDENCE",
+            },
+        }
+    )
+    reply = await ask("How is my application going?", gateway=gateway)
+
+    assert "colleague can check it" in reply.answer["refusal"]["reason"]
