@@ -214,7 +214,7 @@ class UnderwriteCase:
                 retry_policy=_RETRY,
             )
             outcome.token_id = token["token_id"]
-            self._state = "DONE"
+            outcome = await self._carry_out(case, outcome)
             self._decision = outcome
             return outcome
 
@@ -239,9 +239,29 @@ class UnderwriteCase:
                 retry_policy=_RETRY,
             )
             outcome.token_id = token["token_id"]
+            outcome = await self._carry_out(case, outcome)
 
         self._state = "DONE"
         self._decision = outcome
+        return outcome
+
+    async def _carry_out(self, case: CaseRef, outcome: DecisionOutcome) -> DecisionOutcome:
+        """Turn the approval into a facility, or leave the case pending.
+
+        A core that refuses is not a workflow failure: the action is recorded,
+        retryable, and the case waits. Failing the workflow would lose the
+        approval and make a person issue it again for a write that timed out.
+        """
+        self._state = "EXECUTING"
+        result = await workflow.execute_activity(
+            activities.execute_action,
+            args=[case, outcome.decision_record_id, outcome.token_id, outcome.human_decision_id],
+            start_to_close_timeout=_SHORT,
+            retry_policy=_RETRY,
+        )
+        outcome.action_id = result.get("action_id")
+        outcome.execution_state = str(result.get("state") or "UNKNOWN")
+        self._state = "DONE" if outcome.execution_state == "EXECUTED" else "EXECUTION_PENDING"
         return outcome
 
     async def _await_human(self, route: str) -> HumanDecisionSignal:

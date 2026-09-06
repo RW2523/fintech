@@ -78,6 +78,9 @@ async def freeze_snapshot(case: CaseRef) -> CaseRef:
         product_code=snapshot["product_code"],
         requested_amount=snapshot.get("requested_amount", "0.00"),
         application_id=case.application_id,
+        tenor_months=int(snapshot.get("tenor_months") or 0),
+        instalment=str(snapshot.get("instalment") or "0.00"),
+        profit_rate=str(snapshot.get("profit_rate") or "0"),
     )
 
 
@@ -296,6 +299,58 @@ async def issue_token(
     )
 
 
+@activity.defn
+async def execute_action(
+    case: CaseRef, decision_record_id: str, token_id: str, human_decision_id: str | None
+) -> dict[str, Any]:
+    """Turn an approval into a facility (docs/08 §7).
+
+    The proposal is recorded first, then carried out. Two calls rather than
+    one because the proposal is what the token was issued against: an execute
+    that also created its own proposal could execute something nobody
+    approved.
+
+    A core that refuses leaves the action retryable and the outcome pending.
+    The activity reports that rather than raising, so the workflow can decide
+    whether to retry or wait for a person instead of being retried blindly by
+    Temporal into the same failing write.
+    """
+    action_id = f"act_{case.snapshot_id[5:]}"
+    proposal = {
+        "action_id": action_id,
+        "case_id": case.case_id,
+        "member_id": case.member_id,
+        "decision_record_id": decision_record_id,
+        "human_decision_id": human_decision_id,
+        "level": "L3",
+        "type": "APPROVE_FINANCING",
+        "parameters": {
+            "product_code": case.product_code,
+            "amount": case.requested_amount,
+            "tenor_months": case.tenor_months,
+            "instalment": case.instalment,
+            "profit_rate": case.profit_rate,
+        },
+        "rationale": {"text": "approved on the decision record", "evidence_refs": []},
+        "requires": "OFFICER",
+        "proposed_by": "policy",
+    }
+    await _post("execution", 8013, "/action-proposals", proposal)
+
+    try:
+        return await _post(
+            "execution",
+            8013,
+            f"/actions/{action_id}/execute",
+            {"token_id": token_id, "product_code": case.product_code},
+        )
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 409:
+            detail = dict((exc.response.json().get("error") or {}).get("details") or {})
+            return {"action_id": action_id, "state": "FAILED", "retryable": True, **detail}
+        raise
+
+
 #: Registered with the worker in workflows/worker.py.
 ACTIVITIES: list[Callable[..., Any]] = [
     freeze_snapshot,
@@ -306,6 +361,7 @@ ACTIVITIES: list[Callable[..., Any]] = [
     run_committee,
     decide,
     record_decision,
+    execute_action,
     record_human_decision,
     issue_token,
 ]

@@ -43,6 +43,7 @@ PREFIXES: dict[str, str] = {
     "asmt": "FraudAssessment",
     "ext": "Extraction",
     "fnd": "Finding",
+    "stp": "SagaStep",
 }
 
 _ULID_BODY = "[0-9A-HJKMNP-TV-Z]{26}"

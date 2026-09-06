@@ -33,6 +33,12 @@ class CaseRef:
     product_code: str = "PF-STD"
     requested_amount: str = "0.00"
     application_id: str = ""
+    #: The terms the facility would be written on. Carried from the frozen
+    #: snapshot so execution writes the amount that was decided, not the one
+    #: the core happens to hold when it is asked.
+    tenor_months: int = 0
+    instalment: str = "0.00"
+    profit_rate: str = "0"
 
 
 @dataclass
@@ -114,6 +120,10 @@ class DecisionOutcome:
     final_action: str | None = None
     #: Set when the decision was made autonomously and drawn for review.
     sample_id: str | None = None
+    action_id: str | None = None
+    #: EXECUTED, or FAILED when the core refused and the action is waiting to
+    #: be retried. The case is not closed until this reads EXECUTED.
+    execution_state: str | None = None
 
 
 @dataclass

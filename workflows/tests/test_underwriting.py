@@ -69,6 +69,10 @@ class Fakes:
         self.records: list[dict[str, Any]] = []
         self.human_decisions: list[dict[str, Any]] = []
         self.tokens: list[dict[str, Any]] = []
+        self.executions: list[dict[str, Any]] = []
+        #: What the core does with the approval. FAILED leaves the case
+        #: pending, which is a state the workflow has to survive.
+        self.execution_state = "EXECUTED"
 
     def build(self) -> list[Any]:
         outer = self
@@ -169,6 +173,22 @@ class Fakes:
             outer.tokens.append(token)
             return token
 
+        @activity.defn(name="execute_action")
+        async def execute_action(
+            case: CaseRef,
+            decision_record_id: str,
+            token_id: str,
+            human_decision_id: str | None,
+        ) -> dict[str, Any]:
+            outer.calls.append("execute")
+            result = {
+                "action_id": f"act_{case.snapshot_id[5:]}",
+                "state": outer.execution_state,
+                "core_refs": [{"system": "core", "kind": "account", "id": "A-000001"}],
+            }
+            outer.executions.append(result)
+            return result
+
         return [
             freeze_snapshot,
             evaluate_policy,
@@ -177,6 +197,7 @@ class Fakes:
             score_models,
             run_committee,
             decide,
+            execute_action,
             record_decision,
             record_human_decision,
             issue_token,
@@ -456,3 +477,45 @@ async def test_the_state_query_tracks_progress(env: WorkflowEnvironment) -> None
         decision = await handle.query(UnderwriteCase.decision)
         assert decision is not None
         assert decision["token_id"] is not None
+
+
+# ---------------------------------------------------------------------------
+# T-052 — the approval becomes a facility, or the case stays pending
+# ---------------------------------------------------------------------------
+async def test_an_approval_is_carried_out(env: WorkflowEnvironment) -> None:
+    fakes = Fakes()
+    outcome = await run_workflow(
+        env, fakes, signal=HumanDecisionSignal(actor_id="u-1", role="officer", final_action="APPROVE")
+    )
+    assert "execute" in fakes.calls
+    assert outcome.execution_state == "EXECUTED"
+    assert outcome.action_id
+
+
+async def test_a_decline_is_not_carried_out(env: WorkflowEnvironment) -> None:
+    """Nothing is written for a case that was refused, and nothing should be."""
+    fakes = Fakes()
+    await run_workflow(
+        env, fakes, signal=HumanDecisionSignal(actor_id="u-1", role="officer", final_action="DECLINE")
+    )
+    assert "execute" not in fakes.calls
+
+
+async def test_an_autonomous_case_is_carried_out_without_waiting(env: WorkflowEnvironment) -> None:
+    fakes = Fakes(route="AUTONOMOUS")
+    outcome = await run_workflow(env, fakes)
+    assert fakes.calls.count("execute") == 1
+    assert outcome.execution_state == "EXECUTED"
+
+
+async def test_a_core_refusal_leaves_the_workflow_finished_and_the_case_pending(
+    env: WorkflowEnvironment,
+) -> None:
+    """A core that refuses is not a workflow failure. Failing here would lose
+    the approval and make a person issue it again for a write that timed out."""
+    fakes = Fakes(route="AUTONOMOUS")
+    fakes.execution_state = "FAILED"
+
+    outcome = await run_workflow(env, fakes)
+    assert outcome.execution_state == "FAILED"
+    assert outcome.token_id, "the approval is still on the record"
