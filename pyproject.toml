@@ -149,6 +149,11 @@ ignore = [
 "services/llm_gateway/app/gateway.py" = ["ASYNC109"]
 # Same: the timeout goes to the HTTP client that enforces it.
 "ai/rag/index.py" = ["ASYNC109", "S608"]
+# Only the column list is interpolated, asserted at import to be identifiers.
+"services/committee/app/repository.py" = ["S608"]
+# The timeout bounds one agent's invocation and is passed to asyncio.wait_for,
+# which is exactly what the rule asks for; it fires on the parameter name.
+"services/committee/app/orchestrate.py" = ["ASYNC109"]
 # The interpreter dispatches on `_<AstNodeName>`, following the stdlib
 # ast.NodeVisitor convention. Lowercasing them would break the dispatch.
 "services/policy/app/expr.py" = ["N802"]
