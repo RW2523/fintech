@@ -7,6 +7,7 @@ search confuses one clause id for its neighbour. Neither is trusted alone.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,12 @@ from ai.rag.chunk import Clause, chunk_corpus
 from ai.rag.schema import EMBEDDING_DIMENSIONS, apply_ddl
 
 __all__ = ["Hit", "index_corpus", "retrieve"]
+
+log = logging.getLogger(__name__)
+
+#: Why the last embedding attempt produced nothing: "stand-in" when the route
+#: answered with a deterministic stub, "unreachable" when it did not answer.
+_LAST_EMBED_REASON = "unreachable"
 
 #: docs/06 §7 — the two halves are weighted equally.
 LEXICAL_WEIGHT = 0.5
@@ -92,16 +99,41 @@ async def _embed(
     base = (
         gateway_url or os.environ.get("LLM_GATEWAY_URL") or "http://localhost:8000/api/llm_gateway"
     ).rstrip("/")
+    # The default route is behind the API gateway, which needs a bearer token.
+    # Without one every call was a 403 that this function reported as "could
+    # not be reached", so the corpus had never once been embedded and nobody
+    # knew: the message said the route did not answer and the route was
+    # answering "who are you".
+    headers = {}
+    token = os.environ.get("CIO_TOKEN", "")
+    if token:
+        headers["authorization"] = f"Bearer {token}"
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(f"{base}/llm/embed", json={"texts": texts})
+            response = await client.post(f"{base}/llm/embed", json={"texts": texts}, headers=headers)
             response.raise_for_status()
-            vectors = response.json().get("vectors") or []
+            body = response.json()
+            vectors = body.get("vectors") or []
     except (httpx.HTTPError, ValueError):
+        _set_reason("unreachable")
         return None
     if not vectors or len(vectors) != len(texts):
+        _set_reason("unreachable")
+        return None
+    global _LAST_EMBED_REASON
+    if str(body.get("provider")) == "fake":
+        _LAST_EMBED_REASON = "stand-in"
+        # A stand-in's vectors are a deterministic hash, not a meaning. Ranking
+        # against them is worse than not ranking at all, because it looks like
+        # semantic retrieval and is noise.
+        log.warning("the embedding route is a stand-in; indexing lexically instead")
         return None
     return [list(v) for v in vectors]
+
+
+def _set_reason(reason: str) -> None:
+    global _LAST_EMBED_REASON
+    _LAST_EMBED_REASON = reason
 
 
 def _pad(vector: list[float]) -> list[float]:
@@ -157,11 +189,23 @@ async def index_corpus(corpus: Path, *, gateway_url: str | None = None, reset: b
         "clause_ids": len({c.clause_id for c in clauses}),
         "embedded": embedded,
         "retrieval": "hybrid" if embedded else "lexical only",
-        "note": None
-        if embedded
-        else "the embedding route did not answer; retrieval is lexical "
-        "until the index is rebuilt with it available",
+        # Which of the two, because they need different things done. A route
+        # that is a stand-in needs an embedding model loaded; one that is
+        # unreachable needs the gateway up and a token that reaches it.
+        "note": None if embedded else _lexical_note(),
     }
+
+
+def _lexical_note() -> str:
+    if _LAST_EMBED_REASON == "stand-in":
+        return (
+            "the embedding route is a deterministic stand-in, so its vectors carry no "
+            "meaning; retrieval is lexical until a real embedding model is served"
+        )
+    return (
+        "the embedding route could not be reached; retrieval is lexical until the "
+        "index is rebuilt with it available. Set CIO_TOKEN if it is behind the gateway"
+    )
 
 
 async def retrieve(

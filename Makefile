@@ -92,12 +92,21 @@ codegen:  ## contracts/schemas -> pydantic + typescript types
 	else echo "  apps/web: run 'npm install' there to typecheck the generated contracts"; fi
 
 .PHONY: seed
-seed:  ## generate and load the synthetic population, documents and scenarios
-	@$(MAKE) todo TASK=T-020
+seed:  ## load the generated population, index the corpus and decide the golden cases
+	@$(UV) run python -m synthetic load --token "$$(scripts/dev_token.sh system)"
+	@$(UV) run python -m ai.rag build
+	@$(UV) run python -m ai.rag index
+	@$(UV) run python scripts/seed_demo_case.py
+
+.PHONY: generate
+generate:  ## build the synthetic population and its documents from scratch (slow)
+	@$(UV) run python -m synthetic population
+	@$(UV) run python -m synthetic rings
+	@$(UV) run python -m synthetic documents
 
 .PHONY: reset
-reset:  ## wipe and re-seed to the golden demo state
-	@$(MAKE) todo TASK=T-082
+reset:  ## wipe the data volumes and rebuild the demo state (needs docker)
+	@scripts/reset_demo.sh
 
 .PHONY: warmup
 warmup: $(ENV_FILE)  ## one call per LLM route so JIT/compile is done before a demo
@@ -179,6 +188,10 @@ member-drill:  ## walk a member through S10 and grade what they were told (needs
 sandbox-drill:  ## S6: change the weights, replay, adopt (needs 'make up'; writes a pack version)
 	@$(UV) run python scripts/sandbox_drill.py
 
+.PHONY: outage-drill
+outage-drill:  ## take the model away and check the platform still decides (needs 'make up')
+	@scripts/drill_llm_outage.sh
+
 .PHONY: cockpit-eval
 cockpit-eval:  ## grade the cockpit and the manager copilot (needs 'make up')
 	@$(UV) run python scripts/cockpit_eval.py
@@ -209,9 +222,20 @@ harness:  ## evaluation harness over golden + adversarial sets (needs 'make up')
 harness-fast:  ## the harness without the Council: deterministic path and adversarial only
 	@$(UV) run python -m ai.evals.harness --set all --provider fake --no-agents
 
+.PHONY: failsafe
+failsafe:  ## the fail-safe matrix: stop things and check nothing bad happens (needs 'make up')
+	@$(UV) run pytest -m failsafe
+
 .PHONY: security
-security:  ## tool denial, injection, token replay, secret and dependency scans
-	@$(MAKE) todo TASK=T-084
+security:  ## tool denial, injection, token replay, role escalation, secret scan (needs 'make up')
+	@$(UV) run pytest -m security
+	@echo ""
+	@echo "  dependency audit"
+	@$(UV) run pip-audit --progress-spinner off 2>/dev/null \
+	  || echo "    pip-audit is not installed: uv tool install pip-audit"
+	@if [ -d apps/web/node_modules ]; then \
+	  ( cd apps/web && npm audit --omit=dev ) || true; \
+	 else echo "    apps/web: run 'npm install' there to audit the workbench"; fi
 
 .PHONY: verify
 verify:  ## run a phase's acceptance suite, e.g. make verify PHASE=P0
@@ -219,8 +243,16 @@ verify:  ## run a phase's acceptance suite, e.g. make verify PHASE=P0
 	@scripts/verify_phase.sh "$(PHASE)"
 
 .PHONY: demo
-demo:  ## reset -> harness -> print the run-book URLs
-	@$(MAKE) todo TASK=T-082
+demo:  ## reset, run every acceptance, print the run-book
+	@scripts/demo_check.sh
+
+.PHONY: demo-quick
+demo-quick:  ## the same without the model-bound checks
+	@scripts/demo_check.sh --quick
+
+.PHONY: dashboards
+dashboards:  ## check every Grafana panel draws something (needs 'make up')
+	@$(UV) run python scripts/check_dashboards.py
 
 .PHONY: ci
 ci: lint typecheck test  ## what CI runs

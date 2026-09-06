@@ -52,6 +52,7 @@ _STEP_INTEGRITY = "INTEGRITY_CRITICAL"
 _STEP_EVIDENCE = "EVIDENCE_VALIDITY"
 _STEP_SCORE = "WEIGHTED_SCORE"
 _STEP_ROUTING_RULE = "ROUTING_RULE"
+_STEP_NO_FACTORS = "NO_FACTOR_SCORED"
 
 #: Routing hints that decide the case rather than nudge it. RT-01 and RT-02
 #: name COMPLIANCE_REVIEW, which is a recommendation as well as a destination:
@@ -96,12 +97,19 @@ def model_reliability(model_health: str) -> float:
     return _MODEL_RELIABILITY.get(model_health, 0.6)
 
 
-def weighted_score_of(factors: tuple[FactorScore, ...], weights: dict[str, float]) -> float:
-    """Weight-normalised score over the families that were actually scored."""
+def weighted_score_of(factors: tuple[FactorScore, ...], weights: dict[str, float]) -> float | None:
+    """Weight-normalised score over the families that were actually scored.
+
+    None when nothing was scored, never 0.0. A zero is a score, and a score of
+    zero is below every decline threshold: when the Council could not run at
+    all, returning one turned an unassessable case into a declined one. Measured
+    in the outage drill on a clean application, with the model gateway stopped:
+    recommendation DECLINE, on no evidence whatsoever.
+    """
     present = [f for f in factors if f.family in weights]
     total_weight = sum(weights[f.family] for f in present)
     if total_weight <= 0:
-        return 0.0
+        return None
     return round(sum(weights[f.family] * f.score for f in present) / total_weight, 1)
 
 
@@ -495,6 +503,27 @@ def synthesize(inputs: SynthesisInputs) -> dict[str, Any]:
     }
     _mark_decisive(record["factor_scores"])
     record["weighted_score"] = weighted
+
+    if weighted is None:
+        # Nothing was scored, so there is nothing to compare with a threshold.
+        # The case is not bad, it is unassessed, and the difference is the
+        # whole point of this branch: a member declined because a GPU was down
+        # is the failure this platform exists to make impossible.
+        record["recommendation"] = "MORE_INFORMATION_REQUIRED"
+        record["route"] = "OFFICER_REVIEW"
+        record["route_reasons"] = ["NO_FACTOR_SCORED"]
+        if inputs.kill_switch_active:
+            # The route is the same either way, and the reason is not. An
+            # operator reading this record has to be able to see that the
+            # switch is on.
+            record["route_reasons"].append("KILL_SWITCH")
+        record["would_change_outcome"] = [
+            {
+                "change": "score the Decision Factors",
+                "detail": "no factor family was scored, so no weighted score exists",
+            }
+        ]
+        return _finalise(record, _STEP_NO_FACTORS)
 
     thresholds = inputs.dff["thresholds"]
     record["recommendation"] = (

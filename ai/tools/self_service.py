@@ -14,6 +14,7 @@ promise is to give it nothing to state one with.
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Any
 
@@ -21,6 +22,8 @@ from ai.tools.client import services
 from ai.tools.schemas import ARRAY_OF_OBJECTS, MEMBER_ID, OBJECT, inputs, optional
 from cio_tools.registry import tool
 from cio_tools.spec import EvidenceSpec, PermittedUse, SideEffect
+
+log = logging.getLogger(__name__)
 
 READ = SideEffect.READ
 SERVICING = {PermittedUse.SERVICING}
@@ -199,19 +202,44 @@ async def get_my_application(member_id: str) -> dict[str, Any]:
     decision and telling a member their application is under officer review
     invites them to ask what the officer thinks, which nobody here may answer.
     """
-    body = await services().get("application", "/applications/by-member", member_id=member_id)
-    applications = body.get("applications") if isinstance(body, dict) else body
-    entries = [
-        {
-            "application_id": row.get("application_id"),
-            "product": row.get("product_code"),
-            "amount": row.get("amount"),
-            "submitted_at": row.get("submitted_at"),
-            "stage": _member_stage(row),
-        }
-        for row in applications or []
-    ]
+    entries = [_application(row) for row in await _applications_for(member_id)]
     return {"member_id": member_id, "applications": entries, "count": len(entries)}
+
+
+async def _applications_for(member_id: str) -> list[dict[str, Any]]:
+    """Everything this member has applied for, from both places it can live.
+
+    The application service owns what was submitted through this platform. The
+    incumbent core owns what was submitted before it, which for the generated
+    population is all six hundred of them: a member assistant that reads only
+    the first cannot see the application the member actually made, and after a
+    reset it found nothing at all.
+    """
+    found: list[dict[str, Any]] = []
+    try:
+        body = await services().get("application", "/applications/by-member", member_id=member_id)
+        rows = body.get("applications") if isinstance(body, dict) else body
+        found.extend(rows or [])
+    except Exception as exc:
+        # One source being down must not hide the other, and it must not be
+        # silent either: an assistant that says "you have no application"
+        # because a service was unreachable has told a member something false.
+        log.warning("the application service could not be read for %s: %s", member_id, exc)
+
+    if not found:
+        core = await services().get("core_stub", f"/core/members/{member_id}/applications")
+        found.extend(core or [])
+    return found
+
+
+def _application(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "application_id": row.get("application_id"),
+        "product": row.get("product_code"),
+        "amount": row.get("amount"),
+        "submitted_at": row.get("submitted_at") or row.get("created_at"),
+        "stage": _member_stage(row),
+    }
 
 
 #: Internal case states, said the way a member would say them. Anything not
@@ -258,10 +286,8 @@ async def get_missing_documents(member_id: str) -> dict[str, Any]:
     pack stops requiring employment confirmation, this stops asking for it the
     same day.
     """
-    body = await services().get("application", "/applications/by-member", member_id=member_id)
-    applications = body.get("applications") if isinstance(body, dict) else body
     outstanding: list[dict[str, Any]] = []
-    for row in applications or []:
+    for row in await _applications_for(member_id):
         case_id = row.get("case_id")
         product = row.get("product_code")
         if not case_id or not product:

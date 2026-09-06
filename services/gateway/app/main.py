@@ -40,8 +40,12 @@ _STRIP = {
     "x-internal-key",
 }
 
-#: Upstreams whose work is a model call rather than a query.
-_SLOW_SERVICES = frozenset({"llm_gateway", "agent_runtime", "committee"})
+#: Upstreams whose work is a batch rather than a query. A model call and a
+#: five-thousand-member import are slow for different reasons and need the same
+#: deadline: the import builds 453,000 timeline events and takes ninety
+#: seconds, which the reader's timeout cut off at sixty with a 500 that said
+#: nothing about what had happened.
+_SLOW_SERVICES = frozenset({"llm_gateway", "agent_runtime", "committee", "member_intelligence", "lmi"})
 
 _client: httpx.AsyncClient | None = None
 

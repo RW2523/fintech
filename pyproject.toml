@@ -198,6 +198,7 @@ asyncio_mode = "auto"
 markers = [
   "integration: requires the running compose stack",
   "failsafe: fail-safe / outage drills",
+  "security: tool denial, injection, token replay and role escalation",
   "slow: long-running",
   "gpu: requires the GB10 GPU",
 ]

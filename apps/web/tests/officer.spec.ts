@@ -518,12 +518,23 @@ test.describe("member assistant", () => {
     const members = [...new Set(rows.filter((r) => r.table_name === "member").map((r) => r.pk))];
 
     for (const memberId of members) {
+      // Both places an application can live. The platform's own service holds
+      // what was submitted through it; the incumbent core holds what the
+      // generated population applied for, which after a reset is all of them.
       const applications = await request.get(
         `${GATEWAY}/api/application/applications/by-member?member_id=${memberId}`,
         { headers: auth },
       );
-      if (!applications.ok()) continue;
-      if (((await applications.json()).applications as unknown[]).length === 0) continue;
+      let hasApplication =
+        applications.ok() && ((await applications.json()).applications as unknown[]).length > 0;
+      if (!hasApplication) {
+        const core = await request.get(
+          `${GATEWAY}/api/core_stub/core/members/${memberId}/applications`,
+          { headers: auth },
+        );
+        hasApplication = core.ok() && ((await core.json()) as unknown[]).length > 0;
+      }
+      if (!hasApplication) continue;
       const accounts = await request.get(
         `${GATEWAY}/api/core_stub/core/members/${memberId}/accounts`,
         { headers: auth },

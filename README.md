@@ -1,8 +1,58 @@
-# Credit Intelligence OS — build kit for Claude Code on DGX Spark
+# Credit Intelligence OS
 
-This folder is the complete specification and working agreement for building the Cooperative Intelligence
-Platform demo (engine: Credit Intelligence OS) on a single NVIDIA DGX Spark using Claude Code. It contains
-**no application code yet**: it is the input from which Claude Code builds the code, one task at a time.
+A credit decisioning platform for a cooperative credit institution, built on one
+NVIDIA DGX Spark. Eighteen FastAPI services, a React workbench, a deliberating
+Council of agents over a local model, and an append-only record of everything
+decided.
+
+The principle everything else follows from: **a model never computes a number
+and never makes a decision.** Models argue; policy decides. Every figure carries
+the id of the calculation that produced it, and every claim an agent makes cites
+evidence a person can open.
+
+## Getting started
+
+```bash
+make env        # docker/.env from the example, then check the machine
+make install    # sync the workspace with every optional stack
+make up         # core, services and observability
+make up-ai-local  # add the model on the GB10 (slow first time)
+make demo       # reset, run every acceptance, print the run-book
+```
+
+Then http://localhost:8080 for the workbench and http://localhost:8000/docs for
+the API.
+
+- **[docs/OPERATIONS.md](docs/OPERATIONS.md)** — start, stop, reset, roll back,
+  and what to do when something is wrong.
+- **[docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md)** — the forty-five minute
+  demonstration, scenario by scenario.
+- **[docs/PROGRESS.md](docs/PROGRESS.md)** — what was built, what was measured,
+  and every acceptance number that is not met.
+
+Everything in this build is synthetic. There is no real member data in it and
+the seed refuses to run against a production environment.
+
+## What is here
+
+| Path | What it is |
+|---|---|
+| `services/` | Eighteen services: gateway, application, document, policy, committee, decision, execution, agent runtime, LMI, governance and the rest |
+| `apps/web/` | The workbench: officer queue, case file, collections, compliance, ledger, manager cockpit, policy sandbox, member assistant |
+| `ai/` | Agent bundles and prompts, the tool catalogue, guardrails, retrieval, and the evaluation harness |
+| `ml/` | Credit risk, fraud and early-warning models, with their cards and their limitations |
+| `libs/` | What the services share: contracts, auth, errors, ids, the outbox, tools, metrics, tracing |
+| `policy_packs/` | The rules, as files. Versioned, write-once, and what every decision cites |
+| `synthetic/` | The generated population, its documents, and the golden cases |
+| `workflows/` | Temporal workflows and activities |
+| `infra/observability/` | Grafana dashboards and the collector configuration |
+| `tests/` | Integration, fail-safe and security suites |
+| `scripts/` | Reset, demo check, the drills, and the phase verifications |
+
+## The specification
+
+The platform was built from these, one task at a time, and they remain the
+normative description of what it is meant to do.
 
 ## Contents
 
@@ -31,29 +81,28 @@ Platform demo (engine: Credit Intelligence OS) on a single NVIDIA DGX Spark usin
 | `.claude/agents/` | `reviewer` and `harness-runner` subagents |
 | `FULL_BUILD_SPEC.md` | All of the above concatenated into one file (for reading or for tools that want a single document) |
 
-## How to start on the DGX Spark
+## What the machine needs
 
 ```bash
-# 1. put the kit where the repo will live
-mkdir -p ~/work && cp -r credit-intelligence-os ~/work/ && cd ~/work/credit-intelligence-os
-git init && git add -A && git commit -m "kit: specification and build plan"
-
-# 2. environment prerequisites (once)
 uname -m            # aarch64
-nvidia-smi          # GPU visible
+nvidia-smi          # the GB10, with 128 GB shared
 docker --version    # >= 24, NVIDIA container runtime available
 curl -LsSf https://astral.sh/uv/install.sh | sh
-# Node 20 LTS for the web app; Claude Code installed and authenticated
-
-# 3. start Claude Code in the repo and let it work the plan
-claude
-> /next-task            # repeat; or ask it to "work through phase P0 task by task using /next-task"
-> /verify-phase P0
+# Node 22 for the workbench
 ```
 
-Recommended cadence: run `/next-task` in a loop for one phase, then `/verify-phase`, then use the `reviewer`
-subagent on the phase diff before moving on. From P4 onward run `make up-ai-local` first so the harness uses the
-real local model, and record measured tokens/s in `docs/PROGRESS.md`.
+`scripts/env_check.sh` reports what it finds against what it expects, including
+any port already taken by something else on the host. `make env` runs it.
+
+## Checking it works
+
+```bash
+make ci          # lint, typecheck, unit and contract tests
+make harness     # the golden and adversarial sets
+make failsafe    # stop things and check nothing bad happens
+make security    # tool denial, injection, token replay, role escalation
+make verify PHASE=P7
+```
 
 ## Assumptions baked into the kit (change via ADR)
 

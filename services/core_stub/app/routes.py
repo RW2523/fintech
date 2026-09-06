@@ -237,6 +237,30 @@ async def get_applications_by_members(
     return {"count": len(rows), "applications": rows}
 
 
+@router.get("/members/{member_id}/applications", summary="One member's applications")
+async def member_applications(member_id: str) -> Any:
+    """What this member has applied for, from the incumbent core.
+
+    The application service owns applications submitted through this platform.
+    The generated population applied to the core before this platform existed,
+    which is where its six hundred applications are, and a member assistant
+    that cannot see the application a member actually made is not an assistant.
+    """
+    async with session() as db:
+        return await _rows(
+            db,
+            """
+            SELECT application_id, member_id, product_code, amount, tenor_months,
+                   status, created_at
+              FROM core.application_ext
+             WHERE member_id = :member_id
+             ORDER BY created_at DESC
+             LIMIT 50
+        """,
+            member_id=member_id,
+        )
+
+
 @router.get("/applications/velocity", response_model=ApplicationWindow)
 async def get_application_velocity(
     employer_id: str,

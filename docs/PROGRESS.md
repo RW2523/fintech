@@ -494,6 +494,55 @@ Confabulation with a better score is still confabulation.
 Whole suite at the end of P7: **1,824 Python tests** and **29 Playwright
 tests**, all passing.
 
+### P8 in progress
+
+Every task is built. The phase verification is `scripts/verify_phase.sh P8`.
+
+`make demo` is green: twelve checks, from the golden set to the workbench.
+`make failsafe` is nine tests that stop things and check nothing bad happens.
+`make security` is seventeen that each do the thing which must not work and
+assert it did not. `docs/OPERATIONS.md` and `docs/DEMO_RUNBOOK.md` are written
+for somebody who did not build this.
+
+**The harness.** `make harness` replays the five golden cases through the real
+endpoints and grades every agent claim against the evidence the run produced.
+Twenty-seven adversarial cases cover injection, member chat, manager chat,
+gates and routing, and they are pass or fail. `make harness-fast` and CI run
+the half that needs no service.
+
+**The platform measures itself.** Prometheus had been scraping `/metrics` on
+eighteen services and getting a 404 from every one. Six dashboards now draw
+real data, and a committee run is one trace of 181 spans across five services,
+findable in Tempo by case id or committee run id.
+
+**The demo comes back from nothing in four and a half minutes.**
+`scripts/reset_demo.sh` wipes the data volumes and rebuilds everything;
+`scripts/demo_check.sh` runs every acceptance the platform has and prints the
+run-book. docs/11 §3 asks for two minutes and this does not meet it: ninety
+seconds is building 453,000 timeline events from the core records and seventy
+is loading five thousand members into it. Both are doing real work.
+
+**The most serious defect of the phase.** With the model gateway stopped, a
+clean application was recommended DECLINE. The Council could not run, so no
+Decision Factor was scored, and `weighted_score_of` returned 0.0 for an absence
+of factors. Zero is below every decline threshold. A member declined because a
+GPU was down is the failure this platform exists to make impossible, and it took
+`scripts/drill_llm_outage.sh` to find it: no test had ever synthesized a case
+with no factors at all. The function returns None now and the Synthesizer asks
+for more information rather than comparing an absence with a threshold.
+
+**Five other defects, each found by running something rather than by a test.**
+Twelve of eighteen services produced no traces, because the instrumentation was
+added from a startup hook after FastAPI had already built its middleware stack.
+The corpus indexer had never once embedded anything: it called the gateway
+without a token, got a 403, and reported it as "the route did not answer". Two
+policy versions collided on one index key, so a lookup filtered to the version a
+case was decided under would have returned text adopted afterwards. The reset
+never built member timelines, so the core had five thousand members and none of
+them had a history. And a member assistant could not see the application its
+member had actually made, because it read only the platform's own service and
+the generated population applied to the incumbent core.
+
 ## Blocked
 (none)
 

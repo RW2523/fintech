@@ -774,3 +774,39 @@ def test_an_early_warning_record_is_a_valid_contract(std_pack: PolicyPack) -> No
         proposed_actions=(_intervention("L2"), _intervention("L1", "REQUEST_DOCUMENT")),
     )
     cio_contracts.validate(as_contract(record), "DecisionRecord")
+
+
+# ---------------------------------------------------------------------------
+# when nothing was scored (T-082, docs/13 §7)
+# ---------------------------------------------------------------------------
+def test_no_factor_scored_is_not_a_score_of_zero() -> None:
+    """A case nobody could assess is not a case that failed.
+
+    `weighted_score_of` returned 0.0 when no factor was present, and 0.0 is
+    below every decline threshold. Measured in the outage drill, with the model
+    gateway stopped and a clean application submitted: recommendation DECLINE,
+    on no evidence whatsoever. A member declined because a GPU was down is the
+    failure this platform exists to make impossible.
+    """
+    assert weighted_score_of((), {"CAPACITY": 0.35}) is None
+    assert weighted_score_of((factor("CAPACITY", 80),), {"CAPACITY": 0.35}) == 80.0
+
+
+def test_a_case_with_no_factors_asks_for_more_rather_than_declining(std_pack: PolicyPack) -> None:
+    record = synth(std_pack, factors=(), opinions=())
+
+    assert record["recommendation"] == "MORE_INFORMATION_REQUIRED"
+    assert record["route"] == "OFFICER_REVIEW"
+    assert "NO_FACTOR_SCORED" in record["route_reasons"]
+    # And no number is claimed. A weighted score of 0 would be a statement.
+    assert record["weighted_score"] is None
+
+
+def test_the_kill_switch_is_still_named_when_nothing_was_scored(std_pack: PolicyPack) -> None:
+    """The route is the same either way; the reason is not.
+
+    An operator reading a record has to be able to see that the switch is on.
+    """
+    record = synth(std_pack, factors=(), opinions=(), kill_switch_active=True)
+
+    assert record["route_reasons"] == ["NO_FACTOR_SCORED", "KILL_SWITCH"]

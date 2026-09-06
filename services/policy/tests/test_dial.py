@@ -300,7 +300,18 @@ async def test_the_switch_is_read_by_the_service_not_taken_from_the_caller(
                     "required_authority": "CREDIT_OFFICER",
                     "policy_version": "policy/PF-STD/2026.09.1",
                 },
-                "factor_scores": [],
+                # A scored case, so this exercises the router rather than the
+                # "nothing was scored" branch above it.
+                "factor_scores": [
+                    {
+                        "family": "CAPACITY",
+                        "score": 80,
+                        "calc_id": "calc_KILLSWITCH",
+                        "tool": "affordability.compute",
+                        "inputs_digest": "0" * 64,
+                        "evidence_refs": [],
+                    }
+                ],
                 "opinions": [],
                 # kill_switch_active deliberately absent
             },

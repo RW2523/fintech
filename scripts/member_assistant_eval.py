@@ -62,10 +62,17 @@ async def a_member(client: httpx.AsyncClient) -> str:
             seen.append(str(row["pk"]))
 
     for member_id in seen:
+        # Both places an application can live. The platform's own service holds
+        # what was submitted through it; the incumbent core holds what the
+        # generated population applied for, which after a reset is all of them.
         applications = await client.get(
             f"{BASE}/api/application/applications/by-member", params={"member_id": member_id}
         )
-        if applications.status_code != 200 or not applications.json().get("applications"):
+        has_application = applications.status_code == 200 and bool(applications.json().get("applications"))
+        if not has_application:
+            core = await client.get(f"{BASE}/api/core_stub/core/members/{member_id}/applications")
+            has_application = core.status_code == 200 and bool(core.json())
+        if not has_application:
             continue
         accounts = await client.get(f"{BASE}/api/core_stub/core/members/{member_id}/accounts")
         if accounts.status_code == 200 and accounts.json():

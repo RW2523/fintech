@@ -193,8 +193,25 @@ case "$PHASE" in
     step "workbench smoke"        bash -c 'cd apps/web && npx playwright test'
     ;;
   P8)
-    echo "  phase ${PHASE} verification not implemented yet" >&2
-    exit 1
+    # docs/14 P8: the harness meets its thresholds on both providers, the
+    # dashboards render, `make demo` is green twice, the fail-safe and security
+    # suites pass, and the run-book has been walked from the document.
+    step "make lint"              make lint
+    step "make typecheck"         make typecheck
+    step "make test"              make test
+    step "stack healthy"          scripts/wait_healthy.sh 180
+    step "every service routed"   scripts/check_routes.sh
+    step "harness, fake provider" uv run python -m ai.evals.harness --set all --provider fake --no-agents
+    step "harness, real provider" uv run python -m ai.evals.harness --set all --provider real
+    step "fail-safe matrix"       uv run pytest -m failsafe
+    step "security checks"        uv run pytest -m security
+    step "outage drill"           scripts/drill_llm_outage.sh
+    step "demo check"             scripts/demo_check.sh --no-reset
+    # Last, deliberately. A counter that has never been incremented has no
+    # series at all, so the panels reading committee metrics are empty until
+    # something has actually deliberated. Checking before the drills would
+    # report an idle platform as a broken dashboard.
+    step "every dashboard draws"  uv run python scripts/check_dashboards.py
     ;;
   *)
     echo "  unknown phase: ${PHASE}" >&2; exit 2 ;;
