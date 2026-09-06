@@ -237,3 +237,17 @@ export type InboxMessage = {
   cancelled_at: string | null;
   cancel_reason: string | null;
 };
+
+
+/** docs/09 §3.5 — a grounded answer about the case in front of an officer. */
+export type CopilotAnswer = {
+  answer: string;
+  citations: { ref: string; what: string; kind?: string }[];
+  refusal?: { reason: string; code?: string };
+  actions?: { label: string; kind?: string; ref?: string }[];
+  grounded: boolean;
+  attempts: number;
+  tools_read: string[];
+  tools_unavailable: string[];
+  agent_version: string;
+};

@@ -25,6 +25,7 @@ __all__ = [
     "ensure_test_database",
     "postgres_is_up",
     "prepared_test_database_url",
+    "seeded_database_url",
     "test_database_url",
 ]
 
@@ -117,3 +118,26 @@ def prepared_test_database_url(root: Path | None = None) -> str:
     second call in the same process is a cache hit and starts nothing.
     """
     return _created(test_database_url(root))
+
+
+def seeded_database_url(root: Path | None = None) -> str:
+    """The demo database, for the tests that read the generated population.
+
+    The default above is the right one and this is the exception. A test that
+    computes features over a member's twenty-event history cannot build that
+    member in a fixture without rebuilding the generator, so it reads the one
+    the generator made.
+
+    Only for tests that never truncate and clean up exactly what they created.
+    A test that empties a table here empties the demo, and the damage is
+    silent: the suite passes and the workbench is blank.
+    """
+    base = os.environ.get("DATABASE_URL")
+    if base:
+        return base
+    values = _env_file_values(root or Path.cwd())
+    return (
+        f"postgresql+asyncpg://{values.get('POSTGRES_USER', 'cio')}:"
+        f"{values.get('POSTGRES_PASSWORD', '')}@localhost:"
+        f"{values.get('POSTGRES_PORT', '5432')}/{values.get('POSTGRES_DB', 'cio')}"
+    )

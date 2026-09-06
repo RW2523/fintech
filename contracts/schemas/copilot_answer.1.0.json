@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cio.local/schemas/copilot_answer/1.0",
+  "title": "CopilotAnswer",
+  "description": "A grounded answer to a question about a case, or a refusal. Every claim in the answer cites evidence the run produced; an answer that cannot cite anything is a refusal.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "answer", "citations"],
+  "properties": {
+    "schema": { "const": "copilot_answer/1.0" },
+    "answer": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Plain prose. Empty when the question is refused."
+    },
+    "citations": {
+      "type": "array",
+      "maxItems": 12,
+      "description": "What the answer rests on. Every id here must have come from a tool in this run.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref", "what"],
+        "properties": {
+          "ref": {
+            "type": "string",
+            "description": "An evidence id, a clause id, or a record id the run produced."
+          },
+          "what": { "type": "string", "maxLength": 300 },
+          "kind": {
+            "type": "string",
+            "enum": ["EVIDENCE", "CLAUSE", "RECORD", "TIMELINE", "CALCULATION"]
+          }
+        }
+      }
+    },
+    "refusal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason"],
+      "description": "Present when the question was not answered. A refusal states why in terms the asker can act on.",
+      "properties": {
+        "reason": { "type": "string", "maxLength": 500 },
+        "code": {
+          "type": "string",
+          "enum": [
+            "OUT_OF_SCOPE",
+            "NO_EVIDENCE",
+            "WOULD_PREDICT_DECISION",
+            "PROTECTED_CHARACTERISTIC",
+            "ANOTHER_CASE",
+            "NOT_PERMITTED"
+          ]
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 4,
+      "description": "What the asker could do next. Suggestions, never taken by the copilot.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label"],
+        "properties": {
+          "label": { "type": "string", "maxLength": 120 },
+          "kind": {
+            "type": "string",
+            "enum": ["OPEN_EVIDENCE", "OPEN_CLAUSE", "REQUEST_DOCUMENT", "ESCALATE", "RECONSTRUCT"]
+          },
+          "ref": { "type": "string", "maxLength": 64 }
+        }
+      }
+    }
+  }
+}

@@ -72,6 +72,23 @@ async def test_a_non_json_answer_is_a_schema_failure() -> None:
         await ask(FakeProvider(replies=["I would approve this.", "still prose"]))
 
 
+async def test_a_truncated_answer_says_so_rather_than_blaming_the_model() -> None:
+    """Guided decoding cannot write invalid JSON. It can only be cut off.
+
+    Reporting that as "the answer was not JSON" cost a day of hunting for a
+    model fault that was a route ceiling of 400 tokens.
+    """
+    fake = FakeProvider(replies=['{"stance": "SUPP', '{"stance": "SUPP'], tokens_out=64)
+    with pytest.raises(SchemaViolationError, match="cut off at the 64-token ceiling"):
+        await ask(fake, max_tokens=64)
+
+
+async def test_a_short_non_json_answer_is_not_reported_as_truncation() -> None:
+    fake = FakeProvider(replies=["prose", "still prose"], tokens_out=3)
+    with pytest.raises(SchemaViolationError, match="not JSON"):
+        await ask(fake, max_tokens=64)
+
+
 async def test_without_a_schema_the_answer_is_returned_as_text() -> None:
     result = await complete(
         route="agent",
@@ -230,3 +247,33 @@ async def test_the_route_ceiling_caps_what_a_caller_asks_for(client: AsyncClient
     from app.config import DEFAULT_MAX_TOKENS
 
     assert fake.calls[0]["max_tokens"] == DEFAULT_MAX_TOKENS["fast"]
+
+
+# ---------------------------------------------------------------------------
+# route ceilings against what the agent bundles ask for
+# ---------------------------------------------------------------------------
+def test_no_agent_bundle_asks_for_more_output_than_its_route_allows() -> None:
+    """A ceiling below what a bundle declares is silent and looks like a model fault.
+
+    `complete` clamps to the route's own ceiling, so a bundle on a small route
+    quietly gets less than it asked for. Under guided decoding the result is
+    JSON cut off mid-object, which the caller reports as "the answer was not
+    JSON". The officer copilot sat on the `fast` route, capped at 400, while
+    declaring 1200: every answer on a full case file was truncated and nothing
+    in the stack said why.
+
+    The check lives here because the ceilings do. A bundle cannot see them.
+    """
+    from pathlib import Path
+
+    from ai.agents.bundle import list_bundles, load_bundle
+    from app.config import DEFAULT_MAX_TOKENS
+
+    root = Path(__file__).resolve().parents[3]
+    for name in list_bundles(root):
+        bundle = load_bundle(name, root=root)
+        ceiling = DEFAULT_MAX_TOKENS[bundle.route]
+        assert bundle.max_output_tokens <= ceiling, (
+            f"{name} declares {bundle.max_output_tokens} output tokens on the "
+            f"{bundle.route} route, which allows {ceiling}"
+        )

@@ -14,13 +14,20 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState<Role | null>(null);
   const [error, setError] = useState<unknown>(null);
+  // A member signs in as themselves, so this is the one role that needs to
+  // say who. Staff roles are a role picker; this is a membership number.
+  const [memberId, setMemberId] = useState("");
 
   async function choose(role: Role) {
     setBusy(role);
     setError(null);
     try {
-      await signIn(role);
-      navigate("/officer", { replace: true });
+      const member = role === "member" ? memberId.trim() : undefined;
+      if (role === "member" && !member) {
+        throw new Error("enter a membership number to sign in as a member");
+      }
+      await signIn(role, member);
+      navigate(role === "member" ? "/member" : "/officer", { replace: true });
     } catch (caught) {
       setError(caught);
     } finally {
@@ -44,6 +51,17 @@ export function LoginPage() {
       </div>
 
       {error ? <Problem error={error} /> : null}
+
+      <label className="flex flex-col gap-1 text-xs text-[--color-muted]">
+        Membership number, to sign in as a member
+        <input
+          data-testid="member-id"
+          value={memberId}
+          onChange={(event) => setMemberId(event.target.value)}
+          placeholder="M-000042"
+          className="rounded border border-[--color-line] bg-[--color-surface] px-2 py-1 text-sm text-[--color-text]"
+        />
+      </label>
 
       <ul className="flex flex-col gap-2">
         {ROLES.map((role) => (

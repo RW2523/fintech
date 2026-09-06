@@ -171,6 +171,14 @@ state-eval:  ## walk every member through the state machine and measure it (need
 changepoint-eval:  ## measure detection lead time and false alarms (needs 'make up')
 	@$(UV) run python scripts/changepoint_eval.py
 
+.PHONY: member-drill
+member-drill:  ## walk a member through S10 and grade what they were told (needs 'make up')
+	@$(UV) run python scripts/member_assistant_eval.py
+
+.PHONY: copilot-eval
+copilot-eval:  ## ask the officer copilot 25 questions and grade them (needs 'make up')
+	@$(UV) run python scripts/copilot_eval.py
+
 .PHONY: override-drill
 override-drill:  ## decide a case, override one, check the series (needs 'make up')
 	@$(UV) run python scripts/override_drill.py

@@ -59,7 +59,10 @@ def _pack(product: str, version: str | None) -> PolicyPack:
         raise NotFound(
             f"no policy pack for product {product!r}", products=sorted({p for p, _ in available_packs()})
         )
-    chosen = version or versions[-1]
+    # "latest" is spelled out rather than left to a caller passing None,
+    # because the route below has no way to express None in a path segment and
+    # every caller was otherwise forced to list the versions first.
+    chosen = versions[-1] if version in (None, "latest") else version
     if chosen not in versions:
         raise NotFound(f"no version {chosen!r} for {product!r}", versions=versions)
     try:

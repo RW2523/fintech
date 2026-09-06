@@ -28,6 +28,7 @@ __all__ = ["Context", "assemble"]
 #: evidence, which is a different thing from a section that does not apply.
 SECTIONS = (
     "CASE_SUMMARY",
+    "QUESTION",
     "TOOL_RESULTS",
     "RETRIEVED_CLAUSES",
     "PRIOR_OPINIONS",
@@ -121,6 +122,7 @@ def assemble(
     clauses: list[dict[str, Any]] | None = None,
     prior_opinions: list[dict[str, Any]] | None = None,
     temporal_context: dict[str, Any] | None = None,
+    question: str | None = None,
     today: date | None = None,
 ) -> Context:
     """Build the conversation for one invocation."""
@@ -137,6 +139,20 @@ def assemble(
     context.injections.extend(scan(summary, origin="case_summary"))
     context.messages.append({"role": "user", "content": _fenced("CASE_SUMMARY", summary)})
     context.sections.append("CASE_SUMMARY")
+
+    if question is not None:
+        # A copilot's question is the thing it must answer, and it is text
+        # somebody typed. It gets its own block, wrapped like every other piece
+        # of untrusted input, so a question that reads like an instruction is a
+        # question. It cannot go through the case summary: that is a fixed
+        # projection of a CaseSnapshot and silently drops anything else, which
+        # is how the copilot came to be answering a question it had never been
+        # asked.
+        context.injections.extend(scan(question, origin="question"))
+        context.messages.append(
+            {"role": "user", "content": _fenced("QUESTION", {"asked": wrap(question, "officer:question")})}
+        )
+        context.sections.append("QUESTION")
 
     if tool_results:
         context.injections.extend(scan(tool_results, origin="tool_results"))

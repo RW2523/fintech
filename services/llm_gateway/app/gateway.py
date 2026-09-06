@@ -206,6 +206,15 @@ async def complete(
             break
         value = _extract_json(completion.content)
         errors = _validate(value, json_schema)
+        if errors and value is None and completion.tokens_out >= ceiling:
+            # Guided decoding cannot emit invalid JSON; it can only be cut off
+            # mid-object. Reporting that as "the answer was not JSON" sends an
+            # operator hunting for a model fault when the fault is a ceiling
+            # below what the schema allows the model to say.
+            errors = [
+                f"the answer was cut off at the {ceiling}-token ceiling after "
+                f"{len(completion.content)} characters"
+            ]
         if not errors:
             break
         if attempt <= CORRECTIVE_TURNS:

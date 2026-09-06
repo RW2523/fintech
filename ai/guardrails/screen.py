@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-__all__ = ["FORBIDDEN_TERMS", "Screening", "screen_opinion"]
+__all__ = ["FORBIDDEN_TERMS", "Screening", "screen_answer", "screen_opinion"]
 
 #: docs/06 §9 and CLAUDE.md §5 — never mentioned, never inferred.
 FORBIDDEN_TERMS: tuple[str, ...] = (
@@ -205,3 +205,112 @@ def _language_rejections(text: str, where: str) -> list[dict[str, Any]]:
         if pattern.search(text):
             out.append({"where": where, "rule": name, "detail": f"matched {pattern.pattern}"})
     return out
+
+
+def screen_answer(
+    answer: dict[str, Any], *, tool_results: Any = None, evidence_ids: set[str] | None = None
+) -> Screening:
+    """Check one copilot answer against the output policy (docs/06 §9).
+
+    The same rules as an opinion, applied to prose rather than to claims. A
+    copilot answers an officer who is about to act, so the standard is not
+    lower for being conversational: a number nobody produced and a citation
+    nobody can open are the same defect whichever shape they arrive in.
+
+    A refusal is screened too, and passes trivially: refusing to answer is
+    always allowed and never needs evidence.
+    """
+    screening = Screening()
+    text = str(answer.get("answer") or "")
+    refusal = answer.get("refusal") or {}
+
+    if refusal.get("reason"):
+        # A refusal that also tried to answer is not a refusal. Everything
+        # after "I cannot answer that, but" is the thing being refused.
+        if text.strip():
+            screening.rejections.append(
+                {
+                    "where": "answer",
+                    "reason": "a refusal must not also answer the question",
+                    "detail": text[:200],
+                }
+            )
+
+        # A refusal that cites evidence is an answer wearing a refusal label.
+        # Measured: the first model to see this screen refused with
+        # NO_EVIDENCE while its reason named three gate rules and cited five
+        # identifiers, which is the answer the officer asked for filed under a
+        # heading that tells them to ignore it.
+        if answer.get("citations"):
+            screening.rejections.append(
+                {
+                    "where": "refusal",
+                    "reason": "a refusal that cites evidence is an answer; put it in `answer`",
+                    "detail": [str(c.get("ref")) for c in answer["citations"]][:5],
+                }
+            )
+
+        # And a refusal is not a licence to state facts. One that reads "the
+        # case has been declined by a senior officer" has told the officer
+        # something, and told them without evidence, which is exactly what the
+        # refusal was supposed to avoid. Measured: the first model to see this
+        # screen did precisely that.
+        why = str(refusal.get("reason") or "")
+        screening.rejections.extend(_language_rejections(why, "refusal.reason"))
+
+        refusal_numbers: set[str] = set()
+        for value in _tool_numbers(tool_results or []):
+            refusal_numbers |= _rounded_forms(value)
+        invented_in_refusal = _numbers_in(why) - refusal_numbers
+        if invented_in_refusal:
+            screening.rejections.append(
+                {
+                    "where": "refusal.reason",
+                    "reason": "states numbers no tool in this run produced",
+                    "detail": sorted(invented_in_refusal)[:5],
+                }
+            )
+        return screening
+
+    if not text.strip():
+        screening.rejections.append(
+            {"where": "answer", "reason": "an answer that says nothing is not an answer"}
+        )
+        return screening
+
+    screening.rejections.extend(_language_rejections(text, "answer"))
+
+    known_numbers: set[str] = set()
+    for value in _tool_numbers(tool_results or []):
+        known_numbers |= _rounded_forms(value)
+    invented = _numbers_in(text) - known_numbers
+    if invented:
+        screening.rejections.append(
+            {
+                "where": "answer",
+                "reason": "states numbers no tool in this run produced",
+                "detail": sorted(invented)[:5],
+            }
+        )
+
+    citations = answer.get("citations") or []
+    if not citations:
+        # An answer with no citation is a claim the officer cannot check, and
+        # the whole point of this copilot is that they can.
+        screening.rejections.append({"where": "citations", "reason": "an answer must cite what it rests on"})
+
+    available = evidence_ids or set()
+    if available:
+        unknown = [
+            str(citation.get("ref")) for citation in citations if str(citation.get("ref")) not in available
+        ]
+        if unknown:
+            screening.rejections.append(
+                {
+                    "where": "citations",
+                    "reason": "cites identifiers no tool in this run produced",
+                    "detail": unknown[:5],
+                }
+            )
+
+    return screening

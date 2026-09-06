@@ -73,6 +73,15 @@ export function Shell() {
           >
             Ledger
           </NavLink>
+          <NavLink
+            to="/member"
+            data-testid="nav-member"
+            className={({ isActive }) =>
+              isActive ? "font-semibold text-[--color-accent]" : "text-[--color-muted]"
+            }
+          >
+            Member
+          </NavLink>
         </nav>
 
         <div className="ml-auto flex items-center gap-3 text-xs text-[--color-muted]">

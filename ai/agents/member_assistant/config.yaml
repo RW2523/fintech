@@ -1,0 +1,12 @@
+family: copilot
+# The agent route rather than `fast`, for the same measured reason as the
+# officer copilot: `fast` is capped at 400 output tokens and a
+# `copilot_answer/1.0` with its citations does not fit under that. Guided
+# decoding then cuts the JSON off mid-object and the member sees an error.
+route: agent
+output_schema: copilot_answer/1.0
+# Members get short answers. Nobody in difficulty wants four paragraphs, and a
+# long reply from an assistant that must not state a decision is a long reply
+# with more room to imply one.
+max_output_tokens: 900
+temperature: 0.0

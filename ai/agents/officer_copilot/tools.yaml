@@ -1,0 +1,16 @@
+tools:
+- name: case.get
+  version: '1.0'
+  max_calls: 1
+- name: evidence.search
+  version: '1.0'
+  max_calls: 3
+- name: timeline.get
+  version: '1.0'
+  max_calls: 2
+- name: policy.lookup
+  version: '1.0'
+  max_calls: 3
+- name: decision_record.get
+  version: '1.0'
+  max_calls: 1

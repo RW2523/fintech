@@ -12,6 +12,7 @@ import { CasePage } from "./pages/CasePage";
 import { CollectionsPage } from "./pages/CollectionsPage";
 import { CompliancePage } from "./pages/CompliancePage";
 import { LedgerPage } from "./pages/LedgerPage";
+import { MemberPage } from "./pages/MemberPage";
 
 /** Retries are off by default. A failed read on a decision screen should say
  *  so rather than quietly try again: an officer who cannot see the evidence
@@ -35,6 +36,7 @@ const router = createBrowserRouter([
       { path: "compliance", element: <CompliancePage /> },
       { path: "ledger", element: <LedgerPage /> },
       { path: "ledger/:caseId", element: <LedgerPage /> },
+      { path: "member", element: <MemberPage /> },
     ],
   },
 ]);

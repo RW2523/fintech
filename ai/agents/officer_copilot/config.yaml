@@ -1,0 +1,14 @@
+family: copilot
+# The agent route, not `fast`. `fast` narrates and is capped at 400 output
+# tokens by design; a grounded answer with its citations does not fit under
+# that, and guided decoding cuts the JSON off mid-object rather than writing
+# something shorter. The caller then sees "the answer was not JSON", which
+# names the symptom and hides the ceiling. Measured on case_S1CLEAN: four
+# generations, every one truncated at 400.
+route: agent
+output_schema: copilot_answer/1.0
+# Short answers on purpose: an officer asking about the file in front of them
+# wants a sentence, not an essay. This sits above what a good answer needs and
+# below the route's own 1600 ceiling, so a schema-legal answer is never cut.
+max_output_tokens: 1400
+temperature: 0.0

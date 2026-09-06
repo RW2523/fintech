@@ -1,0 +1,22 @@
+# Only the member's own record, and only reads except the one that fetches a
+# person. Nothing here returns a score, a factor, a probability or a
+# recommendation, because the assistant cannot state what it cannot see.
+tools:
+- name: get_my_balance
+  version: '1.0'
+  max_calls: 1
+- name: get_my_next_payment
+  version: '1.0'
+  max_calls: 1
+- name: get_my_application
+  version: '1.0'
+  max_calls: 1
+- name: get_missing_documents
+  version: '1.0'
+  max_calls: 1
+- name: product_info.get
+  version: '1.0'
+  max_calls: 1
+- name: request_callback
+  version: '1.0'
+  max_calls: 1

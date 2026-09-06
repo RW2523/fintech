@@ -9,11 +9,23 @@ The longitudinal tools arrived with the engine behind them (T-060 to T-063):
 `lmi.score` and `survival.get`. Until then they were deliberately absent, on
 the principle that a tool returning something plausible from a service that
 cannot answer is worse than no tool at all.
+
+`self_service` arrived with the member assistant (T-071). Its tools are the
+only ones in this package a member's own words can reach, which is why they
+read nothing but that member's record and return no score of any kind.
 """
 
 from __future__ import annotations
 
-from ai.tools import decision, documents, evidence, longitudinal, member  # noqa: F401
+from ai.tools import (  # noqa: F401
+    case,
+    decision,
+    documents,
+    evidence,
+    longitudinal,
+    member,
+    self_service,
+)
 from cio_tools.registry import registry
 
 __all__ = ["registry", "tool_names"]

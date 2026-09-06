@@ -80,6 +80,24 @@ class ScheduleRequest(BaseModel):
     as_of: str | None = None
 
 
+class HandoffRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    member_id: str = Field(min_length=1, max_length=64)
+    reason: str = Field(min_length=3, max_length=400)
+    #: ROUTINE, or one of the four the assistant must never handle alone.
+    signal: str = Field(
+        default="ROUTINE",
+        pattern="^(ROUTINE|HARDSHIP|COMPLAINT|BEREAVEMENT|VULNERABILITY)$",
+    )
+    urgency: str = Field(default="ROUTINE", pattern="^(ROUTINE|PRIORITY)$")
+    case_id: str | None = None
+    #: What the member wrote. A paraphrase of a hardship disclosure loses the
+    #: part a person needs to read, so the words are kept as they were said.
+    said: str | None = Field(default=None, max_length=4000)
+    raised_by: str = Field(default="member_assistant", min_length=1, max_length=64)
+
+
 class OutcomeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -579,6 +597,102 @@ async def record_outcome(body: OutcomeRequest) -> dict[str, Any]:
         await db.commit()
 
     return {"outcome_id": outcome_id, "member_id": body.member_id, "kind": body.kind}
+
+
+# ---------------------------------------------------------------------------
+# handoffs to a person (T-071)
+# ---------------------------------------------------------------------------
+@router.post("/handoffs", summary="Ask a person to pick this member up")
+async def raise_handoff(body: HandoffRequest) -> dict[str, Any]:
+    """docs/06 §2.3 — where the member assistant stops.
+
+    The row is written before the member is told anybody will call. An
+    assistant that says "someone will be in touch" and leaves no trace has lied
+    to somebody who was probably already having a bad week.
+
+    No event is emitted here. `member.hardship_signal.v1` is produced by the
+    agent runtime, which is where the disclosure was heard, and this service is
+    one of its consumers (contracts/events.yaml). Emitting it here as well
+    would put the same signal on the bus twice under two producers.
+    """
+    handoff_id = new_id("hnd")
+    async with session() as db:
+        await db.execute(
+            text("""
+            INSERT INTO app_notification.handoff
+              (handoff_id, member_id, case_id, signal, urgency, reason, said, raised_by)
+            VALUES (:handoff_id, :member_id, :case_id, :signal, :urgency, :reason,
+                    :said, :raised_by)
+        """),
+            {
+                "handoff_id": handoff_id,
+                "member_id": body.member_id,
+                "case_id": body.case_id,
+                "signal": body.signal,
+                "urgency": body.urgency,
+                "reason": body.reason,
+                "said": body.said,
+                "raised_by": body.raised_by,
+            },
+        )
+        await db.commit()
+
+    return {
+        "handoff_id": handoff_id,
+        "member_id": body.member_id,
+        "signal": body.signal,
+        "urgency": body.urgency,
+        "state": "OPEN",
+    }
+
+
+@router.get("/handoffs", summary="Handoffs waiting for a person")
+async def handoffs(
+    member_id: str | None = Query(default=None),
+    state: str = Query(default="OPEN"),
+) -> dict[str, Any]:
+    async with session() as db:
+        rows = (
+            (
+                await db.execute(
+                    text("""
+            SELECT * FROM app_notification.handoff
+             WHERE (CAST(:member_id AS text) IS NULL OR member_id = CAST(:member_id AS text))
+               AND (CAST(:state AS text) = 'ALL' OR state = CAST(:state AS text))
+             ORDER BY created_at DESC LIMIT 200
+        """),
+                    {"member_id": member_id, "state": state},
+                )
+            )
+            .mappings()
+            .all()
+        )
+    entries = [dict(row) for row in rows]
+    return {"handoffs": entries, "count": len(entries)}
+
+
+@router.post("/handoffs/{handoff_id}/close", summary="A person picked it up")
+async def close_handoff(handoff_id: str, closed_by: str = Query(min_length=1)) -> dict[str, Any]:
+    async with session() as db:
+        row = (
+            (
+                await db.execute(
+                    text("""
+            UPDATE app_notification.handoff
+               SET state = 'CLOSED', closed_by = :closed_by, closed_at = now()
+             WHERE handoff_id = :handoff_id AND state = 'OPEN'
+         RETURNING handoff_id, member_id, state, closed_by, closed_at
+        """),
+                    {"handoff_id": handoff_id, "closed_by": closed_by},
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if row is None:
+            raise NotFound(f"no open handoff {handoff_id!r}")
+        await db.commit()
+    return dict(row)
 
 
 @router.get("/members/{member_id}/outcomes", summary="What this member has said")

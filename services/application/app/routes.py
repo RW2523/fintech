@@ -146,6 +146,42 @@ async def submit_application(
     }
 
 
+@router.get("/applications/by-member", summary="Every application this member has")
+async def applications_by_member(member_id: str) -> dict[str, Any]:
+    """One member's applications, for the member assistant (T-071).
+
+    Declared before the `/applications/{application_id}` route below, which
+    would otherwise match "by-member" as an application id and answer 404.
+
+    The case state comes back as it is stored. Translating it into something a
+    member should read is the assistant's job, not this service's: `SUBMITTED`
+    means one thing to an underwriter and something more hopeful to an
+    applicant, and only one of them is reading this response.
+    """
+    async with session() as db:
+        rows = (
+            (
+                await db.execute(
+                    text("""
+            SELECT a.application_id, a.member_id, a.product_code, a.amount,
+                   a.tenor_months, a.purpose, a.status, a.created_at, a.submitted_at,
+                   c.case_id, c.state
+              FROM app_application.application a
+              LEFT JOIN app_application.case c ON c.application_id = a.application_id
+             WHERE a.member_id = :member_id
+             ORDER BY a.created_at DESC
+             LIMIT 50
+        """),
+                    {"member_id": member_id},
+                )
+            )
+            .mappings()
+            .all()
+        )
+    entries = [dict(row) for row in rows]
+    return {"member_id": member_id, "applications": entries, "count": len(entries)}
+
+
 @router.get("/applications/{application_id}", summary="An application and its case")
 async def get_application(application_id: str) -> dict[str, Any]:
     async with session() as db:

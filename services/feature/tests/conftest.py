@@ -12,21 +12,25 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
-from cio_common.testing import prepared_test_database_url
+from cio_common.testing import seeded_database_url
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
 @lru_cache(maxsize=1)
 def database_url() -> str:
-    """The test database, never the demo one.
+    """The demo database, which is the exception rather than the rule.
 
-    Truncating the tables a test exercises is the only way to test a chain or
-    a queue from a known start, and doing that to the demo database empties the
-    population, the loaded documents and the decisions in front of the
-    workbench without saying so.
+    Every other service's tests use `cio_test`, because they truncate. These
+    do not: they compute features over a member with a twenty-event history,
+    which no fixture can build without rebuilding the generator, so they read
+    the population the generator made and delete exactly the snapshots they
+    created (`_leave_no_trace` below).
+
+    Pointed at `cio_test` these fail on every test, because a database with no
+    `core.member` rows has no member to compute features for.
     """
-    return prepared_test_database_url(ROOT)
+    return seeded_database_url(ROOT)
 
 
 @lru_cache(maxsize=1)

@@ -65,6 +65,30 @@ CREATE TABLE IF NOT EXISTS app_notification.outcome (
   recorded_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS outcome_by_member ON app_notification.outcome (member_id, recorded_at DESC);
+
+-- A member asked for a person, or said something no assistant should be the
+-- last responder to. The row is the promise: it exists before the member is
+-- told anybody will call, and it is closed by a human rather than by a model.
+CREATE TABLE IF NOT EXISTS app_notification.handoff (
+  handoff_id  text PRIMARY KEY,
+  member_id   text NOT NULL,
+  case_id     text,
+  -- ROUTINE, or one of the signals the assistant must never handle alone:
+  -- HARDSHIP, COMPLAINT, BEREAVEMENT, VULNERABILITY.
+  signal      text NOT NULL DEFAULT 'ROUTINE',
+  urgency     text NOT NULL DEFAULT 'ROUTINE',
+  reason      text NOT NULL,
+  -- What the member actually wrote, kept because a paraphrase of a hardship
+  -- disclosure loses the part a person needs to read.
+  said        text,
+  state       text NOT NULL DEFAULT 'OPEN',
+  raised_by   text NOT NULL DEFAULT 'member_assistant',
+  closed_by   text,
+  closed_at   timestamptz,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS handoff_by_member ON app_notification.handoff (member_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS handoff_open ON app_notification.handoff (created_at DESC) WHERE state = 'OPEN';
 """
 
 

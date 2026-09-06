@@ -39,11 +39,11 @@ export const AUTHORITY: Record<
   member: { approves: 0, label: "Member", authority: null },
 };
 
-type Session = { role: Role; token: string };
+type Session = { role: Role; token: string; memberId?: string };
 
 type AuthValue = {
   session: Session | null;
-  signIn: (role: Role) => Promise<void>;
+  signIn: (role: Role, memberId?: string) => Promise<void>;
   signOut: () => void;
   /** The trace id of the last API call, so a reader can find it in the logs. */
   lastTraceId: string | null;
@@ -58,17 +58,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [lastTraceId, setLastTraceId] = useState<string | null>(null);
 
-  const signIn = useCallback(async (role: Role) => {
+  // A member signs in as themselves, so the token has to name them. The
+  // member assistant reads the member from the token and nothing else: an id
+  // typed into a request body is ignored the moment a real member is signed
+  // in, because identity that can be typed is not identity.
+  const signIn = useCallback(async (role: Role, memberId?: string) => {
     const response = await fetch("/api/auth/dev-token", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ role }),
+      body: JSON.stringify(memberId ? { role, member_id: memberId } : { role }),
     });
     if (!response.ok) {
       throw new Error(`sign-in failed: ${response.status}`);
     }
     const body = (await response.json()) as { access_token: string };
-    setSession({ role, token: body.access_token });
+    setSession({ role, token: body.access_token, memberId });
   }, []);
 
   const signOut = useCallback(() => setSession(null), []);

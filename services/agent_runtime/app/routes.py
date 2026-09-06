@@ -6,11 +6,12 @@ import os
 from functools import lru_cache
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from ai.agents.bundle import list_bundles, load_bundle
 from ai.tools import registry, tool_names
+from app.copilot import CopilotQuestion, answer_question
 from app.gateway_client import GatewayClient, HttpGatewayClient
 from app.guided import prune_defs, simplify
 from app.invoke import OPINION_SCHEMA_ID, Invocation, invoke
@@ -241,3 +242,248 @@ async def invoke_agent(body: InvokeRequest) -> dict[str, Any]:
         output_schema=model_output_schema(),
     )
     return result.as_contract()
+
+
+# ---------------------------------------------------------------------------
+# copilots (docs/06 §2.3, docs/09 §3.5)
+# ---------------------------------------------------------------------------
+@lru_cache(maxsize=1)
+def answer_schema() -> dict[str, Any]:
+    """The CopilotAnswer contract, as a schema the model is given."""
+    document = contract_bundle()
+    return {
+        "$schema": document["$schema"],
+        "$ref": "#/$defs/CopilotAnswer",
+        "$defs": document["$defs"],
+    }
+
+
+class AskRequest(BaseModel):
+    """A question about one case."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    agent_id: str = Field(default="officer_copilot", min_length=2, max_length=64)
+    case_id: str = Field(min_length=3, max_length=64)
+    question: str = Field(min_length=3, max_length=1000)
+    decision_record_id: str | None = None
+    run_id: str = ""
+    budget_tokens: int = Field(default=0, ge=0)
+
+
+#: What the copilot is given before it is asked anything. Gathered by the
+#: service rather than called by the model: a copilot that chose its own reads
+#: could read another case, and scoping the question is the one guarantee this
+#: endpoint makes.
+async def _gather(case_id: str, decision_record_id: str | None) -> list[dict[str, Any]]:
+    from ai.tools import registry
+    from cio_tools.grants import Grant, GrantRegistry
+    from cio_tools.registry import ToolContext
+    from cio_tools.spec import PermittedUse
+
+    wanted: list[tuple[str, dict[str, Any]]] = [
+        ("case.get", {"case_id": case_id}),
+        ("evidence.search", {"case_id": case_id}),
+    ]
+    if decision_record_id is None:
+        # Found from the case rather than required from the caller. Without the
+        # record the copilot has no recommendation, no gates and no factor
+        # scores, and it will refuse half the questions an officer asks while
+        # looking as though it decided to.
+        decision_record_id = await _record_for(case_id)
+    if decision_record_id:
+        wanted.append(("decision_record.get", {"decision_record_id": decision_record_id}))
+
+    scoped = registry.with_grants(
+        GrantRegistry([Grant(agent_id="copilot", tool=name, max_calls=2) for name, _ in wanted])
+    )
+    context = ToolContext(
+        agent_id="copilot",
+        run_id=case_id,
+        purpose=PermittedUse.UNDERWRITING,
+        principal="copilot",
+        case_id=case_id,
+    )
+
+    gathered: list[dict[str, Any]] = []
+    for name, args in wanted:
+        try:
+            result = await scoped.call(name, args, context)
+        except Exception as exc:
+            # Named rather than dropped: an answer that could not read the
+            # decision record should be able to say so.
+            gathered.append({"tool": name, "unavailable": str(exc)})
+            continue
+        gathered.append({"tool": name, "result": result, "evidence_refs": []})
+    return gathered
+
+
+async def _record_for(case_id: str) -> str | None:
+    """The decision record on a case, if there is one."""
+    import httpx
+
+    url = os.environ.get("DECISION_URL", "http://decision:8012").rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{url}/queue")
+            response.raise_for_status()
+    except httpx.HTTPError:
+        return None
+    for row in response.json().get("decisions") or []:
+        if row.get("case_id") == case_id:
+            return str(row.get("decision_record_id"))
+    return None
+
+
+@router.post("/copilot/ask", summary="Answer a question about one case")
+async def ask(body: AskRequest, request: Request) -> dict[str, Any]:
+    """docs/09 §3.5 — grounded question and answer over the case in front of
+    an officer.
+
+    The case is gathered here and handed to the model. The model does not
+    choose what to read, because a copilot that could would eventually read
+    somebody else's case, and being confined to this one is the guarantee that
+    makes the panel safe to put in front of an officer.
+    """
+    # A member's token reaches this service like anybody else's: the gateway
+    # authenticates and the service authorises. Until roles are enforced across
+    # the API (T-084) this is the one place it matters, because the member
+    # assistant is the first member-facing token in the platform and this
+    # endpoint reads whole case files by id.
+    if request.headers.get("X-Principal-Role") == "member":
+        raise Forbidden("the case copilot is for staff; members use /assistant/ask")
+
+    try:
+        bundle = load_bundle(body.agent_id)
+    except FileNotFoundError as exc:
+        raise NotFound(f"no agent bundle {body.agent_id!r}") from exc
+
+    if bundle.family != "copilot":
+        raise ValidationFailed(
+            f"{body.agent_id} is a {bundle.family} agent, not a copilot",
+            agent_id=body.agent_id,
+        )
+
+    tool_results = await _gather(body.case_id, body.decision_record_id)
+    result = await answer_question(
+        CopilotQuestion(
+            agent_id=body.agent_id,
+            question=body.question,
+            case_id=body.case_id,
+            tool_results=tool_results,
+            run_id=body.run_id,
+            budget_tokens=body.budget_tokens,
+        ),
+        bundle=bundle,
+        client=gateway_client(),
+        output_schema=simplify(prune_defs(answer_schema())),
+    )
+
+    return {
+        **result.as_contract(),
+        "case_id": body.case_id,
+        "agent_id": body.agent_id,
+        "agent_version": bundle.agent_version,
+        "tools_read": [entry["tool"] for entry in tool_results],
+        "tools_unavailable": [entry["tool"] for entry in tool_results if "unavailable" in entry],
+    }
+
+
+# ---------------------------------------------------------------------------
+# member assistant (T-071, docs/06 §2.3, docs/09 §5)
+# ---------------------------------------------------------------------------
+class AssistantRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=2000)
+    agent_id: str = Field(default="member_assistant", min_length=1, max_length=64)
+    conversation_id: str | None = None
+    case_id: str | None = None
+    run_id: str = ""
+    budget_tokens: int = 0
+    #: Only honoured when the request carries no member identity of its own.
+    #: A token that names a member always wins, so a member cannot ask about
+    #: anybody else by putting an id in the body.
+    member_id: str | None = None
+
+
+def _member_of(request: Request, body: AssistantRequest) -> str:
+    """Whose records this turn may read.
+
+    The gateway validates the token and forwards the member it names. That
+    header is the identity: the body's `member_id` is accepted only when there
+    is no header at all, which is the case for a service calling in directly,
+    and is ignored the moment a real member is signed in. Identity that can be
+    typed is not identity.
+    """
+    from_token = request.headers.get("X-Principal-Member")
+    member_id = from_token or body.member_id
+    if not member_id:
+        raise Forbidden("the member assistant needs a member; sign in first")
+    if from_token and body.member_id and body.member_id != from_token:
+        raise Forbidden("you can only ask about your own records")
+    return member_id
+
+
+@router.post("/assistant/ask", summary="Answer a member's question about their own records")
+async def assistant_ask(body: AssistantRequest, request: Request) -> dict[str, Any]:
+    """docs/09 §5 — the member assistant.
+
+    Distress is classified before the model is called, refusals are decided by
+    rule, and both sides of every turn are written down. The model's only job
+    is the questions a member may safely be answered.
+    """
+    from app.assistant import answer_member
+    from app.conversations import log_turns
+
+    member_id = _member_of(request, body)
+
+    try:
+        bundle = load_bundle(body.agent_id)
+    except FileNotFoundError as exc:
+        raise NotFound(f"no agent bundle {body.agent_id!r}") from exc
+    if bundle.family != "copilot":
+        raise ValidationFailed(
+            f"{body.agent_id} is a {bundle.family} agent, not a copilot",
+            agent_id=body.agent_id,
+        )
+
+    reply = await answer_member(
+        member_id=member_id,
+        question=body.question,
+        bundle=bundle,
+        client=gateway_client(),
+        output_schema=simplify(prune_defs(answer_schema())),
+        case_id=body.case_id,
+        run_id=body.run_id,
+        budget_tokens=body.budget_tokens,
+    )
+
+    conversation_id = await log_turns(
+        member_id=member_id,
+        conversation_id=body.conversation_id,
+        said=body.question,
+        reply=reply,
+        case_id=body.case_id,
+    )
+
+    return {
+        **reply.as_contract(),
+        "member_id": member_id,
+        "conversation_id": conversation_id,
+        "agent_id": body.agent_id,
+        "agent_version": bundle.agent_version,
+    }
+
+
+@router.get("/assistant/conversations/{conversation_id}", summary="One conversation, both sides")
+async def assistant_conversation(conversation_id: str, request: Request) -> dict[str, Any]:
+    """What was actually said. Scoped to the member in the token: a member may
+    read their own conversation and nobody else's."""
+    from app.conversations import read_conversation
+
+    turns = await read_conversation(conversation_id)
+    member = request.headers.get("X-Principal-Member")
+    if member and any(turn["member_id"] != member for turn in turns):
+        raise Forbidden("that conversation is not yours")
+    return {"conversation_id": conversation_id, "turns": turns, "count": len(turns)}

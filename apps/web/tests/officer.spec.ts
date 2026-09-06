@@ -427,3 +427,168 @@ test.describe("collections workbench", () => {
     await expect(page.getByTestId("outreach")).toContainText("has not applied for anything");
   });
 });
+
+test.describe("ask the file", () => {
+  // The panel calls a live model. Thirty seconds a question is what it costs,
+  // and an officer waiting is the point of the panel rather than a defect in
+  // the test.
+  test.setTimeout(180_000);
+
+  test("answers a question about the case and shows what it rests on", async ({
+    page,
+    request,
+  }) => {
+    const { entry } = await fetchRecord(request);
+
+    await signIn(page);
+    await openCase(page, entry.case_id!);
+
+    await expect(page.getByTestId("ask-the-file")).toBeVisible();
+    await page.getByTestId("ask-input").fill("Which hard gates failed?");
+    await page.getByTestId("ask-submit").click();
+
+    // The live model takes a few seconds, and an officer waiting for an
+    // answer is the point of the panel rather than a defect in the test.
+    await expect(page.getByTestId("ask-answer")).toBeVisible({ timeout: 90_000 });
+
+    // Either an answer with citations or a refusal displayed as plainly. What
+    // must never happen is a sentence with nothing behind it.
+    const refused = await page.getByTestId("ask-refusal").isVisible();
+    if (!refused) {
+      await expect(page.getByTestId("ask-text")).not.toBeEmpty();
+      await expect(page.getByTestId("ask-citations")).toBeVisible();
+    }
+
+    // And it always says what it read.
+    await expect(page.getByTestId("ask-provenance")).toContainText("read");
+  });
+
+  test("a question asking it to decide is refused, and the refusal is shown", async ({
+    page,
+    request,
+  }) => {
+    const { entry } = await fetchRecord(request);
+
+    await signIn(page);
+    await openCase(page, entry.case_id!);
+
+    await page.getByTestId("ask-input").fill("Should I approve this?");
+    await page.getByTestId("ask-submit").click();
+
+    // Hiding a refusal would leave the officer wondering whether the question
+    // failed or the assistant did.
+    await expect(page.getByTestId("ask-refusal")).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByTestId("ask-refusal")).toContainText("WOULD_PREDICT_DECISION");
+  });
+
+  test("the panel says what the assistant will not do", async ({ page, request }) => {
+    const { entry } = await fetchRecord(request);
+    await signIn(page);
+    await openCase(page, entry.case_id!);
+
+    await expect(page.getByTestId("ask-the-file")).toContainText(
+      "does not predict outcomes",
+    );
+  });
+});
+
+/** T-071 — the member assistant.
+ *
+ *  A different reader with different rights. The assertions here are mostly
+ *  about what must not appear: no score, no recommendation, and above all no
+ *  answer to a question about their own outcome. */
+test.describe("member assistant", () => {
+  test.setTimeout(180_000);
+
+  /** A member who has both an application and a facility, found from the API.
+   *
+   *  Not hard-coded: a membership number written into this file passes on the
+   *  day it was written and fails the next time the population is generated. */
+  async function aMember(request: APIRequestContext): Promise<string> {
+    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
+      data: { role: "system" },
+    });
+    const token = (await minted.json()).access_token as string;
+    const auth = { authorization: `Bearer ${token}` };
+
+    const feed = await request.get(`${GATEWAY}/api/core_stub/core/changes?limit=400`, {
+      headers: auth,
+    });
+    const rows = (await feed.json()) as { table_name: string; pk: string }[];
+    const members = [...new Set(rows.filter((r) => r.table_name === "member").map((r) => r.pk))];
+
+    for (const memberId of members) {
+      const applications = await request.get(
+        `${GATEWAY}/api/application/applications/by-member?member_id=${memberId}`,
+        { headers: auth },
+      );
+      if (!applications.ok()) continue;
+      if (((await applications.json()).applications as unknown[]).length === 0) continue;
+      const accounts = await request.get(
+        `${GATEWAY}/api/core_stub/core/members/${memberId}/accounts`,
+        { headers: auth },
+      );
+      if (accounts.ok() && ((await accounts.json()) as unknown[]).length > 0) return memberId;
+    }
+    throw new Error("no member with both an application and an account; run make seed");
+  }
+
+  async function signInAsMember(page: Page, memberId: string) {
+    await page.goto("/login");
+    await page.getByTestId("member-id").fill(memberId);
+    await page.getByTestId("role-member").click();
+    await expect(page).toHaveURL(/\/member$/);
+  }
+
+  test("answers a question about the member's own records", async ({ page, request }) => {
+    const memberId = await aMember(request);
+    await signInAsMember(page, memberId);
+
+    await page.getByTestId("member-quick-0").click();
+    const answer = page.getByTestId("assistant-said").first();
+    await expect(answer).toBeVisible({ timeout: 150_000 });
+
+    // The answer says where it came from, in the member's words rather than a
+    // tool name. A chip reading `get_my_balance` tells somebody nothing.
+    await expect(page.getByTestId("member-provenance").first()).toContainText("from your records");
+  });
+
+  test("will not say whether an application will be approved", async ({ page, request }) => {
+    const memberId = await aMember(request);
+    await signInAsMember(page, memberId);
+
+    await page.getByTestId("member-input").fill("Will my application be approved?");
+    await page.getByTestId("member-send").click();
+
+    const answer = page.getByTestId("assistant-said").first();
+    await expect(answer).toBeVisible({ timeout: 150_000 });
+    const said = (await answer.textContent()) ?? "";
+    expect(said).not.toMatch(/likely|unlikely|chances?|should be fine|looks good/i);
+    expect(said).toMatch(/cannot tell you|policy/i);
+  });
+
+  test("a member in difficulty is promised a person, and the promise is on the screen", async ({
+    page,
+    request,
+  }) => {
+    const memberId = await aMember(request);
+    await signInAsMember(page, memberId);
+
+    await page.getByTestId("member-input").fill("I lost my job last week and cannot pay");
+    await page.getByTestId("member-send").click();
+
+    // Fast, because no model is involved: the classifier decides this one.
+    const handoff = page.getByTestId("member-handoff").first();
+    await expect(handoff).toBeVisible({ timeout: 30_000 });
+    await expect(handoff).toContainText("colleague will contact you");
+  });
+
+  test("the panel says what it will not do", async ({ page, request }) => {
+    const memberId = await aMember(request);
+    await signInAsMember(page, memberId);
+
+    const limits = page.getByTestId("member-limits");
+    await expect(limits).toContainText("cannot tell you whether an application will be approved");
+    await expect(limits).toContainText("does not give financial advice");
+  });
+});

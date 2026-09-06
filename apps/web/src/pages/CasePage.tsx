@@ -5,6 +5,7 @@ import { Link, useParams } from "react-router-dom";
 import { useApi } from "../api";
 import { useAuth } from "../auth";
 import { AgentDiscussion } from "../components/AgentDiscussion";
+import { AskTheFile } from "../components/AskTheFile";
 import { DecideForm } from "../components/DecideForm";
 import { DecisionCard } from "../components/DecisionCard";
 import { EvidencePanel } from "../components/EvidencePanel";
@@ -138,6 +139,12 @@ export function CasePage() {
         />
         <DecideForm record={decision} caseId={caseId} role={session?.role ?? "officer"} />
       </div>
+
+      <AskTheFile
+        caseId={caseId}
+        decisionRecordId={recordId}
+        onCitation={setSelectedEvidence}
+      />
 
       <AgentDiscussion opinions={opinions} onEvidence={setSelectedEvidence} />
 
