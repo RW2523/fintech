@@ -281,6 +281,60 @@ contract check.
 Whole suite at the end of P4: **1,371 Python tests** and **4 Playwright
 tests**, all passing.
 
+### P5 (verified 2026-09-06, `scripts/verify_phase.sh P5`)
+
+18 pass, 0 fail.
+
+| Step | Result |
+|---|---|
+| make lint | PASS |
+| make typecheck | PASS |
+| policy service | PASS |
+| committee service | PASS |
+| decision service | PASS |
+| execution service | PASS |
+| audit service | PASS |
+| governance service | PASS |
+| agent runtime | PASS |
+| workflow tests | PASS |
+| stack healthy | PASS |
+| every service serving its routes | PASS |
+| golden cases seeded | PASS |
+| S7 autonomy drill | PASS |
+| execution drill | PASS |
+| override drill | PASS |
+| tamper drill | PASS |
+| workbench Playwright smoke (10 tests) | PASS |
+
+Against `docs/14` P5 criteria: execution with tokens, the ledger viewer
+reconstructs, override analytics, and S7 end to end.
+
+**Four drills join the suite, and every one of them found a defect in itself
+before it found anything else.** The tamper drill wrote the value already in
+the row, so it reported a clean chain as proof of nothing. The execution drill
+reused its action id, so a second run took the replay path and the checks after
+it passed without running; it now mints fresh ids. The autonomy drill routed a
+case autonomously and stopped there, which proves a number changed rather than
+that a facility exists, so it now carries the decision through to the core. The
+override drill picked the first case in the queue, which needed a senior, so
+the step about acting within authority failed for the reason the next step is
+about. A drill that has never failed is a drill nobody has checked.
+
+**S2, S3, S4 and S5 are seeded and decided through the real deterministic path
+on every verification run.** Tier 2 repair and revise is exercised by 21 tests
+against a scripted Council rather than by a live model round, because a live
+round costs minutes per case and is not reproducible; the live Council was
+measured in P4 and stands.
+
+**One P5 criterion is not met as written.** docs/09 §3.4 says an action beyond
+a role's authority is hidden. It is shown disabled with the reason instead, and
+the open actions stay enabled, because an officer who cannot see that approval
+exists cannot tell whether to escalate the case or leave it. The API refuses it
+either way, and the browser test asserts both halves.
+
+Whole suite at the end of P5: **1,466 Python tests** and **10 Playwright
+tests**, all passing.
+
 ## Blocked
 (none)
 

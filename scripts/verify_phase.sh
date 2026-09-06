@@ -129,7 +129,29 @@ case "$PHASE" in
     step "workbench typechecks"  bash -c 'cd apps/web && npx --no-install tsc --noEmit'
     step "workbench smoke"       bash -c 'cd apps/web && npx playwright test'
     ;;
-  P5|P6|P7|P8)
+  P5)
+    # docs/14 P5: Tier 2 on S2, execution with tokens, the ledger viewer
+    # reconstructs, override analytics, and S7 end to end.
+    step "make lint"             make lint
+    step "make typecheck"        make typecheck
+    step "policy service"        bash -c 'cd services/policy && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "committee service"     bash -c 'cd services/committee && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "decision service"      bash -c 'cd services/decision && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "execution service"     bash -c 'cd services/execution && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "audit service"         bash -c 'cd services/audit && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "governance service"    bash -c 'cd services/governance && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "agent runtime"         bash -c 'cd services/agent_runtime && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "workflow tests"        uv run pytest workflows -q
+    step "stack healthy"         scripts/wait_healthy.sh 120
+    step "every service routed"  scripts/check_routes.sh
+    step "golden cases seeded"   uv run python scripts/seed_demo_case.py
+    step "S7 autonomy drill"     uv run python scripts/autonomy_drill.py
+    step "execution drill"       uv run python scripts/execution_drill.py
+    step "override drill"        uv run python scripts/override_drill.py
+    step "tamper drill"          uv run python scripts/tamper_drill.py
+    step "workbench smoke"       bash -c 'cd apps/web && npx playwright test'
+    ;;
+  P6|P7|P8)
     echo "  phase ${PHASE} verification not implemented yet" >&2
     exit 1
     ;;

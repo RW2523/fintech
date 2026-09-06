@@ -15,14 +15,26 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from cio_common.ids import new_id
 
 BASE = "http://localhost:8000"
 PRODUCT = "PF-STD"
 SNAPSHOT = "snap_0000000000000000000T052AC"
 CASE = "case_T052ACCEPT"
+
+#: Fresh every run. Reusing an action id would have the second run find the
+#: first run's executed action and take the replay path, so every check after
+#: it would pass without running. Minted with the platform's own id function
+#: rather than a timestamp, which two runs in the same second would share.
+ACTION_ID = new_id("act")
+SECOND_ACTION_ID = new_id("act")
 
 RECORD = {
     "product_code": PRODUCT,
@@ -86,20 +98,20 @@ async def main() -> int:
             await c.post(
                 f"{BASE}/api/decision/tokens",
                 json={
-                    "action_id": "act_0000000000000000000T052AC",
+                    "action_id": ACTION_ID,
                     "decision_record_id": record["decision_record_id"],
                     "case_id": CASE,
                     "member_id": member,
                     "product_code": PRODUCT,
                     "max_amount": "8000",
-                    "idempotency_key": f"t052-{record['decision_record_id']}",
+                    "idempotency_key": f"t052-{ACTION_ID}",
                 },
             )
         ).json()
         token_id = issued["token_id"]
         print(f"  token {token_id}")
 
-        action_id = "act_0000000000000000000T052AC"
+        action_id = ACTION_ID
         proposal = {
             "action_id": action_id,
             "case_id": CASE,
@@ -139,7 +151,7 @@ async def main() -> int:
         ok &= again.status_code == 200 and again.json().get("replayed") is True
 
         # The same token on a different action must be refused: it is spent.
-        second = dict(proposal, action_id="act_0000000000000000000T052BD")
+        second = dict(proposal, action_id=SECOND_ACTION_ID)
         await c.post(f"{BASE}/api/execution/action-proposals", json=second)
         reused = await c.post(
             f"{BASE}/api/execution/actions/{second['action_id']}/execute",

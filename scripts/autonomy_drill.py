@@ -74,6 +74,15 @@ CASE = {
 }
 
 
+async def member_id(client: httpx.AsyncClient) -> str:
+    """A real member: the core refuses to open an account for a stranger."""
+    for candidate in (f"M-{n:06d}" for n in range(1, 40)):
+        response = await client.get(f"{BASE}/api/core_stub/core/members/{candidate}")
+        if response.status_code == 200:
+            return candidate
+    raise SystemExit("  no member found; run the synthetic loader first")
+
+
 async def main() -> int:
     ok = True
     async with httpx.AsyncClient(timeout=60.0) as anon:
@@ -117,7 +126,7 @@ async def main() -> int:
         print(f"  ledger {appended['entry_id']}  sample {appended.get('sample_id')}")
 
         # --- 3. a token is issued for it -----------------------------------
-        issued = await c.post(
+        issued_response = await c.post(
             f"{BASE}/api/decision/tokens",
             json={
                 "action_id": "act_0000000000000000000T051AC",
@@ -129,8 +138,9 @@ async def main() -> int:
                 "idempotency_key": "t051-acceptance",
             },
         )
-        print(f"  token -> {issued.status_code} {issued.json().get('token_id')}")
-        ok &= issued.status_code in (200, 201)
+        print(f"  token -> {issued_response.status_code} {issued_response.json().get('token_id')}")
+        ok &= issued_response.status_code in (200, 201)
+        issued = issued_response.json()
 
         # --- 4. it is in the sampling queue --------------------------------
         assert record.get("sampled"), "the acceptance snapshot must be one the draw selects"
@@ -157,6 +167,44 @@ async def main() -> int:
         )
         print(f"  review -> {reviewed.status_code} chained at {reviewed.json().get('entry_id')}")
         ok &= reviewed.status_code == 200
+
+        # --- 4b. and it is carried out (docs/11 S7a) ------------------------
+        # The scenario is not "routed AUTONOMOUS", it is "the facility exists".
+        # A dial that routes but never reaches the core proves only that a
+        # number changed.
+        member = await member_id(c)
+        action_id = "act_0000000000000000000T051EX"
+        await c.post(
+            f"{BASE}/api/execution/action-proposals",
+            json={
+                "action_id": action_id,
+                "case_id": "case_T051ACCEPT",
+                "member_id": member,
+                "decision_record_id": record["decision_record_id"],
+                "level": "L3",
+                "type": "APPROVE_FINANCING",
+                "parameters": {
+                    "product_code": PRODUCT,
+                    "amount": "8000.00",
+                    "tenor_months": 36,
+                    "instalment": "262.22",
+                    "profit_rate": "0.09",
+                    "due_day": 1,
+                },
+                "rationale": {"text": "decided by the platform under the dial", "evidence_refs": []},
+                "requires": "AUTO",
+                "proposed_by": "policy",
+            },
+        )
+        carried = await c.post(
+            f"{BASE}/api/execution/actions/{action_id}/execute",
+            json={"token_id": issued["token_id"], "product_code": PRODUCT},
+        )
+        print(
+            f"  executed -> {carried.status_code} {carried.json().get('state')} "
+            f"{carried.json().get('core_refs')}"
+        )
+        ok &= carried.status_code == 200 and carried.json().get("state") == "EXECUTED"
 
         # --- 5. the kill switch --------------------------------------------
         stopped = await c.post(
@@ -186,7 +234,7 @@ async def main() -> int:
             json={"setting": "ASSIST", "approvers": HEADS, "reason": "restore after acceptance"},
         )
 
-    print("\n  T-051 acceptance:", "PASS" if ok else "FAIL")
+    print("\n  S7 autonomy drill:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 
 
