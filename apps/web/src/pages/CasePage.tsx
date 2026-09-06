@@ -3,13 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 
 import { useApi } from "../api";
-import { AUTHORITY, useAuth } from "../auth";
+import { useAuth } from "../auth";
 import { AgentDiscussion } from "../components/AgentDiscussion";
+import { DecideForm } from "../components/DecideForm";
 import { DecisionCard } from "../components/DecisionCard";
 import { EvidencePanel } from "../components/EvidencePanel";
 import { Card, Chip, Copyable, Empty, Figure, Problem } from "../components/primitives";
 import { NARRATIVE_AUDIENCES } from "../types";
-import type { DecisionRecord, Explanation, HeldRecord, Opinion, Queue } from "../types";
+import type { Explanation, HeldRecord, Opinion, Queue } from "../types";
 
 /** docs/09 §3 — the case page.
  *
@@ -135,11 +136,7 @@ export function CasePage() {
           selected={selectedEvidence}
           onSelect={setSelectedEvidence}
         />
-        <Actions
-          record={decision}
-          role={session?.role ?? "officer"}
-          amount={Number(entry.weighted_score ?? 0)}
-        />
+        <DecideForm record={decision} caseId={caseId} role={session?.role ?? "officer"} />
       </div>
 
       <AgentDiscussion opinions={opinions} onEvidence={setSelectedEvidence} />
@@ -166,73 +163,5 @@ export function CasePage() {
         </Card>
       ) : null}
     </div>
-  );
-}
-
-/** docs/09 §3.4 — what this person may do.
- *
- *  An action beyond the role's authority is shown disabled with the reason,
- *  never hidden: an officer needs to know the action exists and who can take
- *  it, so they can send it on rather than wonder. */
-function Actions({
-  record,
-  role,
-  amount,
-}: {
-  record: DecisionRecord | undefined;
-  role: keyof typeof AUTHORITY;
-  amount: number;
-}) {
-  const ceiling = AUTHORITY[role].approves;
-  const required = record?.required_authority ?? "CREDIT_OFFICER";
-  const mayApprove =
-    ceiling === null || (ceiling > 0 && required === "CREDIT_OFFICER") ||
-    (ceiling >= 75000 && required !== "CREDIT_COMMITTEE");
-
-  const reason = mayApprove
-    ? null
-    : `This case needs ${required.replaceAll("_", " ").toLowerCase()}. Your role approves ${
-        ceiling === 0 ? "nothing" : `up to ${ceiling?.toLocaleString()}`
-      }.`;
-
-  return (
-    <Card title="What you can do" testId="actions">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap gap-2">
-          {["Approve", "Approve with conditions", "Decline"].map((label) => (
-            <button
-              key={label}
-              type="button"
-              disabled={!mayApprove}
-              data-testid={`action-${label.split(" ")[0].toLowerCase()}`}
-              title={reason ?? undefined}
-              className="rounded border border-[--color-line] px-3 py-1.5 text-sm hover:border-[--color-accent] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {label}
-            </button>
-          ))}
-          {["Request information", "Escalate", "Defer"].map((label) => (
-            <button
-              key={label}
-              type="button"
-              data-testid={`action-${label.split(" ")[0].toLowerCase()}`}
-              className="rounded border border-[--color-line] px-3 py-1.5 text-sm hover:border-[--color-accent]"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {reason ? (
-          <p data-testid="authority-reason" className="text-xs text-[--color-warn]">
-            {reason}
-          </p>
-        ) : null}
-        <p className="text-xs text-[--color-muted]">
-          Every decision is recorded against you with its reason. An override of
-          the recommendation needs a reason code and a note.
-        </p>
-        {amount ? null : null}
-      </div>
-    </Card>
   );
 }

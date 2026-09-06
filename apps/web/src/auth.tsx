@@ -22,14 +22,21 @@ export type Role = (typeof ROLES)[number];
 /** What each role may do on a case (docs/09 §3.4, docs/05 §4 authority).
  *  The UI disables what a role may not do and says why; it never hides it,
  *  because an officer needs to know an action exists and who can take it. */
-export const AUTHORITY: Record<Role, { approves: number | null; label: string }> = {
-  officer: { approves: 20000, label: "Credit Officer" },
-  senior_officer: { approves: 75000, label: "Senior Officer" },
-  collections: { approves: 0, label: "Collections" },
-  manager: { approves: 0, label: "Manager" },
-  compliance: { approves: 0, label: "Compliance" },
-  head_of_credit: { approves: null, label: "Head of Credit" },
-  member: { approves: 0, label: "Member" },
+export const AUTHORITY: Record<
+  Role,
+  { approves: number | null; label: string; authority: string | null }
+> = {
+  // `authority` is the rung on the approval ladder the role signs at, which is
+  // what the decision service checks. `approves` is the amount it may commit,
+  // shown to the reader. They are different questions and were previously
+  // conflated, which let the screen offer an approval the API would refuse.
+  officer: { approves: 20000, label: "Credit Officer", authority: "CREDIT_OFFICER" },
+  senior_officer: { approves: 75000, label: "Senior Officer", authority: "SENIOR_OFFICER" },
+  collections: { approves: 0, label: "Collections", authority: null },
+  manager: { approves: 0, label: "Manager", authority: null },
+  compliance: { approves: 0, label: "Compliance", authority: null },
+  head_of_credit: { approves: null, label: "Head of Credit", authority: "CREDIT_COMMITTEE" },
+  member: { approves: 0, label: "Member", authority: null },
 };
 
 type Session = { role: Role; token: string };

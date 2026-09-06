@@ -47,6 +47,15 @@ export function Shell() {
             Officer queue
           </NavLink>
           <NavLink
+            to="/compliance"
+            data-testid="nav-compliance"
+            className={({ isActive }) =>
+              isActive ? "font-semibold text-[--color-accent]" : "text-[--color-muted]"
+            }
+          >
+            Compliance
+          </NavLink>
+          <NavLink
             to="/ledger"
             data-testid="nav-ledger"
             className={({ isActive }) =>

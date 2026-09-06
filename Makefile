@@ -155,6 +155,10 @@ autonomy-drill:  ## turn the dial up, act alone, then stop (needs 'make up')
 execution-drill:  ## turn an approval into a facility, then replay it (needs 'make up')
 	@$(UV) run python scripts/execution_drill.py
 
+.PHONY: override-drill
+override-drill:  ## decide a case, override one, check the series (needs 'make up')
+	@$(UV) run python scripts/override_drill.py
+
 .PHONY: tamper-drill
 tamper-drill:  ## alter a row in each chain and prove both go red (needs 'make up')
 	@$(UV) run python scripts/tamper_drill.py

@@ -472,6 +472,80 @@ async def record_human_decision(body: HumanDecisionRequest) -> dict[str, Any]:
     return decision
 
 
+@router.get("/human-decisions", summary="What people decided, and where they overrode")
+async def human_decisions(
+    case_id: str | None = None,
+    override: bool | None = None,
+    since: str | None = None,
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> dict[str, Any]:
+    """The record of human decisions, for oversight rather than for a case.
+
+    Read from `app_decision.human_decision` rather than by walking the ledger:
+    the ledger is the authority on what happened, and this is an index over it
+    for questions about many cases at once. Every row here has a ledger entry
+    behind it.
+    """
+    async with session() as db:
+        rows = (
+            (
+                await db.execute(
+                    text("""
+            SELECT h.human_decision_id, h.decision_record_id, h.case_id, h.actor_id,
+                   h.authority_role, h.final_action, h.override, h.body, h.created_at,
+                   r.recommendation, r.route
+              FROM app_decision.human_decision h
+              LEFT JOIN app_decision.decision_record r
+                     ON r.decision_record_id = h.decision_record_id
+             WHERE (CAST(:case_id AS text) IS NULL OR h.case_id = CAST(:case_id AS text))
+               AND (CAST(:override AS boolean) IS NULL
+                    OR h.override = CAST(:override AS boolean))
+               AND (CAST(:since AS timestamptz) IS NULL
+                    OR h.created_at >= CAST(:since AS timestamptz))
+             ORDER BY h.created_at DESC
+             LIMIT :limit
+        """),
+                    {
+                        "case_id": case_id,
+                        "override": override,
+                        # The cast in the query tells asyncpg the type; the
+                        # value has to be a datetime to match it, because the
+                        # ISO string the query string carries is not one.
+                        "since": datetime.fromisoformat(since) if since else None,
+                        "limit": limit,
+                    },
+                )
+            )
+            .mappings()
+            .all()
+        )
+
+    decisions = []
+    for row in rows:
+        body = row["body"]
+        body = json.loads(body) if isinstance(body, str) else body
+        reason = (body or {}).get("override_reason") or {}
+        decisions.append(
+            {
+                "human_decision_id": row["human_decision_id"],
+                "decision_record_id": row["decision_record_id"],
+                "case_id": row["case_id"],
+                "actor_id": row["actor_id"],
+                "authority_role": row["authority_role"],
+                "final_action": row["final_action"],
+                "override": row["override"],
+                "override_reason_code": reason.get("code"),
+                "override_reason_text": reason.get("text"),
+                # What the platform had recommended, so an override can be
+                # read as a disagreement rather than as a bare action.
+                "recommendation": row["recommendation"],
+                "route": row["route"],
+                "decided_at": row["created_at"].isoformat() if row["created_at"] else None,
+            }
+        )
+    return {"count": len(decisions), "decisions": decisions}
+
+
 # ---------------------------------------------------------------------------
 # ledger
 # ---------------------------------------------------------------------------

@@ -242,3 +242,87 @@ test.describe("ledger viewer", () => {
     await expect(page.getByTestId("problem")).toBeVisible();
   });
 });
+
+test.describe("deciding a case", () => {
+  test("an action beyond the role's authority is offered but disabled, and the API refuses it too", async ({
+    page,
+    request,
+  }) => {
+    // docs/09 §3.4 — shown disabled with the reason, never hidden: an officer
+    // needs to know the action exists and who can take it.
+    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
+      data: { role: "officer" },
+    });
+    const token = (await minted.json()).access_token as string;
+    const queued = await request.get(`${GATEWAY}/api/decision/queue`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const rows = (await queued.json()).decisions as QueueEntry[];
+    const beyond = rows.find(
+      (row) => row.case_id && row.required_authority !== "CREDIT_OFFICER",
+    );
+    test.skip(!beyond, "no seeded case needs more than an officer");
+
+    await signIn(page, "officer");
+    await openCase(page, beyond!.case_id!);
+
+    await expect(page.getByTestId("action-approve")).toBeDisabled();
+    await expect(page.getByTestId("authority-reason")).toBeVisible();
+    // The open actions stay available: escalating is how an officer moves a
+    // case they may not decide.
+    await expect(page.getByTestId("action-escalate")).toBeEnabled();
+
+    // The screen is a courtesy; the service is the control.
+    const refused = await request.post(`${GATEWAY}/api/decision/human-decisions`, {
+      headers: { authorization: `Bearer ${token}` },
+      data: {
+        decision_record_id: beyond!.decision_record_id,
+        case_id: beyond!.case_id,
+        actor_id: "officer-demo",
+        role: "officer",
+        final_action: "APPROVE",
+        override: false,
+      },
+    });
+    expect(refused.status()).toBe(403);
+  });
+
+  test("departing from the recommendation demands a reason before it can be recorded", async ({
+    page,
+    request,
+  }) => {
+    const { entry, record } = await fetchRecord(request);
+    test.skip(Boolean(entry.route === "AUTONOMOUS"), "an autonomous case has no officer step");
+
+    await signIn(page, "head_of_credit");
+    await openCase(page, entry.case_id!);
+
+    // Choose the action the record did not recommend.
+    const against = record.recommendation === "DECLINE" ? "approve" : "decline";
+    await page.getByTestId(`action-${against}`).click();
+
+    // The submit is held until the override is acknowledged and explained.
+    await expect(page.getByTestId("submit-decision")).toBeDisabled();
+    await page.getByTestId("override-confirm").check();
+    await expect(page.getByTestId("submit-decision")).toBeDisabled();
+
+    await page.getByTestId("override-note").fill("too short");
+    await expect(page.getByTestId("override-note-short")).toBeVisible();
+
+    await page
+      .getByTestId("override-note")
+      .fill("the member has banked here for nine years and the score does not see it");
+    await expect(page.getByTestId("submit-decision")).toBeEnabled();
+  });
+});
+
+test.describe("compliance view", () => {
+  test("lists what is worth reading, with the reason on the row", async ({ page }) => {
+    await signIn(page, "compliance");
+    await page.getByTestId("nav-compliance").click();
+
+    await expect(page.getByTestId("overrides")).toBeVisible();
+    await expect(page.getByTestId("override-rate")).toBeVisible();
+    await expect(page.getByTestId("attention")).toBeVisible();
+  });
+});
