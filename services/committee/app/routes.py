@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-from pathlib import Path
 from typing import Any
 
 import yaml
@@ -16,11 +15,12 @@ from app.clients import Clients, HttpClients
 from app.db import session
 from app.orchestrate import COUNCIL, run_committee
 from app.tiers import select_tier
+from cio_common.assets import policy_pack_root
 from cio_common.errors import NotFound, ValidationFailed
 
 router = APIRouter(tags=["committee"])
 
-PACK_ROOT = Path(__file__).resolve().parents[3] / "policy_packs"
+PACK_ROOT = policy_pack_root()
 
 #: Swapped for a fake in tests.
 _clients: Clients | None = None

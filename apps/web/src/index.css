@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/* One place for the few colours the workbench uses. A decision screen should
+   be quiet: colour is reserved for the things that change what an officer
+   does, which is the route, the severity of a finding and whether a gate
+   passed. Everything else is grey. */
+@theme {
+  --color-ink: #14171f;
+  --color-muted: #5b6472;
+  --color-line: #e2e6ec;
+  --color-surface: #ffffff;
+  --color-canvas: #f6f7f9;
+  --color-pass: #17724a;
+  --color-warn: #8a5a00;
+  --color-fail: #a32020;
+  --color-accent: #1f4e79;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}

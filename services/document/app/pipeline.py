@@ -14,9 +14,9 @@ from typing import Any
 
 from app.classify import Classification, classify
 from app.extract import ExtractedField, extract_fields
-from app.ocr import read_lines
+from app.ocr import ocr_available, read_lines
 from app.storage import ALLOWED_MIME, MAX_BYTES, MAX_PAGES
-from cio_common.errors import ValidationFailed
+from cio_common.errors import ReaderUnavailable, ValidationFailed
 from cio_common.hashing import sha256
 from cio_common.ids import new_id
 
@@ -116,6 +116,16 @@ def process(
     """Read a document: classify it, extract its fields, mint its evidence."""
     check_upload(mime=mime, size=len(data))
     document_id = document_id or new_id("doc")
+
+    # Checked before any work: a document read without OCR has no word spans,
+    # so every field would come back unanchored and the document would be
+    # recorded as processed and empty. An unread document must not reach an
+    # officer looking like a blank one (docs/07 §1.3).
+    if not ocr_available():
+        raise ReaderUnavailable(
+            "the OCR engine is not installed, so no document can be read",
+            document_id=document_id,
+        )
 
     pages, page_count = _render_pages(data, mime)
     first = pages[0]

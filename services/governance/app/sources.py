@@ -27,6 +27,10 @@ class DecisionBundle:
     model_run: dict[str, Any] | None = None
     fraud: dict[str, Any] | None = None
     documents: dict[str, Any] | None = None
+    #: One entry per document: the fields read from it, with the box each was
+    #: read from. This is what lets an officer check a value against the paper
+    #: rather than take the explanation's word for it (docs/09 §3.7).
+    extractions: list[dict[str, Any]] = field(default_factory=list)
     human_decision: dict[str, Any] | None = None
     policy: dict[str, Any] | None = None
     sources: dict[str, str] = field(default_factory=dict)
@@ -100,16 +104,37 @@ class HttpExplainSource:
                 else _none(),
             )
 
+            # The field boxes live one call further in, per document. Fetched
+            # here rather than in the explanation builder so the builder stays
+            # a pure function of what was gathered.
+            listed = (documents or {}).get("documents") or []
+            extractions = [
+                extraction
+                for extraction in await asyncio.gather(
+                    *(
+                        self._get(
+                            client,
+                            f"{self._urls['document']}/documents/{row['document_id']}/extraction",
+                        )
+                        for row in listed
+                        if row.get("document_id")
+                    )
+                )
+                if extraction
+            ]
+
         return DecisionBundle(
             decision=decision,
             model_run=model_run,
             fraud=fraud,
             documents=documents,
+            extractions=extractions,
             sources={
                 "decision": "decision",
                 "model_run": "risk" if model_run else "unavailable",
                 "fraud": "fraud" if fraud else "unavailable",
                 "documents": "document" if documents else "unavailable",
+                "extractions": "document" if extractions else "unavailable",
             },
         )
 

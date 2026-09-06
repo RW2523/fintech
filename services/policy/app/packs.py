@@ -16,6 +16,8 @@ from typing import Any
 import yaml
 from jsonschema import Draft202012Validator
 
+from cio_common.assets import policy_pack_root
+
 __all__ = [
     "PackError",
     "PolicyPack",
@@ -42,11 +44,7 @@ class PackError(ValueError):
 
 def pack_root() -> Path:
     """Where packs live. Overridden in tests via CIO_POLICY_PACK_ROOT."""
-    import os
-
-    if override := os.environ.get("CIO_POLICY_PACK_ROOT"):
-        return Path(override)
-    return Path(__file__).resolve().parents[3] / "policy_packs"
+    return policy_pack_root()
 
 
 @lru_cache(maxsize=8)

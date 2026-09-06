@@ -69,6 +69,61 @@ async def append_recommendation(body: RecommendationRequest) -> dict[str, Any]:
     }
 
 
+#: docs/09 §2 — the officer queue is sorted by how much attention a case needs,
+#: not by when it arrived. A compliance review left for later is a worse
+#: outcome than an officer review left for later.
+ROUTE_PRIORITY = (
+    "COMPLIANCE_REVIEW",
+    "COMPLIANCE",
+    "ENHANCED_ASSESSMENT",
+    "COMMITTEE",
+    "SENIOR_REVIEW",
+    "OFFICER_REVIEW",
+    "MANUAL_FALLBACK",
+    "AUTONOMOUS",
+)
+
+
+@router.get("/queue", summary="Decisions waiting for a person")
+async def queue(route: str | None = None, limit: int = 100) -> dict[str, Any]:
+    """Every recorded decision that still needs someone, worst first.
+
+    Read from the ledger rather than from a work table, because the ledger is
+    the record: a queue built beside it could disagree with what was decided.
+    """
+    async with session() as db:
+        rows = await ledger.decision_records(db, limit=min(limit, 500))
+
+    order = {name: index for index, name in enumerate(ROUTE_PRIORITY)}
+    entries = []
+    for row in rows:
+        record = row["payload"]
+        if route and str(record.get("route")) != route:
+            continue
+        entries.append(
+            {
+                "decision_record_id": record.get("decision_record_id"),
+                "case_id": row.get("case_id"),
+                "snapshot_id": record.get("snapshot_id"),
+                "member_id": row.get("member_id"),
+                "tier": record.get("tier"),
+                "route": record.get("route"),
+                "route_reasons": record.get("route_reasons") or [],
+                "recommendation": record.get("recommendation"),
+                "confidence": record.get("confidence"),
+                "disagreement": record.get("disagreement"),
+                "weighted_score": record.get("weighted_score"),
+                "required_authority": record.get("required_authority"),
+                "challenger_open": record.get("challenger_open"),
+                "created_at": row.get("created_at"),
+                "decided": row.get("decided", False),
+            }
+        )
+
+    entries.sort(key=lambda e: (order.get(str(e["route"]), len(order)), str(e["created_at"])))
+    return {"count": len(entries), "routes": list(ROUTE_PRIORITY), "decisions": entries}
+
+
 @router.get("/decision-records/{record_id}", summary="One decision record")
 async def get_record(record_id: str) -> dict[str, Any]:
     async with session() as db:
@@ -76,7 +131,7 @@ async def get_record(record_id: str) -> dict[str, Any]:
             (
                 await db.execute(
                     text("""
-            SELECT body, superseded_by FROM app_decision.decision_record
+            SELECT body, superseded_by, case_id FROM app_decision.decision_record
             WHERE decision_record_id = :id
         """),
                     {"id": record_id},
@@ -89,7 +144,11 @@ async def get_record(record_id: str) -> dict[str, Any]:
         raise NotFound(f"no decision record {record_id!r}")
     body = row["body"]
     record = json.loads(body) if isinstance(body, str) else body
-    return {**record, "superseded_by": row["superseded_by"]}
+    # The case id is the ledger's own column rather than part of the record
+    # contract, and it is returned alongside for the same reason superseded_by
+    # is: a reader holding a record id should not need a second query to find
+    # the case whose documents and findings the record rests on.
+    return {**record, "superseded_by": row["superseded_by"], "case_id": row["case_id"]}
 
 
 # ---------------------------------------------------------------------------

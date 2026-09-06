@@ -4,13 +4,27 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 5173",
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit"
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.102.8",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.3",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "typescript": "^5.7.2"
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.7.2",
+    "vite": "^8.2.2"
   }
 }

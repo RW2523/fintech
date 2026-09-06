@@ -223,3 +223,57 @@ async def verify(
         expected_prev = entry.hash
 
     return not breaks, breaks, len(rows)
+
+
+async def decision_records(
+    db: AsyncSession, *, limit: int = 200, decided_kinds: tuple[str, ...] = ("HUMAN_DECISION",)
+) -> list[dict[str, Any]]:
+    """The current decision on each case, newest first, and whether a person
+    has answered it.
+
+    Read from the ledger rather than from a work table beside it. A queue kept
+    separately can disagree with what was actually decided, and the ledger is
+    the record.
+
+    One row per case, not one per entry. A case that is re-assessed appends a
+    new record without removing the old one, and a queue that listed both would
+    show the same case twice and invite an officer to act on a superseded
+    recommendation. The whole chain is still readable through `/ledger`.
+    """
+    rows = (
+        (
+            await db.execute(
+                text("""
+        WITH latest AS (
+          SELECT DISTINCT ON (COALESCE(case_id, entry_id))
+                 seq, entry_id, case_id, member_id, payload, created_at
+            FROM ledger.entry
+           WHERE kind = 'DECISION_RECORD'
+           ORDER BY COALESCE(case_id, entry_id), seq DESC
+        ),
+        records AS (
+          SELECT * FROM latest ORDER BY seq DESC LIMIT :limit
+        )
+        SELECT r.*,
+               EXISTS (
+                 SELECT 1 FROM ledger.entry d
+                  WHERE d.case_id = r.case_id
+                    AND d.kind = ANY(:decided_kinds)
+                    AND d.seq > r.seq
+               ) AS decided
+          FROM records r
+         ORDER BY r.seq DESC
+    """),
+                {"limit": limit, "decided_kinds": list(decided_kinds)},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        body = dict(row)
+        payload = body.get("payload")
+        body["payload"] = json.loads(payload) if isinstance(payload, str) else payload
+        out.append(body)
+    return out

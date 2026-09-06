@@ -13,6 +13,7 @@ __all__ = [
     "LlmUnavailable",
     "NotFound",
     "PolicyBlocked",
+    "ReaderUnavailable",
     "TokenInvalid",
     "ValidationFailed",
 ]
@@ -61,6 +62,18 @@ class PolicyBlocked(CioError):
 
 class TokenInvalid(CioError):
     code, status = "TOKEN_INVALID", 403
+
+
+class ReaderUnavailable(CioError):
+    """A deterministic reader the service depends on is not installed.
+
+    Distinct from LlmUnavailable: a missing model can be worked around by
+    degrading to the record, whereas a missing OCR engine means the bytes were
+    never read at all. Reporting that as an empty extraction would put an
+    unread document in front of an officer as though it were a blank one.
+    """
+
+    code, status = "READER_UNAVAILABLE", 503
 
 
 class KillSwitchActive(CioError):

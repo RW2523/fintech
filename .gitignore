@@ -39,3 +39,7 @@ synthetic/out/
 .vscode/
 .idea/
 .DS_Store
+
+# Playwright run artefacts
+apps/web/test-results/
+apps/web/playwright-report/

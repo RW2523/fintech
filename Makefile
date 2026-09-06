@@ -143,6 +143,16 @@ test:  ## unit + contract tests (no docker)
 test-int:  ## integration tests against the running stack
 	@$(UV) run pytest -m integration tests/integration
 
+.PHONY: seed-demo
+seed-demo:  ## put decided golden cases in front of the workbench
+	@$(UV) run python scripts/seed_demo_case.py
+
+.PHONY: test-e2e
+test-e2e:  ## Playwright smoke over the officer workbench (needs 'make up')
+	@if [ ! -d apps/web/node_modules ]; then \
+	  echo "  apps/web: run 'npm install' there first"; exit 2; fi
+	@cd apps/web && npx playwright test
+
 .PHONY: harness
 harness:  ## evaluation harness over golden + adversarial sets
 	@$(MAKE) todo TASK=T-080

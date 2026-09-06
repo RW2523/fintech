@@ -59,10 +59,23 @@ fi
 # --- memory (docs/02 §4.3 budgets ~104 GB) ---------------------------------
 MEM_TOTAL_GB=$(awk '/MemTotal/{printf "%d", $2/1048576}' /proc/meminfo)
 MEM_AVAIL_GB=$(awk '/MemAvailable/{printf "%d", $2/1048576}' /proc/meminfo)
+
+# Memory the platform already holds is not a shortfall: it is the platform
+# doing the job this row is asking whether the host can do. Reporting a busy
+# host as unfit to start would tell a developer to free memory that freeing
+# would mean stopping the very stack they are checking.
+STACK_UP=0
+if command -v docker >/dev/null 2>&1; then
+  RUNNING=$(docker ps --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME:-cio}" --format '{{.ID}}' 2>/dev/null | wc -l)
+  [ "${RUNNING:-0}" -gt 0 ] && STACK_UP=1
+fi
+
 if [ "$MEM_AVAIL_GB" -ge 96 ]; then
   row "memory available" PASS "${MEM_AVAIL_GB} GB of ${MEM_TOTAL_GB} GB"
 elif [ "$MEM_AVAIL_GB" -ge 40 ]; then
   row "memory available" WARN "${MEM_AVAIL_GB} GB of ${MEM_TOTAL_GB} GB (< 96 GB; shrink the model budget in docs/02 §4.3 or free the host)"
+elif [ "$STACK_UP" -eq 1 ]; then
+  row "memory available" WARN "${MEM_AVAIL_GB} GB of ${MEM_TOTAL_GB} GB free, with ${RUNNING} platform containers running and holding the rest"
 else
   row "memory available" FAIL "${MEM_AVAIL_GB} GB of ${MEM_TOTAL_GB} GB (too little to serve a local model)"
 fi

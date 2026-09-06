@@ -172,6 +172,31 @@ def _provenance_level(bundle: DecisionBundle) -> list[dict[str, Any]]:
                 "source_system": "document",
             }
         )
+    # One entry per extracted field, carrying the box it was read from. A
+    # document on its own tells a reader which paper was looked at; only the
+    # field tells them where on it, which is the question they have.
+    for extraction in bundle.extractions:
+        document_id = extraction.get("document_id")
+        for read in extraction.get("fields") or []:
+            if read.get("value") is None:
+                continue
+            out.append(
+                {
+                    "evidence_id": read.get("evidence_id"),
+                    "document_id": document_id,
+                    "type": "DOCUMENT_FIELD",
+                    "source_system": "document",
+                    "source_record_id": document_id,
+                    "display": f"{read.get('field')} = {read.get('value')}",
+                    "confidence": read.get("conf"),
+                    "locator": {
+                        "document_id": document_id,
+                        "page": read.get("page", 1),
+                        "field_path": read.get("field"),
+                        **({"bbox": read["bbox"]} if read.get("bbox") else {}),
+                    },
+                }
+            )
     for finding in (bundle.fraud or {}).get("findings") or []:
         out.append(
             {
@@ -221,6 +246,7 @@ def build_explanation(bundle: DecisionBundle) -> Explanation:
         | collect_identifiers(bundle.model_run)
         | collect_identifiers(bundle.fraud)
         | collect_identifiers(bundle.documents)
+        | collect_identifiers(bundle.extractions)
         | collect_identifiers(bundle.human_decision)
     )
     cited = collect_identifiers(explanation.as_dict())

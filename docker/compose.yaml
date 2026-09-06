@@ -604,15 +604,6 @@ services:
       HF_HOME: /hf
       HF_TOKEN: ${HF_TOKEN:-}
     volumes: ["${HF_HOME:-/data/hf}:/hf"]
-    # The GB10 has to be handed to the container explicitly; without this the
-    # image starts, finds no device and serves nothing (docs/02 §3).
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     ports: ["${BIND_ADDR:-0.0.0.0}:${VLLM_PORT:-8100}:8100"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8100/health || exit 1"]
@@ -637,15 +628,6 @@ services:
       HF_HOME: /hf
       HF_TOKEN: ${HF_TOKEN:-}
     volumes: ["${HF_HOME:-/data/hf}:/hf"]
-    # The GB10 has to be handed to the container explicitly; without this the
-    # image starts, finds no device and serves nothing (docs/02 §3).
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     ports: ["${BIND_ADDR:-0.0.0.0}:${VLLM_VISION_PORT:-8101}:8101"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8101/health || exit 1"]
