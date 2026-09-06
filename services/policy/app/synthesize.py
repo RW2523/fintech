@@ -223,10 +223,41 @@ def _counterfactuals(
     return entries[:4]
 
 
+def _watching_recommendation(weighted: float, thresholds: dict[str, float]) -> str:
+    """What to do about a member nobody has applied for anything (docs/08 §8.2).
+
+    A different vocabulary on purpose. An early-warning case cannot approve or
+    decline anything: the member has a facility already and is not asking for
+    another, so the only question is whether somebody should reach out, keep
+    watching, or stop.
+
+    The same weighted score drives it, read the other way up: a member scoring
+    like an approval is one whose behaviour is fine, and the concern that
+    opened the case can be stood down.
+    """
+    if weighted >= thresholds["approve"]:
+        return "DE_ESCALATE"
+    if weighted < thresholds["decline"]:
+        return "INTERVENE"
+    return "MONITOR"
+
+
 def _empty_narrative() -> dict[str, Any]:
     """Narratives are generated last, by the orchestrator (docs/06 §8)."""
     blank = {"text": "", "status": "NONE"}
     return {"member": dict(blank), "officer": dict(blank), "auditor": dict(blank)}
+
+
+def _prohibited_levels(inputs: SynthesisInputs) -> set[str]:
+    """Action levels this kind of case may never take (docs/05 §6).
+
+    An early-warning case may not take an L3 action. The member has not applied
+    for anything and has not been told they are being watched, and a platform
+    that can restructure their facility on the strength of a drift it noticed
+    is a platform acting against somebody who never asked it to look.
+    """
+    block = inputs.autonomy.get("prohibited_for_case_type") or {}
+    return {str(level) for level in (block.get(inputs.case_type) or [])}
 
 
 def _proposed_actions(inputs: SynthesisInputs) -> list[dict[str, Any]]:
@@ -235,7 +266,12 @@ def _proposed_actions(inputs: SynthesisInputs) -> list[dict[str, Any]]:
     Deduplicated by action id, because a repair proposal and an agent asking
     for the same document are one request to the officer, not two. The first
     occurrence wins, so an agent's own rationale survives.
+
+    Proposals at a level this case type prohibits are dropped here rather than
+    refused later: an action that reaches the record is one an officer can
+    approve, and offering one the pack forbids invites exactly that.
     """
+    prohibited = _prohibited_levels(inputs)
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
     for proposal in [
@@ -244,6 +280,8 @@ def _proposed_actions(inputs: SynthesisInputs) -> list[dict[str, Any]]:
     ]:
         key = str(proposal.get("action_id") or "")
         if key and key in seen:
+            continue
+        if str(proposal.get("level") or "") in prohibited:
             continue
         seen.add(key)
         out.append(dict(proposal))
@@ -433,7 +471,9 @@ def synthesize(inputs: SynthesisInputs) -> dict[str, Any]:
 
     thresholds = inputs.dff["thresholds"]
     record["recommendation"] = (
-        "APPROVE"
+        _watching_recommendation(weighted, thresholds)
+        if inputs.case_type == "EARLY_WARNING"
+        else "APPROVE"
         if weighted >= thresholds["approve"]
         else "DECLINE"
         if weighted < thresholds["decline"]

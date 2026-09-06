@@ -234,3 +234,35 @@ def test_any_other_transition_closes_nothing() -> None:
     for alert in open_alerts:
         alert.member_id = "M-000042"
     assert close_on_recovery(open_alerts, transition(), at=TODAY) == []
+
+
+def test_the_line_opens_with_what_actually_raised_it() -> None:
+    """A CRITICAL raised on a payment two months late that opens with "days to
+    pay moved from 17 to 13" reads as an error, and an officer who spots one
+    stops trusting the rest."""
+    line = why_now(
+        signal="days to pay",
+        baseline=17.0,
+        current=13.0,
+        days=30,
+        change_point=None,
+        corroboration={},
+        rule="LATE_BEYOND_30_DAYS",
+    )
+    assert line.startswith("a payment is more than thirty days late")
+    # The drift is still stated: it is what the officer looks at once they open
+    # the case.
+    assert "17 to 13" in line
+
+
+def test_a_rule_with_no_opening_falls_back_to_the_movement() -> None:
+    line = why_now(
+        signal="days to pay",
+        baseline=1.0,
+        current=9.0,
+        days=30,
+        change_point=None,
+        corroboration={},
+        rule="CHANGE_POINT_CORROBORATED",
+    )
+    assert line.startswith("days to pay moved from 1 to 9")

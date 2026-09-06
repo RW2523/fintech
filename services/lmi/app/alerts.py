@@ -104,6 +104,19 @@ def rank_value(*, p90: float | None, exposure: float, contact_response_rate: flo
     return float(p90) * float(exposure) * (1.0 + uplift)
 
 
+#: What each rule is actually about, so the line names the reason rather than
+#: describing a drift on a member whose rule was about something else. A
+#: CRITICAL raised on a payment two months late that opens with "days to pay
+#: moved from 17 to 13" reads as an error, and an officer who spots one stops
+#: trusting the rest.
+RULE_OPENINGS: dict[str, str] = {
+    "LATE_BEYOND_30_DAYS": "a payment is more than thirty days late",
+    "FRAUD_HIGH": "an integrity finding of high severity is open",
+    "P30_HIGH_TWO_FAMILIES": "the model puts this member at high risk and two families agree",
+    "DEDUCTION_MISSED": "a salary deduction cycle was missed",
+}
+
+
 def why_now(
     *,
     signal: str,
@@ -112,16 +125,20 @@ def why_now(
     days: int,
     change_point: str | None,
     corroboration: dict[str, Any],
+    rule: str | None = None,
 ) -> str:
     """docs/07 §4.7 — the sentence an officer reads first.
 
-    Names the signal, what it was, what it is, over how long, and what agrees
-    or explains it. Everything an officer needs to decide whether to open the
-    case, in one line.
+    Opens with what actually raised the alert, then what agrees or explains it.
+    Everything an officer needs to decide whether to open the case, in one
+    line.
     """
-    parts = [
-        f"{signal} moved from {baseline:g} to {current:g} over {days} days",
-    ]
+    opening = RULE_OPENINGS.get(str(rule or ""))
+    parts = [opening if opening else f"{signal} moved from {baseline:g} to {current:g} over {days} days"]
+    # The drift is still worth stating when it is not the headline, because it
+    # is what the officer will look at once they open the case.
+    if opening and abs(current - baseline) >= 1:
+        parts.append(f"{signal} moved from {baseline:g} to {current:g} over {days} days")
     if change_point:
         parts.append(f"change-point {change_point}")
 
@@ -201,6 +218,7 @@ def raise_alert(
             days=30,
             change_point=change_point,
             corroboration=transition.get("corroboration") or {},
+            rule=str(transition.get("rule") or ""),
         ),
         p90=p90,
         exposure=exposure,

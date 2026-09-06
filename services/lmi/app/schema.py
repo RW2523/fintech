@@ -50,6 +50,55 @@ CREATE TABLE IF NOT EXISTS app_lmi.materialisation (
   finished_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS materialisation_by_as_of ON app_lmi.materialisation (as_of DESC);
+
+-- Where each member stands, and every move they made to get there.
+--
+-- Current state is a row, and history is the whole table: an officer asking
+-- "why is this member ELEVATED" needs the transition that put them there, with
+-- the rule and the reason, not just the label.
+CREATE TABLE IF NOT EXISTS app_lmi.member_state (
+  member_id  text PRIMARY KEY,
+  state      text NOT NULL,
+  since      date NOT NULL,
+  rule       text NOT NULL,
+  reason     text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS app_lmi.state_transition (
+  transition_id text PRIMARY KEY,
+  member_id     text NOT NULL,
+  at            date NOT NULL,
+  from_state    text NOT NULL,
+  to_state      text NOT NULL,
+  rule          text NOT NULL,
+  reason        text NOT NULL,
+  corroboration jsonb NOT NULL DEFAULT '{}'::jsonb,
+  evidence_ids  jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS transition_by_member ON app_lmi.state_transition (member_id, at DESC);
+
+-- One open alert per account, deduplicated on the signal set that raised it.
+CREATE TABLE IF NOT EXISTS app_lmi.alert (
+  alert_id      text PRIMARY KEY,
+  member_id     text NOT NULL,
+  account_id    text,
+  state         text NOT NULL,
+  signals       jsonb NOT NULL DEFAULT '[]'::jsonb,
+  rank_value    double precision NOT NULL DEFAULT 0,
+  why_now       text NOT NULL,
+  p90           double precision,
+  exposure      numeric(18,2) NOT NULL DEFAULT 0,
+  change_point  date,
+  corroboration jsonb NOT NULL DEFAULT '{}'::jsonb,
+  case_id       text,
+  opened_at     date NOT NULL DEFAULT current_date,
+  closed_at     date,
+  close_reason  text
+);
+CREATE INDEX IF NOT EXISTS alert_open ON app_lmi.alert (rank_value DESC) WHERE closed_at IS NULL;
+CREATE INDEX IF NOT EXISTS alert_by_member ON app_lmi.alert (member_id, opened_at DESC);
 """
 
 

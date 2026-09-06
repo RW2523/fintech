@@ -706,3 +706,71 @@ def test_a_repair_proposal_reaches_the_record(std_pack: PolicyPack) -> None:
 
     assert record["proposed_actions"] == [proposal]
     cio_contracts.validate(as_contract(record), "DecisionRecord")
+
+
+# ---------------------------------------------------------------------------
+# T-064 — an early-warning case (docs/08 §8.2, docs/05 §6)
+# ---------------------------------------------------------------------------
+def _intervention(level: str = "L2", action_type: str = "OFFICER_OUTREACH") -> dict[str, Any]:
+    return {
+        "schema": "action_proposal/1.0",
+        "action_id": f"act_01JQZK7M8N9P0Q1R2S3T4V5W{level[-1]}X",
+        "level": level,
+        "type": action_type,
+        "parameters": {},
+        "rationale": {"text": "the member's payment timing has drifted", "evidence_refs": []},
+        "requires": "OFFICER",
+        "proposed_by": "intervention_planner",
+        "state": "PROPOSED",
+    }
+
+
+def test_an_early_warning_case_cannot_approve_or_decline(std_pack: PolicyPack) -> None:
+    """The member has a facility already and is not asking for another, so the
+    only question is whether somebody should reach out, keep watching, or
+    stop."""
+    record = synth(std_pack, case_type="EARLY_WARNING", tier="STANDARD")
+    assert record["recommendation"] in ("INTERVENE", "MONITOR", "DE_ESCALATE")
+
+
+def test_a_member_behaving_well_stands_the_concern_down(std_pack: PolicyPack) -> None:
+    record = synth(std_pack, case_type="EARLY_WARNING", tier="STANDARD")
+    assert record["recommendation"] == "DE_ESCALATE"
+
+
+def test_a_member_scoring_badly_is_worth_reaching_out_to(std_pack: PolicyPack) -> None:
+    record = synth(
+        std_pack,
+        case_type="EARLY_WARNING",
+        tier="STANDARD",
+        factors=factors(CAPACITY=30, CONDUCT=31, COMMITMENT=30, CONDITIONS=30, INTEGRITY=40),
+    )
+    assert record["recommendation"] == "INTERVENE"
+
+
+def test_an_early_warning_case_may_never_carry_an_l3_action(std_pack: PolicyPack) -> None:
+    """A platform that can restructure a facility on the strength of a drift it
+    noticed is a platform acting against somebody who never asked it to look."""
+    record = synth(
+        std_pack,
+        case_type="EARLY_WARNING",
+        tier="STANDARD",
+        proposed_actions=(_intervention("L3", "RESTRUCTURE"), _intervention("L2")),
+    )
+    levels = {action["level"] for action in record["proposed_actions"]}
+    assert levels == {"L2"}
+
+
+def test_an_origination_case_keeps_its_l3_actions(std_pack: PolicyPack) -> None:
+    record = synth(std_pack, proposed_actions=(_intervention("L3", "APPROVE_FINANCING"),))
+    assert [action["level"] for action in record["proposed_actions"]] == ["L3"]
+
+
+def test_an_early_warning_record_is_a_valid_contract(std_pack: PolicyPack) -> None:
+    record = synth(
+        std_pack,
+        case_type="EARLY_WARNING",
+        tier="STANDARD",
+        proposed_actions=(_intervention("L2"), _intervention("L1", "REQUEST_DOCUMENT")),
+    )
+    cio_contracts.validate(as_contract(record), "DecisionRecord")

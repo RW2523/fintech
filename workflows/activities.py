@@ -351,6 +351,149 @@ async def execute_action(
         raise
 
 
+# ---------------------------------------------------------------------------
+# the early-warning case (docs/08 §8.2)
+# ---------------------------------------------------------------------------
+@activity.defn
+async def read_member_watch(case: CaseRef) -> dict[str, Any]:
+    """Where the state machine has put this member, and what it saw.
+
+    Read rather than recomputed: the nightly pass already decided, and a case
+    that recomputed the state would be able to disagree with the alert that
+    opened it.
+    """
+    try:
+        state = await _get("lmi", 8008, f"/lmi/state/{case.member_id}")
+    except httpx.HTTPError:
+        # A member the engine cannot speak about is not a member in trouble.
+        return {"state": "STABLE", "available": False}
+
+    features: dict[str, Any] = {}
+    scores: dict[str, Any] = {}
+    try:
+        features = await _get("lmi", 8008, f"/lmi/features/{case.member_id}")
+        scores = await _post("lmi", 8008, "/lmi/score", {"member_id": case.member_id})
+    except httpx.HTTPError:
+        # The state stands without them; the Council is told what is missing
+        # rather than handed zeros.
+        pass
+
+    return {
+        "state": state.get("state"),
+        "since": state.get("since"),
+        "rule": state.get("rule"),
+        "reason": state.get("reason"),
+        "transitions": state.get("transitions") or [],
+        "features": features.get("features") or {},
+        "stale_days": features.get("stale_days"),
+        "scores": scores.get("scores") or [],
+        "model_version": scores.get("model_version"),
+        "available": True,
+    }
+
+
+@activity.defn
+async def run_longitudinal_council(case: CaseRef, alert_id: str, watch: dict[str, Any]) -> dict[str, Any]:
+    """The Longitudinal Council, through the committee orchestrator.
+
+    The same orchestrator as an application: the case type is what differs, and
+    keeping one state machine means an early-warning deliberation is auditable
+    the same way an origination one is.
+    """
+    scores = {int(s["horizon_days"]): s for s in watch.get("scores") or []}
+    p30 = scores.get(30, {})
+
+    request = {
+        "snapshot": {
+            "snapshot_id": case.snapshot_id or f"snap_{case.case_id[5:]}",
+            "case_id": case.case_id,
+            "product_code": case.product_code,
+            "amount": case.requested_amount,
+            "member": {"member_ref": case.member_id},
+        },
+        "policy_result": {
+            "blockers": [],
+            "flags": [],
+            "rules": [],
+            "evidence_coverage": 1.0 if watch.get("features") else 0.0,
+            "required_authority": "CREDIT_OFFICER",
+            "policy_version": f"policy/{case.product_code}/2026.09.1",
+        },
+        "case_type": "EARLY_WARNING",
+        "tier": "STANDARD",
+        # What the Council is reasoning about, so an opinion can cite it.
+        "tool_results": {
+            "behaviour_trend": [
+                {"tool": "state.get", "result": watch, "evidence_refs": []},
+            ],
+            "forecast_scenario": [
+                {"tool": "lmi.score", "result": {"scores": watch.get("scores")}, "evidence_refs": []},
+            ],
+        },
+        "model_health": "GREEN" if watch.get("available") else "AMBER",
+    }
+
+    try:
+        body = await _post("committee", 8009, "/committee/runs", request, timeout=_COMMITTEE_TIMEOUT)
+    except httpx.HTTPError:
+        # No deliberation. The case still gets a record, from the state machine
+        # and the model, because an alert nobody can act on is worse than one
+        # decided without agents.
+        return {
+            "decision_record_id": "",
+            "recommendation": "MONITOR" if watch.get("state") != "CRITICAL" else "INTERVENE",
+            "route": "OFFICER_REVIEW",
+            "proposed_actions": [],
+            "degraded": True,
+            "detail": "the committee was unavailable; decided from the state and the model",
+            "p30": p30.get("probability"),
+        }
+
+    record = dict(body.get("decision_record") or {})
+    return {
+        "decision_record_id": record.get("decision_record_id", ""),
+        "recommendation": record.get("recommendation", "MONITOR"),
+        "route": record.get("route", "OFFICER_REVIEW"),
+        "proposed_actions": record.get("proposed_actions") or [],
+        "degraded": bool(body.get("degraded_agents")),
+        "p30": p30.get("probability"),
+    }
+
+
+@activity.defn
+async def carry_out_intervention(
+    case: CaseRef, decision_record_id: str, action_ids: list[str], signal: dict[str, Any]
+) -> dict[str, Any]:
+    """Carry out the actions a person approved, and no others.
+
+    Each is proposed to the execution service and executed under the approver's
+    name. An action nobody approved is not attempted, and one that fails leaves
+    the rest alone: these are separate contacts with a member, not a
+    transaction.
+    """
+    executed: list[str] = []
+    failed: list[dict[str, Any]] = []
+
+    for action_id in action_ids:
+        try:
+            await _post(
+                "execution",
+                8013,
+                f"/actions/{action_id}/execute",
+                {"token_id": f"tok_{action_id[4:]}", "product_code": case.product_code},
+            )
+            executed.append(action_id)
+        except httpx.HTTPError as exc:
+            failed.append({"action_id": action_id, "detail": str(exc)})
+
+    return {
+        "executed": executed,
+        "failed": failed,
+        "approved_by": signal.get("actor_id"),
+        "decision_record_id": decision_record_id,
+    }
+
+
 #: Registered with the worker in workflows/worker.py.
 ACTIVITIES: list[Callable[..., Any]] = [
     freeze_snapshot,
@@ -362,6 +505,9 @@ ACTIVITIES: list[Callable[..., Any]] = [
     decide,
     record_decision,
     execute_action,
+    read_member_watch,
+    run_longitudinal_council,
+    carry_out_intervention,
     record_human_decision,
     issue_token,
 ]

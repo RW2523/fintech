@@ -15,10 +15,12 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
+from app import repository
 from app.anomaly import score_book
 from app.config import load_config
 from app.db import session
 from app.detect import latest_features, run_detection
+from app.evaluate import evaluate_book
 from app.materialise import materialise
 from cio_common.errors import NotFound, ValidationFailed
 
@@ -328,4 +330,163 @@ async def model_version() -> dict[str, Any]:
             for name in ("time_to_first_late", "time_to_cure")
             if model.survival.get(name)
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# the nightly pass, and what the longitudinal agents read (docs/07 §4.5-4.7)
+# ---------------------------------------------------------------------------
+class EvaluateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: str | None = None
+    member_ids: list[str] | None = Field(default=None, max_length=10_000)
+    cap: int = Field(default=25, ge=1, le=500)
+    officers: int = Field(default=1, ge=1, le=100)
+
+
+@router.post("/lmi/evaluate", summary="Detect, decide and alert over the book")
+async def evaluate(body: EvaluateRequest) -> dict[str, Any]:
+    """One pass: what changed, what that means, and who should look.
+
+    The three steps run together and see the same evidence. A state change
+    justified by a change-point the alert does not mention is a case an officer
+    cannot follow.
+    """
+    as_of = date.fromisoformat(body.as_of) if body.as_of else _today()
+
+    model = None
+    try:
+        model = early_warning_model()
+    except Exception:
+        # The machine still runs: it loses the probability, and the transitions
+        # that need one simply do not fire. Refusing to evaluate at all would
+        # mean a missing model stops the platform noticing anything.
+        model = None
+
+    async with session() as db:
+        run = await evaluate_book(
+            db,
+            as_of=as_of,
+            member_ids=body.member_ids,
+            model=model,
+            cap=body.cap,
+            officers=body.officers,
+        )
+        await db.commit()
+
+    return {**run.as_dict(), "scored": model is not None}
+
+
+@router.get("/lmi/state/{member_id}", summary="Where a member stands, and how they got there")
+async def member_state(member_id: str) -> dict[str, Any]:
+    """The current state with the transitions behind it.
+
+    An officer asking why a member is ELEVATED needs the move that put them
+    there, with its rule and its reason. A label on its own is not an answer.
+    """
+    async with session() as db:
+        stored = await repository.current_state(db, member_id)
+        history = await repository.transitions_for(db, member_id)
+
+    if stored is None:
+        # Not an error: a member nobody has evaluated is STABLE by default, and
+        # saying so is more use than a 404 to a caller drawing a timeline.
+        return {
+            "member_id": member_id,
+            "state": "STABLE",
+            "since": None,
+            "evaluated": False,
+            "transitions": [],
+        }
+
+    return {
+        "member_id": member_id,
+        "state": stored["state"],
+        "since": stored["since"].isoformat(),
+        "rule": stored["rule"],
+        "reason": stored["reason"],
+        "evaluated": True,
+        "transitions": [
+            {**move, "at": move["at"].isoformat(), "created_at": move["created_at"].isoformat()}
+            for move in history
+        ],
+    }
+
+
+@router.get("/lmi/states", summary="Every member in a state")
+async def states(state: str | None = None, limit: int = Query(default=200, ge=1, le=5000)) -> dict[str, Any]:
+    async with session() as db:
+        rows = await repository.member_states(db, state=state, limit=limit)
+    return {
+        "count": len(rows),
+        "members": [
+            {**row, "since": row["since"].isoformat(), "updated_at": row["updated_at"].isoformat()}
+            for row in rows
+        ],
+    }
+
+
+@router.get("/lmi/alerts", summary="What an officer should look at")
+async def alerts(
+    member_id: str | None = None, limit: int = Query(default=50, ge=1, le=500)
+) -> dict[str, Any]:
+    """Highest value first. Everything below the cap stays open for tomorrow."""
+    async with session() as db:
+        rows = await repository.open_alerts(db, member_id=member_id, limit=limit)
+    return {"count": len(rows), "alerts": rows}
+
+
+class CloseAlertRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=3, max_length=500)
+    at: str | None = None
+
+
+@router.post("/lmi/alerts/{alert_id}/close", summary="Close an alert")
+async def close_alert(alert_id: str, body: CloseAlertRequest) -> dict[str, Any]:
+    """A platform that raises concerns and never withdraws them teaches people
+    to ignore it, so closing is a first-class action rather than a cleanup."""
+    at = date.fromisoformat(body.at) if body.at else _today()
+    async with session() as db:
+        closed = await repository.close_alert(db, alert_id, at=at, reason=body.reason)
+        await db.commit()
+    if not closed:
+        raise NotFound(f"no open alert {alert_id!r}", alert_id=alert_id)
+    return {"alert_id": alert_id, "closed_at": at.isoformat(), "reason": body.reason}
+
+
+@router.get("/lmi/baseline/{member_id}", summary="What normal looks like for this member")
+async def baseline(member_id: str, as_of: str | None = None) -> dict[str, Any]:
+    """The habit every departure is measured against.
+
+    Served separately from the features because it is the thing an officer
+    argues with: "is nine days late unusual" is answered by this and by nothing
+    else on the case.
+    """
+    cutoff = date.fromisoformat(as_of) if as_of else _today()
+    async with session() as db:
+        row = (
+            (
+                await db.execute(
+                    text("""
+            SELECT as_of, baselines FROM app_lmi.temporal_features
+             WHERE member_id = :member_id AND as_of <= :cutoff
+             ORDER BY as_of DESC LIMIT 1
+        """),
+                    {"member_id": member_id, "cutoff": cutoff},
+                )
+            )
+            .mappings()
+            .first()
+        )
+    if row is None:
+        raise NotFound(f"no baseline for {member_id!r}", member_id=member_id)
+
+    body = row["baselines"]
+    return {
+        "member_id": member_id,
+        "as_of": row["as_of"].isoformat(),
+        "baselines": json.loads(body) if isinstance(body, str) else body,
     }
