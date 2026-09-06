@@ -69,14 +69,17 @@ THRESHOLDS: dict[str, tuple[float, str]] = {
 #: about aggregates or about the asker's own record.
 INDIVIDUAL = re.compile(r"\b(M-\d{4,}|A-\d{4,}|case_[0-9A-HJKMNP-TV-Z]{6,})\b")
 
-#: A number in prose, normalised so 2,201.15 matches 2201.15. Years are not
-#: claims about a case.
-_NUMBER = re.compile(r"(?<![\w.])(\d[\d,]*(?:\.\d+)?)")
-_YEAR = re.compile(r"^(19|20)\d{2}$")
-
 
 def numbers_in(text: str) -> set[str]:
-    return {m.group(1).replace(",", "") for m in _NUMBER.finditer(text) if not _YEAR.match(m.group(1))}
+    """Every quantity in a string, as the output screen counts them.
+
+    The screen's own rule, not a second copy of it. The copy that lived here
+    omitted the hyphen from its lookbehind, so an agent citing `AFF-01` was
+    reported as inventing the number one, four times across the golden set.
+    """
+    from ai.guardrails.screen import numbers_in_prose
+
+    return numbers_in_prose(text)
 
 
 def rounded_forms(value: str) -> set[str]:
@@ -280,17 +283,27 @@ def evidence_offered(case: Any) -> set[str]:
 
 
 @lru_cache(maxsize=1)
-def pack_reason_codes() -> frozenset[str]:
-    """Every reason code the policy packs define.
+def known_reason_codes() -> frozenset[str]:
+    """Every reason code an agent is allowed to cite.
 
-    A reason code is a clause in the pack, not something a tool returns, so
-    checking one against tool output was the wrong question: it scored 0.275
-    while every code an agent cited was real. What matters is that the clause
-    exists and that an officer opening it finds the rule the agent meant.
+    Two sources, and both are needed. `contracts/reason_codes.yaml` is the
+    approved vocabulary: sixty-seven codes with the wording for staff and the
+    wording that may reach a member. The policy packs map rules onto a subset
+    of it, twenty of them.
+
+    Checking against the packs alone scored 0.238, and every code it rejected
+    was real: an agent citing DOC-02 "document unreadable" is citing the
+    vocabulary, which is where a document agent's reasons live, because no
+    hard gate turns on legibility. Checking against tool output before that
+    was wronger still. What matters is that a code exists and that an officer
+    looking it up finds what the agent meant.
     """
     codes: set[str] = set()
     for path in sorted((ROOT / "policy_packs").glob("*/*/*.yaml")):
         codes |= set(re.findall(r"\b[A-Z]{3}-\d{2}\b", path.read_text()))
+    vocabulary = ROOT / "contracts" / "reason_codes.yaml"
+    if vocabulary.is_file():
+        codes |= set(re.findall(r"\b[A-Z]{3}-\d{2}\b", vocabulary.read_text()))
     return frozenset(codes)
 
 
@@ -314,6 +327,11 @@ async def invoke(client: httpx.AsyncClient, agent_id: str, case: Any) -> dict[st
 
 def score_agent(run: Run, case: Any, agent_id: str, body: dict[str, Any], offered: set[str]) -> None:
     """Whether what the agent said rests on what it was given."""
+    # Imported here rather than at module level: `ROOT` is put on the path
+    # above, so an `ai.` import at the top would fail when this is run from
+    # anywhere but the repository root.
+    from ai.guardrails.screen import numbers_a_tool_supplied
+
     run.invocations += 1
     opinion = body.get("opinion") or {}
     label = f"{case.scenario}/{agent_id}"
@@ -345,18 +363,20 @@ def score_agent(run: Run, case: Any, agent_id: str, body: dict[str, Any], offere
             else "",
         )
 
-        # The snapshot as well as the tools. An agent is given both, and the
-        # tenor, amount and product terms it reads there are not inventions:
-        # scoring against the tools alone marked "84 months" as an unsupported
-        # number when it is on the application.
-        given = json.dumps(
-            {
-                "snapshot": case.snapshot,
-                "tools": case.results_for([g.name for g in _grants(agent_id)]),
-            }
-        )
+        # The screen's own extractor, not a second copy of the rule. A harness
+        # that reimplements what it grades drifts from it: this used the prose
+        # matcher, which does not see the digits inside a field name, and
+        # reported "over the last 12 months" as invented when `arrears_12m`
+        # had supplied the 12.
+        #
+        # The snapshot counts as well as the tools. An agent is given both, and
+        # the tenor and amount it reads there are on the application.
+        given = {
+            "snapshot": case.snapshot,
+            "tools": case.results_for([g.name for g in _grants(agent_id)]),
+        }
         available: set[str] = set()
-        for value in numbers_in(given):
+        for value in numbers_a_tool_supplied(given):
             available |= rounded_forms(value)
         invented = sorted(numbers_in(str(claim.get("text") or "")) - available)
         run.add(
@@ -366,14 +386,14 @@ def score_agent(run: Run, case: Any, agent_id: str, body: dict[str, Any], offere
             f"claim {index}: {invented}" if invented else "",
         )
 
-    known = pack_reason_codes()
+    known = known_reason_codes()
     for code in opinion.get("reason_codes") or []:
         if re.fullmatch(r"[A-Z]{3}-\d{2}", str(code)):
             run.add(
                 label,
                 "policy_citation_accuracy",
                 str(code) in known,
-                f"cited {code}, which no policy pack defines",
+                f"cited {code}, which is not in the approved vocabulary or any pack",
             )
 
 

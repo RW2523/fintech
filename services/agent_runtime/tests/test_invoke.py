@@ -91,7 +91,13 @@ async def test_two_broken_answers_degrade(
     assert body["degraded"] is True
     assert body["opinion"]["stance"] == "NEED_MORE_EVIDENCE"
     assert body["opinion"]["confidence"] == 0.0
-    assert body["opinion"]["unresolved"][0]["question"] == "agent output invalid"
+    # The reason names what actually broke rather than a fixed phrase. A
+    # degraded opinion that says only "agent output invalid" is a Council
+    # member who fell silent and nobody asked why.
+    why = body["opinion"]["unresolved"][0]["question"]
+    assert why != "agent output invalid"
+    assert "stance" in why
+    assert body["detail"] == why
 
 
 async def test_a_gateway_schema_refusal_degrades_at_once(

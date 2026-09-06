@@ -265,13 +265,18 @@ async def invoke(
                 },
             ]
 
+    # Named, not "agent output invalid". The screen knows exactly which rule
+    # broke and a reader of this response should not have to dig through the
+    # screening structure to find out: a degraded opinion with no stated reason
+    # is a Council member who fell silent and nobody asked why.
+    why = "; ".join(problems[:3]) if problems else "agent output invalid"
     return InvocationResult(
-        opinion=degraded_opinion(invocation, "agent output invalid"),
+        opinion=degraded_opinion(invocation, why),
         degraded=True,
         attempts=attempts,
         latency_ms=(time.perf_counter() - started) * 1000.0,
         injections=injections,
         screening=screening,
         usage=usage,
-        detail="; ".join(problems[:5]) or "agent output invalid",
+        detail=why,
     )

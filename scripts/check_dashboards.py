@@ -17,10 +17,9 @@ from __future__ import annotations
 import json
 import re
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
 from pathlib import Path
+
+import httpx
 
 ROOT = Path(__file__).resolve().parents[1]
 DASHBOARDS = ROOT / "infra" / "observability" / "dashboards"
@@ -61,11 +60,16 @@ def series_exist(expr: str) -> bool:
 
 
 def query(expr: str) -> list[dict] | None:
-    url = f"{PROMETHEUS}?{urllib.parse.urlencode({'query': expr})}"
+    """One PromQL query, or None when Prometheus could not be reached.
+
+    httpx rather than urllib: this only ever talks to Prometheus over http, and
+    urlopen accepts any scheme the string happens to carry.
+    """
     try:
-        with urllib.request.urlopen(url, timeout=20) as response:
-            body = json.load(response)
-    except (urllib.error.URLError, TimeoutError, ValueError):
+        response = httpx.get(PROMETHEUS, params={"query": expr}, timeout=20.0)
+        response.raise_for_status()
+        body = response.json()
+    except (httpx.HTTPError, ValueError):
         return None
     return list(body.get("data", {}).get("result") or [])
 

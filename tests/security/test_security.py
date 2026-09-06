@@ -334,13 +334,16 @@ def test_no_secret_is_committed() -> None:
         ["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True
     ).stdout.split()
 
+    # Assembled rather than written out. A file containing the literals it
+    # searches for matches itself, and the fix for that is not an exclusion
+    # list: a scanner that skips a file by name is a place to hide a secret.
     patterns = (
-        "-----BEGIN RSA PRIVATE KEY-----",
-        "-----BEGIN OPENSSH PRIVATE KEY-----",
-        "sk-ant-api",
-        "sk-proj-",
-        "ghp_",
-        "AKIA",
+        "-----BEGIN " + "RSA PRIVATE KEY-----",
+        "-----BEGIN " + "OPENSSH PRIVATE KEY-----",
+        "sk-" + "ant-api",
+        "sk-" + "proj-",
+        "gh" + "p_",
+        "AKI" + "A",
     )
     found: list[str] = []
     for name in tracked:

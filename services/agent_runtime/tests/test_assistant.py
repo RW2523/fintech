@@ -34,6 +34,12 @@ class Bundle:
 
 SCHEMA: dict[str, Any] = {"type": "object"}
 
+#: The evidence ref matters. `get_my_balance` declares an `EvidenceSpec`, so a
+#: real call returns one, and a fixture without it exercises a shape the tool
+#: never produces: with nothing citable in the run, the output screen now
+#: refuses any citation at all, which is the point of it.
+EVIDENCE = "ev_01ARZ3NDEKTSV4RRFFQ69G5FAW"
+
 BALANCE = {
     "tool": "get_my_balance",
     "result": {
@@ -42,7 +48,7 @@ BALANCE = {
         "savings_balance": "1364.87",
         "savings_as_of": "2026-08-31",
     },
-    "evidence_refs": [],
+    "evidence_refs": [{"evidence_id": EVIDENCE}],
 }
 
 
@@ -59,7 +65,7 @@ class Gateway:
         self.answer = answer or {
             "schema": "copilot_answer/1.0",
             "answer": "Your savings balance is 1364.87 as of 2026-08-31.",
-            "citations": [{"ref": "A-000061", "what": "your account"}],
+            "citations": [{"ref": EVIDENCE, "what": "your account"}],
         }
 
     async def complete(self, **kwargs: Any) -> Any:
@@ -198,7 +204,7 @@ async def test_an_ungrounded_answer_is_not_shown_to_a_member(tools: list[dict[st
         answer={
             "schema": "copilot_answer/1.0",
             "answer": "Your outstanding balance is 9,412.55.",
-            "citations": [{"ref": "A-000061", "what": "your account"}],
+            "citations": [{"ref": EVIDENCE, "what": "your account"}],
         }
     )
     reply = await ask("What is my balance?", gateway=gateway)

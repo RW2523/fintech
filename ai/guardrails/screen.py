@@ -19,7 +19,14 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-__all__ = ["FORBIDDEN_TERMS", "Screening", "screen_answer", "screen_opinion"]
+__all__ = [
+    "FORBIDDEN_TERMS",
+    "Screening",
+    "numbers_a_tool_supplied",
+    "numbers_in_prose",
+    "screen_answer",
+    "screen_opinion",
+]
 
 #: docs/06 §9 and CLAUDE.md §5 — never mentioned, never inferred.
 FORBIDDEN_TERMS: tuple[str, ...] = (
@@ -84,13 +91,30 @@ class Screening:
         return {"passed": self.passed, "rejections": self.rejections, "redactions": self.redactions}
 
 
-def _numbers_in(text: str) -> set[str]:
-    """Every quantity in a string, normalised so 2,201.15 matches 2201.15."""
+def numbers_in_prose(text: str) -> set[str]:
+    """Every quantity in a string, normalised so 2,201.15 matches 2201.15.
+
+    The hyphen in the lookbehind is what keeps `AFF-01` out: a rule id is not a
+    quantity, and an agent citing the clause it read must not be accused of
+    inventing the number one. Public because the evaluation harness grades the
+    same thing: its own copy of this rule omitted the hyphen and reported four
+    claims as inventing "01" and "03".
+    """
     return {m.group(1).replace(",", "") for m in _NUMBER.finditer(text) if not _YEAR.match(m.group(1))}
 
 
-def _tool_numbers(tool_results: Any) -> set[str]:
-    """Every number any tool returned, at any depth."""
+_numbers_in = numbers_in_prose
+
+
+def numbers_a_tool_supplied(tool_results: Any) -> set[str]:
+    """Every number any tool returned, at any depth.
+
+    Public because the evaluation harness grades the same thing and must apply
+    the same rule. A harness with its own copy drifts from the screen it is
+    grading: its version used the prose matcher, which does not see the digits
+    inside a field name, so it reported "over the last 12 months" as an
+    invented number when `arrears_12m` had supplied it.
+    """
     found: set[str] = set()
     if isinstance(tool_results, (int, float)) and not isinstance(tool_results, bool):
         found.add(_normalise(tool_results))
@@ -106,10 +130,10 @@ def _tool_numbers(tool_results: Any) -> set[str]:
                 # `ontime_rate_24m`, so the digits are taken directly rather
                 # than through the prose matcher.
                 found |= set(re.findall(r"\d+", key))
-            found |= _tool_numbers(value)
+            found |= numbers_a_tool_supplied(value)
     elif isinstance(tool_results, list):
         for item in tool_results:
-            found |= _tool_numbers(item)
+            found |= numbers_a_tool_supplied(item)
     return found
 
 
@@ -147,9 +171,21 @@ def screen_opinion(
     """Check one agent opinion against the output policy."""
     screening = Screening()
     known_numbers: set[str] = set()
-    for value in _tool_numbers(tool_results or []):
+    for value in numbers_a_tool_supplied(tool_results or []):
         known_numbers |= _rounded_forms(value)
-    available = evidence_ids or set()
+
+    # None means the caller cannot check. An empty set means the run produced
+    # no evidence, which is not the same thing and is not permission to cite
+    # anything: `available or set()` collapsed the two, so the check below was
+    # skipped exactly when it mattered most.
+    #
+    # Measured on the golden set: `member_relationship` on S3, S4 and S5 is
+    # given no tool results at all, invented four evidence ids that look like
+    # real ones, and the screen passed it with no rejections. An agent with
+    # nothing to go on citing four sources is the single worst output this
+    # platform can produce, and this is the component whose job is to catch it.
+    checking = evidence_ids is not None
+    available = evidence_ids if evidence_ids is not None else set()
 
     for index, claim in enumerate(opinion.get("claims") or []):
         text = str(claim.get("text") or "")
@@ -165,12 +201,13 @@ def screen_opinion(
                     "produced in this run (docs/06 §5.1 rule 1)",
                 }
             )
-        elif available and not set(cited) <= available:
+        elif checking and not set(cited) <= available:
             screening.rejections.append(
                 {
                     "where": where,
                     "rule": "evidence_not_from_this_run",
-                    "detail": f"cites {sorted(set(cited) - available)}, which no tool in this run produced",
+                    "detail": f"cites {sorted(set(cited) - available)}, which no tool in this run produced"
+                    + ("; this run produced none" if not available else ""),
                 }
             )
 
@@ -304,7 +341,7 @@ def screen_answer(
         screening.rejections.extend(_language_rejections(why, "refusal.reason"))
 
         refusal_numbers: set[str] = set()
-        for value in _tool_numbers(tool_results or []):
+        for value in numbers_a_tool_supplied(tool_results or []):
             refusal_numbers |= _rounded_forms(value)
 
         # A refusal that quotes a figure the tools produced is an answer filed
@@ -360,7 +397,7 @@ def screen_answer(
         )
 
     known_numbers: set[str] = set()
-    for value in _tool_numbers(tool_results or []):
+    for value in numbers_a_tool_supplied(tool_results or []):
         known_numbers |= _rounded_forms(value)
     invented = _numbers_in(text) - known_numbers
     if invented:
@@ -378,8 +415,10 @@ def screen_answer(
         # the whole point of this copilot is that they can.
         screening.rejections.append({"where": "citations", "reason": "an answer must cite what it rests on"})
 
-    available = evidence_ids or set()
-    if available:
+    # Same distinction as `screen_opinion`: None is a caller that cannot check,
+    # an empty set is a run that produced nothing to cite.
+    available = evidence_ids if evidence_ids is not None else set()
+    if evidence_ids is not None:
         unknown = [
             str(citation.get("ref")) for citation in citations if str(citation.get("ref")) not in available
         ]

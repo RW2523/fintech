@@ -191,7 +191,12 @@ disallow_untyped_defs = false
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "-q --strict-markers --strict-config"
+# The suites that need the running stack are deselected by default. `make test`
+# says "no docker" and the fail-safe tests stop containers: run under it during
+# a phase verification, they took the model gateway away from whatever else was
+# running. Ask for them by name: `pytest -m failsafe`, `-m security`,
+# `-m integration`.
+addopts = "-q --strict-markers --strict-config -m 'not integration and not failsafe and not security'"
 testpaths = ["libs", "workflows", "synthetic", "ml", "ai", "tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"

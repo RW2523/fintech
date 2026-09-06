@@ -43,11 +43,19 @@ ACCOUNT_FIELDS = (
     "opened_at",
 )
 
-ACCOUNT_EVIDENCE = EvidenceSpec(
+#: The member's own record in the core. Pointed at `member_id`, which every
+#: one of these results carries at the top level.
+#:
+#: It used to name `account_id`, which is not there: the accounts are nested in
+#: a list and the spec could resolve nothing, so no member tool ever produced a
+#: citable id. Nothing the assistant said could be cited, and once the output
+#: screen stopped treating an empty evidence set as permission to cite
+#: anything, every answer became a refusal.
+MEMBER_EVIDENCE = EvidenceSpec(
     type="CORE_FIELD",
     source_system="core_stub",
-    source_record_path="account_id",
-    locator_from={"field_path": "account_id"},
+    source_record_path="member_id",
+    locator_from={"field_path": "member_id"},
 )
 
 
@@ -63,7 +71,7 @@ def _account(row: dict[str, Any]) -> dict[str, Any]:
     purpose_tags=SERVICING,
     side_effects=READ,
     backing_service="core_stub",
-    evidence=ACCOUNT_EVIDENCE,
+    evidence=MEMBER_EVIDENCE,
 )
 async def get_my_balance(member_id: str) -> dict[str, Any]:
     """What this member has saved, and where each financing has got to.
@@ -132,7 +140,7 @@ async def _instalments_paid(account_id: str) -> dict[str, Any]:
     purpose_tags=SERVICING,
     side_effects=READ,
     backing_service="core_stub",
-    evidence=ACCOUNT_EVIDENCE,
+    evidence=MEMBER_EVIDENCE,
 )
 async def get_my_next_payment(member_id: str, as_of: str | None = None) -> dict[str, Any]:
     """The next instalment falling due, and anything already past due.
@@ -194,6 +202,7 @@ async def get_my_next_payment(member_id: str, as_of: str | None = None) -> dict[
     purpose_tags=SERVICING,
     side_effects=READ,
     backing_service="application",
+    evidence=MEMBER_EVIDENCE,
 )
 async def get_my_application(member_id: str) -> dict[str, Any]:
     """Where this member's application has got to, in the words a member uses.
@@ -276,6 +285,7 @@ def _member_stage(row: dict[str, Any]) -> str:
     purpose_tags=SERVICING,
     side_effects=READ,
     backing_service="application",
+    evidence=MEMBER_EVIDENCE,
 )
 async def get_missing_documents(member_id: str) -> dict[str, Any]:
     """What the member still has to send.

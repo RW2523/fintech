@@ -9,7 +9,7 @@ fooled. The screen checks what the agent said before anyone reads it.
 from __future__ import annotations
 
 from ai.guardrails.injection import PATTERNS, Detection, classify, scan
-from ai.guardrails.screen import FORBIDDEN_TERMS, screen_opinion
+from ai.guardrails.screen import FORBIDDEN_TERMS, screen_answer, screen_opinion
 from ai.guardrails.wrapping import NOTE, is_wrapped, wrap, wrap_many
 
 
@@ -212,3 +212,57 @@ def test_a_field_name_does_not_licence_an_unrelated_figure() -> None:
 def test_an_opinion_with_no_claims_passes_the_screen() -> None:
     """A degraded opinion has none, and must not be rejected for that."""
     assert screen_opinion({"claims": []}, tool_results=TOOLS).passed
+
+
+# ---------------------------------------------------------------------------
+# an agent with nothing to go on (T-080)
+# ---------------------------------------------------------------------------
+def test_a_run_that_produced_no_evidence_lets_nothing_be_cited() -> None:
+    """The distinction between "cannot check" and "nothing to cite".
+
+    `available or set()` collapsed the two, so the citation check was skipped
+    exactly when it mattered most. Measured on the golden set: an agent given
+    no tool results at all invented four evidence ids that look like real ones,
+    and the screen passed it with no rejections.
+    """
+    opinion = {
+        "stance": "SUPPORT",
+        "confidence": 0.9,
+        "claims": [
+            {"text": "The member has saved steadily.", "evidence_refs": ["ev_0000000000000000000000000A"]}
+        ],
+    }
+
+    screening = screen_opinion(opinion, tool_results=[], evidence_ids=set())
+    assert not screening.passed
+    assert any(r.get("rule") == "evidence_not_from_this_run" for r in screening.rejections)
+
+
+def test_a_caller_that_cannot_check_is_not_told_the_run_produced_nothing() -> None:
+    """None is a caller with no evidence set to check against.
+
+    It is not the same as a run that produced none, and screening on it would
+    reject every claim a caller could not verify rather than the ones that are
+    wrong.
+    """
+    opinion = {
+        "stance": "SUPPORT",
+        "confidence": 0.9,
+        "claims": [
+            {"text": "The member has saved steadily.", "evidence_refs": ["ev_0000000000000000000000000A"]}
+        ],
+    }
+
+    screening = screen_opinion(opinion, tool_results=[], evidence_ids=None)
+    assert not any(r.get("rule") == "evidence_not_from_this_run" for r in screening.rejections)
+
+
+def test_an_answer_citing_what_no_tool_returned_is_refused_even_with_no_tools() -> None:
+    answer = {
+        "schema": "copilot_answer/1.0",
+        "answer": "The case was approved.",
+        "citations": [{"ref": "ev_0000000000000000000000000A", "what": "the record"}],
+    }
+
+    screening = screen_answer(answer, tool_results=[], evidence_ids=set())
+    assert not screening.passed
