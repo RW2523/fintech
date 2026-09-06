@@ -18,22 +18,28 @@
 | vLLM / ollama image tags | not yet pulled | pin validated tag | pending T-003 |
 | Measured tok/s | not yet measured | record at P4 | pending |
 
-### Pre-existing workload on this host (affects T-002/T-003)
+### Pre-existing workload on this host — RESOLVED 2026-09-06
 
-An unrelated `echomind` stack is running in Docker and holds resources this build's
-compose profile assumes are free:
+An unrelated `echomind` stack held resources this build's compose profile assumes
+are free. **On 2026-09-06 the user asked for it to be stopped**, and its six
+containers were halted with `docker stop` (not removed, so `docker start` brings
+them back).
 
-| Conflict | Detail | Affected task |
+| Was held | Before | After |
 |---|---|---|
-| Port 3000 | `echomind-frontend` — spec assigns 3000 to Grafana | T-003 |
-| Port 11434 | `echomind-ollama` — spec assigns 11434 to the ollama fallback | T-003 |
-| GPU memory | ~33 GB held by echomind (`trtllm-serve` + python workers) | T-040 |
-| Host memory | ~47 GB in use, leaving ~73 GB vs the ~104 GB budgeted in `docs/02 §4.3` | T-040 |
+| Host memory available | 71 GB of 121 GB | **115 GB of 121 GB** |
+| GPU memory | ~33 GB held by `trtllm-serve` and python workers | **fully free** |
+| Port 3000 | `echomind-frontend` | free |
+| Port 11434 | `echomind-ollama` | free |
 
-Resolution options (decide before T-003, record as an ADR if it changes the spec):
-stop the echomind stack for demo runs; remap Grafana/ollama ports in `docker/.env`;
-or reuse the running ollama (it already serves `bge-m3`, the spec's `embed` model)
-instead of starting a second one.
+This clears the constraint flagged against T-040: 115 GB available against the
+~104 GB the memory budget in `docs/02 §4.3` calls for. Stopping the stack also
+took `echomind-cloudflared` down, so anything reaching echomind through that
+tunnel is offline until it is restarted.
+
+Grafana and ollama can move back to their documented ports (3000, 11434) whenever
+convenient; they stay remapped to 3001/11435 in `docker/.env` for now because the
+stack is running and healthy on them.
 
 
 | Task | Status | Date | Notes / deviations |
@@ -59,7 +65,7 @@ instead of starting a second one.
 | T-023 | done | 2026-09-05 | document-service: ingest with MIME/size/page checks and presigned upload, classification, OCR extraction with bbox anchoring, EvidenceRefs, and human review that supersedes rather than overwrites. 40 tests. **Measured over 400 documents: classification 100% (target 98%), critical fields 96.7% (target 95%), bbox and confidence coverage 97.5%.** Every critical field individually: payslip period 100%, gross_salary 100%, employer_name 97.5%, net_salary 96.2%; identity dob 100%, id_number 92.8%, name 90.1%. Notes: (a) the extractor is pluggable, so the vision route in T-040 replaces the OCR backend behind the same interface; (b) the declared document type is a hint only, never the classification; (c) render DPI was raised to the documented 200, without which the identity card was too small for OCR to read at all; (d) `norm_value` is read through a driver-agnostic decoder because asyncpg already decodes jsonb. |
 | T-024 | done | 2026-09-05 | Forensics (arithmetic, metadata, reused image, layout signature, copy-move, readability) and cross-source reconciliation (income across payslip/employer/bank, employer match, identity match, duplicate identity numbers). 39 tests. **Measured: 74 of 76 injected anomalies detected (97.4%), integrity false positives 1.12% against a 3% ceiling.** Five of seven anomaly kinds detected in full. The two misses are documents whose critical field OCR failed entirely; both raise DOC-04 and route to a human, so nothing passes silently. **Three deviations, each with evidence:** (a) docs/07 §1.4 assigns INT-02 HIGH on a page-hash match alone, which T-022 measured cannot separate documents; an unconfirmed match is recorded LOW as a lead and only a content-confirmed or byte-identical match is HIGH; (b) the arithmetic and income checks refuse to run on figures read below 0.75 confidence, because an unreadable document is a DOC-04 problem and not grounds to accuse anyone; (c) 33.7% of clean documents raise DOC-04 at the policy's 0.85 confidence floor, reported separately from integrity false positives since asking for more information is not an accusation. Note: entity resolution uses rapidfuzz only; the bge-m3 embedding half of docs/07 §1.5 needs the LLM gateway and arrives with T-041. |
 | T-025 | done | 2026-09-05 | member-intelligence-service: monthly-partitioned `member_event` (61 partitions covering the seeded window plus headroom), core-record import, content-addressed profile projection, cursor-paginated timeline, and the derived views the tools read. 40 tests. **Import of the full population: 453,195 events across 5,000 members in 2m42s, of which 172,631 are payment events, matching the ~180k the acceptance names.** The remainder are the deduction, savings, share and arrangement sources docs/07 §4.1 also lists. Event ids are derived from the source record, so a replayed import updates rather than duplicates, which is what makes the change feed safe to replay. Paging is verified to lose and repeat nothing across the whole timeline, and the projection is checked against the core stub for 100 randomly sampled members. A missed deduction is inferred from an absence, so it carries `validation: WARN` rather than being presented as an observation. |
-| T-030 | todo | | |
+| T-030 | done | 2026-09-06 | feature-service: a 23-feature registry, reproducible snapshots and a permitted-use filter. 36 tests. Every feature declares its family, window, source, permitted uses, dtype, version and monotone direction, and the registry is published to `feature_def` so a model run can cite the definition it used. The registry covers all five Decision Factors: CAPACITY 4, CONDUCT 7, COMMITMENT 6, CONDITIONS 2, INTEGRITY 4. Purpose scoping narrows that to 23 for underwriting, 11 for collections and 5 for fraud, so a collections call cannot see the proposed debt-service ratio. Values are computed from the member timeline and the core record as of a stated moment, each with its own provenance row, and the set is hashed into an `inputs_digest`; recomputing the same member at the same moment reproduces the digest exactly, and a snapshot with an equivalent digest is reused rather than recomputed. A database trigger refuses UPDATE on `feature_value`, because a model run cites a snapshot and a snapshot that drifted would make the decision unreconstructable. A structural test refuses any feature whose name or description mentions a protected characteristic. Note: these tests read the seeded population, so they run against the demo database rather than `cio_test`, and each test deletes only the snapshots that appeared while it ran instead of truncating.
 | T-031 | todo | | |
 | T-032 | todo | | |
 | T-033 | todo | | |
