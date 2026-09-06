@@ -154,6 +154,8 @@ ignore = [
 # The timeout bounds one agent's invocation and is passed to asyncio.wait_for,
 # which is exactly what the rule asks for; it fires on the parameter name.
 "services/committee/app/orchestrate.py" = ["ASYNC109"]
+# The timeout is handed to httpx, which enforces it on the connection.
+"workflows/activities.py" = ["ASYNC109"]
 # The interpreter dispatches on `_<AstNodeName>`, following the stdlib
 # ast.NodeVisitor convention. Lowercasing them would break the dispatch.
 "services/policy/app/expr.py" = ["N802"]

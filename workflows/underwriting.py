@@ -6,13 +6,15 @@
       -> record -> route -> autonomous token, or wait for a human
       -> execute -> ledger
 
-Committee and model steps are placeholders until P3 and P4. A placeholder run is
-marked degraded and forced to a human route: a partial assessment must never
-look like a complete one (CLAUDE.md §2.7).
+A step whose service could not answer marks the run degraded and forces a human
+route: a partial assessment must never look like a complete one (CLAUDE.md
+§2.7). Tier selection is the committee service's, not the workflow's, so the
+rule has one implementation rather than two that can disagree.
 """
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import asdict
 from datetime import timedelta
 from typing import Any
@@ -26,6 +28,8 @@ with workflow.unsafe.imports_passed_through():
         CaseRef,
         CommitteeOutcome,
         DecisionOutcome,
+        DocumentOutcome,
+        FeatureOutcome,
         HumanDecisionSignal,
         ModelOutcome,
         PolicyOutcome,
@@ -50,6 +54,8 @@ _HUMAN_SLA = {
 _RETRY = RetryPolicy(initial_interval=timedelta(seconds=1), maximum_attempts=3)
 _SHORT = timedelta(seconds=30)
 _LONG = timedelta(minutes=5)
+#: A Council round is minutes of model decoding, not a query.
+_COMMITTEE = timedelta(minutes=20)
 
 
 def workflow_id_for(snapshot_id: str) -> str:
@@ -103,27 +109,77 @@ class UnderwriteCase:
                 case, policy, CommitteeOutcome(tier="POLICY_ONLY", degraded=True), model_health="GREEN"
             )
 
-        self._state = "MODELS"
-        models: ModelOutcome = await workflow.execute_activity(
-            activities.score_models, case, start_to_close_timeout=_SHORT, retry_policy=_RETRY
+        # Documents and features are gathered together: both read the frozen
+        # case and neither depends on the other.
+        self._state = "GATHERING"
+        documents, features = await asyncio.gather(
+            workflow.execute_activity(
+                activities.gather_documents, case, start_to_close_timeout=_SHORT, retry_policy=_RETRY
+            ),
+            workflow.execute_activity(
+                activities.compute_features, case, start_to_close_timeout=_LONG, retry_policy=_RETRY
+            ),
         )
 
-        # An unavailable model forces the standard tier and a human route.
-        model_health = "GREEN" if models.available else "RED"
-        tier = "STANDARD" if not models.available else self._tier_for(case, policy)
+        self._state = "MODELS"
+        models: ModelOutcome = await workflow.execute_activity(
+            activities.score_models,
+            args=[case, features.snapshot_id],
+            start_to_close_timeout=_LONG,
+            retry_policy=_RETRY,
+        )
+
+        # An unavailable model or an unreadable case file forces a human route:
+        # neither is the same as finding nothing (docs/13 §7).
+        healthy = models.available and features.available and documents.available
+        model_health = "GREEN" if healthy else "RED"
 
         self._state = "COMMITTEE"
         committee: CommitteeOutcome = await workflow.execute_activity(
-            activities.run_committee, args=[case, tier], start_to_close_timeout=_LONG, retry_policy=_RETRY
+            activities.run_committee,
+            args=[case, self._committee_request(case, policy, models, documents, features, model_health)],
+            start_to_close_timeout=_COMMITTEE,
+            retry_policy=_RETRY,
         )
 
         return await self._record_and_settle(case, policy, committee, model_health)
 
     # -- internals ----------------------------------------------------------
     @staticmethod
-    def _tier_for(case: CaseRef, policy: PolicyOutcome) -> str:
-        """Placeholder tier selection until T-044 implements docs/05 tier rules."""
-        return "FAST" if float(case.requested_amount) <= 10000 else "STANDARD"
+    def _committee_request(
+        case: CaseRef,
+        policy: PolicyOutcome,
+        models: ModelOutcome,
+        documents: DocumentOutcome,
+        features: FeatureOutcome,
+        model_health: str,
+    ) -> dict[str, Any]:
+        """What the orchestrator needs to choose a tier and run the Council.
+
+        The workflow gathers; it does not decide. Tier selection lives in the
+        committee service with the policy pack that defines it, so there is one
+        implementation of the rule rather than two that can disagree.
+        """
+        return {
+            "snapshot": {
+                "snapshot_id": case.snapshot_id,
+                "case_id": case.case_id,
+                "product_code": case.product_code,
+                "amount": case.requested_amount,
+                "member": {"member_ref": case.member_id},
+                "documents": documents.documents,
+                "feature_snapshot_id": features.snapshot_id,
+                "model_versions": {
+                    "risk": (models.risk or {}).get("version"),
+                    "model_run_id": models.model_run_id,
+                },
+            },
+            "policy_result": policy.policy_result,
+            "fraud_level": models.fraud_level,
+            "identity_mismatch": documents.identity_mismatch,
+            "model_health": model_health,
+            "case_type": "ORIGINATION",
+        }
 
     async def _record_and_settle(
         self,

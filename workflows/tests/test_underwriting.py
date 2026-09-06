@@ -26,6 +26,8 @@ from workflows.shared import (
     CaseRef,
     CommitteeOutcome,
     DecisionOutcome,
+    DocumentOutcome,
+    FeatureOutcome,
     HumanDecisionSignal,
     ModelOutcome,
     PolicyOutcome,
@@ -35,6 +37,7 @@ from workflows.underwriting import UnderwriteCase, workflow_id_for
 SNAPSHOT = "snap_01JQZK7M8N9P0Q1R2S3T4V5W6X"
 CASE = "case_01JQZK7M8N9P0Q1R2S3T4V5W6X"
 RECORD = "dr_01JQZK7M8N9P0Q1R2S3T4V5W6X"
+FEATURE_SNAPSHOT = "fs_01JQZK7M8N9P0Q1R2S3T4V5W6X"
 
 
 class Fakes:
@@ -50,6 +53,18 @@ class Fakes:
         self.blockers = blockers or []
         self.route = route
         self.recommendation = recommendation
+        # Each step can be made to fail on its own, because the workflow's job
+        # is to keep going and mark the run rather than to stop.
+        self.documents_available = True
+        self.features_available = True
+        self.models_available = True
+        self.committee_degraded = False
+        self.tier = "STANDARD"
+        self.documents: list[dict[str, Any]] = []
+        self.findings: list[dict[str, Any]] = []
+        self.risk: dict[str, Any] = {"model_run_id": "mr_test", "champion": {"grade": "A"}}
+        self.fraud: dict[str, Any] = {"level": "LOW", "findings": []}
+        self.committee_requests: list[dict[str, Any]] = []
         self.calls: list[str] = []
         self.records: list[dict[str, Any]] = []
         self.human_decisions: list[dict[str, Any]] = []
@@ -84,15 +99,28 @@ class Fakes:
                 evidence_coverage=1.0,
             )
 
+        @activity.defn(name="gather_documents")
+        async def gather_documents(case: CaseRef) -> DocumentOutcome:
+            outer.calls.append("documents")
+            return DocumentOutcome(
+                documents=outer.documents, findings=outer.findings, available=outer.documents_available
+            )
+
+        @activity.defn(name="compute_features")
+        async def compute_features(case: CaseRef) -> FeatureOutcome:
+            outer.calls.append("features")
+            return FeatureOutcome(snapshot_id=FEATURE_SNAPSHOT, available=outer.features_available)
+
         @activity.defn(name="score_models")
-        async def score_models(case: CaseRef) -> ModelOutcome:
-            outer.calls.append("models")
-            return ModelOutcome(available=False)
+        async def score_models(case: CaseRef, feature_snapshot_id: str = "") -> ModelOutcome:
+            outer.calls.append(f"models:{feature_snapshot_id or 'none'}")
+            return ModelOutcome(available=outer.models_available, risk=outer.risk, fraud=outer.fraud)
 
         @activity.defn(name="run_committee")
-        async def run_committee(case: CaseRef, tier: str) -> CommitteeOutcome:
-            outer.calls.append(f"committee:{tier}")
-            return CommitteeOutcome(tier=tier, degraded=True)
+        async def run_committee(case: CaseRef, request: dict[str, Any]) -> CommitteeOutcome:
+            outer.calls.append(f"committee:{request.get('fraud_level')}")
+            outer.committee_requests.append(request)
+            return CommitteeOutcome(tier=outer.tier, degraded=outer.committee_degraded)
 
         @activity.defn(name="decide")
         async def decide(
@@ -144,6 +172,8 @@ class Fakes:
         return [
             freeze_snapshot,
             evaluate_policy,
+            gather_documents,
+            compute_features,
             score_models,
             run_committee,
             decide,
@@ -221,20 +251,77 @@ async def test_a_clean_case_runs_the_full_sequence(env: WorkflowEnvironment) -> 
         env, fakes, signal=HumanDecisionSignal(actor_id="u-1", role="officer", final_action="APPROVE")
     )
 
-    assert fakes.calls[:3] == ["freeze", "policy", "models"]
+    assert fakes.calls[:2] == ["freeze", "policy"]
+    # Documents and features are gathered concurrently, so their order is not
+    # fixed; what matters is that both precede the models.
+    assert set(fakes.calls[2:4]) == {"documents", "features"}
+    assert any(c.startswith("models:") for c in fakes.calls)
     assert any(c.startswith("committee") for c in fakes.calls)
     assert "record" in fakes.calls
 
 
-async def test_an_unavailable_model_forces_a_degraded_run(env: WorkflowEnvironment) -> None:
-    """docs/13 §7 — a missing model means STANDARD tier and never autonomous."""
+async def test_the_models_score_the_frozen_feature_snapshot(env: WorkflowEnvironment) -> None:
+    """Risk and fraud must reason about the same inputs, so the snapshot is
+    frozen once before either runs and the decision cites one, not two."""
     fakes = Fakes()
     await run_workflow(
         env, fakes, signal=HumanDecisionSignal(actor_id="u-1", role="officer", final_action="APPROVE")
     )
+    assert f"models:{FEATURE_SNAPSHOT}" in fakes.calls
 
-    assert "committee:STANDARD" in fakes.calls
+
+async def test_the_committee_is_told_what_it_needs_to_choose_a_tier(env: WorkflowEnvironment) -> None:
+    """The workflow gathers; the committee decides the tier, so the rule has
+    one implementation rather than two that can disagree."""
+    fakes = Fakes()
+    fakes.fraud = {"level": "HIGH", "findings": [{"code": "INT-05"}]}
+    fakes.findings = [{"code": "INT-08", "severity": "CRITICAL"}]
+    await run_workflow(
+        env, fakes, signal=HumanDecisionSignal(actor_id="u-1", role="officer", final_action="APPROVE")
+    )
+
+    request = fakes.committee_requests[0]
+    assert request["fraud_level"] == "HIGH"
+    assert request["identity_mismatch"] is True
+    assert request["policy_result"] is not None
+    assert request["snapshot"]["feature_snapshot_id"] == FEATURE_SNAPSHOT
+
+
+async def test_an_unavailable_model_forces_a_degraded_run(env: WorkflowEnvironment) -> None:
+    """docs/13 §7 — a model that did not run is not a model that found nothing."""
+    fakes = Fakes()
+    fakes.models_available = False
+    await run_workflow(
+        env, fakes, signal=HumanDecisionSignal(actor_id="u-1", role="officer", final_action="APPROVE")
+    )
     assert "decide:RED" in fakes.calls
+
+
+async def test_an_unreadable_case_file_forces_a_degraded_run(env: WorkflowEnvironment) -> None:
+    """A case file that could not be read is not an empty case file."""
+    fakes = Fakes()
+    fakes.documents_available = False
+    await run_workflow(
+        env, fakes, signal=HumanDecisionSignal(actor_id="u-1", role="officer", final_action="APPROVE")
+    )
+    assert "decide:RED" in fakes.calls
+
+
+async def test_an_unavailable_feature_snapshot_forces_a_degraded_run(env: WorkflowEnvironment) -> None:
+    fakes = Fakes()
+    fakes.features_available = False
+    await run_workflow(
+        env, fakes, signal=HumanDecisionSignal(actor_id="u-1", role="officer", final_action="APPROVE")
+    )
+    assert "decide:RED" in fakes.calls
+
+
+async def test_everything_working_keeps_the_run_healthy(env: WorkflowEnvironment) -> None:
+    fakes = Fakes()
+    await run_workflow(
+        env, fakes, signal=HumanDecisionSignal(actor_id="u-1", role="officer", final_action="APPROVE")
+    )
+    assert "decide:GREEN" in fakes.calls
 
 
 async def test_an_approval_issues_a_token(env: WorkflowEnvironment) -> None:

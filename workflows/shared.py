@@ -13,6 +13,8 @@ __all__ = [
     "CaseRef",
     "CommitteeOutcome",
     "DecisionOutcome",
+    "DocumentOutcome",
+    "FeatureOutcome",
     "HumanDecisionSignal",
     "ModelOutcome",
     "PolicyOutcome",
@@ -43,22 +45,61 @@ class PolicyOutcome:
 
 @dataclass
 class ModelOutcome:
-    """Placeholder until the real services land in P3."""
+    """What the risk and fraud services said about this case.
+
+    `available` is false when either could not answer. It is not a detail: the
+    workflow forces a human route on it, because a model that did not run is
+    not a model that found nothing (docs/13 §7).
+    """
 
     available: bool = True
     risk: dict[str, Any] = field(default_factory=dict)
     fraud: dict[str, Any] = field(default_factory=dict)
+    unavailable: list[str] = field(default_factory=list)
+
+    @property
+    def fraud_level(self) -> str:
+        return str(self.fraud.get("level") or "NONE")
+
+    @property
+    def model_run_id(self) -> str | None:
+        return self.risk.get("model_run_id")
+
+
+@dataclass
+class DocumentOutcome:
+    """What the document service holds for this case."""
+
+    documents: list[dict[str, Any]] = field(default_factory=list)
+    findings: list[dict[str, Any]] = field(default_factory=list)
+    available: bool = True
+
+    @property
+    def identity_mismatch(self) -> bool:
+        return any(str(f.get("code")) == "INT-08" for f in self.findings)
+
+
+@dataclass
+class FeatureOutcome:
+    """The frozen feature snapshot the models scored."""
+
+    snapshot_id: str = ""
+    features: dict[str, Any] = field(default_factory=dict)
+    available: bool = True
 
 
 @dataclass
 class CommitteeOutcome:
-    """Placeholder until the Council lands in P4."""
+    """What the Council produced, or why it did not."""
 
     tier: str = "STANDARD"
     run_id: str | None = None
     factor_scores: list[dict[str, Any]] = field(default_factory=list)
     opinions: list[dict[str, Any]] = field(default_factory=list)
     degraded: bool = False
+    decision_record: dict[str, Any] = field(default_factory=dict)
+    tier_reasons: list[str] = field(default_factory=list)
+    timed_out: bool = False
 
 
 @dataclass
