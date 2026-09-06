@@ -1,0 +1,44 @@
+# Sign constraints for the credit-risk models (docs/07 §2.2).
+#
+# `+1` means more of this must never lower the predicted probability of
+# default; `-1` means more of it must never raise it; `0` leaves the shape to
+# the data. The constraint is a policy statement, not something learned: a
+# member with more arrears must never score better for having them, however
+# the sample happens to fall. The champion enforces it by making bin weights
+# of evidence monotone and holding the coefficient sign; the challenger passes
+# it to LightGBM as `monotone_constraints`.
+#
+# This table must agree with `permitted_uses`/`monotone` in the feature-service
+# registry. A test compares the two and fails if they drift.
+schema: monotone/1.0
+version: 2026.09.1
+
+features:
+  # CAPACITY
+  income_verified_monthly: -1
+  income_source_variance: +1
+  dsr_proposed: +1
+  commitments_monthly: +1
+  # CONDUCT
+  ontime_rate_24m: -1
+  arrears_events_12m: +1
+  months_since_last_arrears: -1
+  restructures_36m: +1
+  facilities_open: +1
+  facilities_new_6m: +1
+  utilisation: +1
+  # COMMITMENT
+  tenure_months: -1
+  savings_balance: -1
+  savings_slope_180d: -1
+  savings_paused_months: +1
+  share_capital_units: -1
+  share_capital_ratio: -1
+  # CONDITIONS
+  employer_sector: 0        # categorical; no ordering to constrain
+  employer_tenure_months: -1
+  # INTEGRITY
+  application_count_12m: +1
+  contact_change_days: -1
+  doc_min_conf: -1
+  findings_max_severity: +1

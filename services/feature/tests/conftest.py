@@ -81,10 +81,9 @@ async def _leave_no_trace(db):  # type: ignore[no-untyped-def]
     before = list((await db.execute(query)).scalars())
     yield
     await db.execute(
-        text(
-            "DELETE FROM app_feature.feature_snapshot "
-            "WHERE snapshot_id NOT IN :keep"
-        ).bindparams(bindparam("keep", expanding=True)),
+        text("DELETE FROM app_feature.feature_snapshot WHERE snapshot_id NOT IN :keep").bindparams(
+            bindparam("keep", expanding=True)
+        ),
         {"keep": before or [""]},
     )
     await db.commit()

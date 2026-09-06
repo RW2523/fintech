@@ -1,0 +1,41 @@
+# Feature drivers to approved reason codes (docs/07 §2.2, docs/03 §11).
+#
+# A model driver is a number. A reason code is something a person can be told.
+# This table is the only bridge between them, so a member never receives an
+# explanation the reason-code vocabulary has not approved.
+#
+# Each feature names the code to use when it pushes risk UP (`adverse`) and
+# when it pushes risk DOWN (`favourable`). A missing side means the driver is
+# never reported in that direction, because there is no approved wording for
+# it. Codes must exist in `contracts/reason_codes.yaml`; a test checks that.
+schema: reason_map/1.0
+version: 2026.09.1
+
+features:
+  dsr_proposed:              { adverse: CAP-02, favourable: CAP-01 }
+  commitments_monthly:       { adverse: CAP-02, favourable: CAP-01 }
+  income_verified_monthly:   { adverse: CAP-04, favourable: CAP-05 }
+  income_source_variance:    { adverse: CAP-06, favourable: CAP-05 }
+
+  ontime_rate_24m:           { adverse: CON-02, favourable: CON-01 }
+  arrears_events_12m:        { adverse: CON-02, favourable: CON-01 }
+  months_since_last_arrears: { adverse: CON-02, favourable: CON-01 }
+  restructures_36m:          { adverse: CON-03 }
+  facilities_new_6m:         { adverse: CON-04 }
+  facilities_open:           { adverse: CON-04 }
+  utilisation:               { adverse: CON-04 }
+
+  tenure_months:             { adverse: COM-06, favourable: COM-01 }
+  savings_balance:           { adverse: COM-04, favourable: COM-02 }
+  savings_slope_180d:        { adverse: COM-04, favourable: COM-02 }
+  savings_paused_months:     { adverse: COM-04, favourable: COM-02 }
+  share_capital_units:       { favourable: COM-03 }
+  share_capital_ratio:       { favourable: COM-03 }
+
+  employer_sector:           { adverse: CND-02, favourable: CND-03 }
+  employer_tenure_months:    { adverse: CND-02, favourable: CND-03 }
+
+  application_count_12m:     { adverse: INT-04 }
+  contact_change_days:       { adverse: INT-06 }
+  doc_min_conf:              { adverse: DOC-04 }
+  findings_max_severity:     { adverse: INT-01 }
