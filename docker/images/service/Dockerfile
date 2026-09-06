@@ -23,6 +23,12 @@ COPY pyproject.toml uv.lock ./
 COPY libs ./libs
 RUN uv sync --frozen --no-dev
 
+# Trained models and the code that loads them. `ml` is not an installed
+# package, so the services that score import it from here; the rest ignore it.
+# Artifacts are part of the image on purpose: a service must not depend on a
+# volume to know what model it is serving.
+COPY ml ./ml
+
 ARG SERVICE
 ENV SERVICE_NAME=${SERVICE}
 COPY services/${SERVICE}/app ./app

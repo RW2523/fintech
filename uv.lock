@@ -11,6 +11,7 @@ members = [
     "cio-ai",
     "cio-common",
     "cio-contracts",
+    "cio-dff",
     "cio-ml",
     "cio-svc-agent-runtime",
     "cio-svc-application",
@@ -362,6 +363,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "cio-dff"
+version = "0.1.0"
+source = { editable = "libs/cio_dff" }
+dependencies = [
+    { name = "cio-common" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "cio-common", editable = "libs/cio_common" }]
+
+[[package]]
 name = "cio-ml"
 version = "0.1.0"
 source = { virtual = "ml" }
@@ -565,6 +577,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "cio-common" },
     { name = "cio-contracts" },
+    { name = "cio-dff" },
     { name = "cio-tools" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -645,6 +658,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "cio-common", editable = "libs/cio_common" },
     { name = "cio-contracts", editable = "libs/cio_contracts" },
+    { name = "cio-dff", editable = "libs/cio_dff" },
     { name = "cio-tools", editable = "libs/cio_tools" },
     { name = "credit-intelligence-os", extras = ["data"], marker = "extra == 'ml'" },
     { name = "fastapi", specifier = ">=0.115" },

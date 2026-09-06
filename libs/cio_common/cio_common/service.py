@@ -22,6 +22,12 @@ __all__ = ["create_app"]
 TRACE_HEADER = "X-Trace-Id"
 
 
+async def _maybe_await(value: Any) -> dict[str, Any]:
+    if hasattr(value, "__await__"):
+        value = await value
+    return dict(value)
+
+
 def create_app(
     service: str,
     *,
@@ -30,6 +36,7 @@ def create_app(
     settings: Settings | None = None,
     on_startup: Any = None,
     on_shutdown: Any = None,
+    version_detail: Any = None,
 ) -> FastAPI:
     """Build the app for ``service`` with the platform conventions applied."""
     config = settings or get_settings()
@@ -74,8 +81,24 @@ def create_app(
         return {"status": "ok", "service": service, "version": version}
 
     @app.get("/version", tags=["meta"], summary="Build and configuration version")
-    async def version_info() -> dict[str, str]:
-        return {"service": service, "version": version, "environment": config.cio_env}
+    async def version_info() -> dict[str, Any]:
+        body: dict[str, Any] = {"service": service, "version": version, "environment": config.cio_env}
+        if version_detail is None:
+            return body
+        # A service that serves a model reports the model's version here,
+        # because the CaseSnapshot freeze stamps whatever this returns
+        # (docs/03 §1). A service router cannot add it: this route is
+        # registered first and would shadow theirs.
+        try:
+            body.update(await _maybe_await(version_detail()))
+        except Exception as exc:
+            # Fail safe: an unreportable version is said to be unavailable, so
+            # a case frozen now is visibly distinguishable from one frozen
+            # against a known model.
+            body["version"] = "0.0.0-unavailable"
+            body["available"] = False
+            body["detail"] = str(exc)
+        return body
 
     for router in routers:
         app.include_router(router)

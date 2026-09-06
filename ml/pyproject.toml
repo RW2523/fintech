@@ -5,5 +5,9 @@ description = "Model training, artifacts and cards"
 requires-python = ">=3.12,<3.13"
 dependencies = []
 
+# Not installed. The package directory is this project's own root, and an
+# editable install cannot add a path prefix, so `ml` is imported from the
+# repository instead. `cio_common.models.add_model_path` finds it, and the
+# service image copies it in alongside `app`.
 [tool.uv]
 package = false

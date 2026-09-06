@@ -31,6 +31,12 @@ todo:
 # ---------------------------------------------------------------------------
 # environment and stack
 # ---------------------------------------------------------------------------
+.PHONY: install
+install:  ## install the workspace with every optional stack
+	@# --all-extras matters: the data, ml and docai stacks are optional, and a
+	@# plain `uv sync` removes them, which breaks the model and document code.
+	$(UV) sync --all-extras
+
 .PHONY: env
 env:  ## create .env from the example and check the DGX Spark environment
 	@if [ ! -f docker/.env ]; then \

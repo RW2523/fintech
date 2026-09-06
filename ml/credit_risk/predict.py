@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from cio_dff.factors import FactorScore, conduct_score
 
 from cio_common.hashing import canonical_json, sha256
 from cio_common.ids import derived_id
@@ -26,32 +27,11 @@ from ml.credit_risk.explain import Driver, drivers_for, reason_codes
 
 FAMILY = "credit_risk"
 
-#: docs/06 §CONDUCT — the deterministic conduct score, computed here from
-#: feature values so that the number and the formula that produced it are
-#: recorded together. Weights sum to 1.
-CONDUCT_TERMS: tuple[tuple[str, float, str], ...] = (
-    ("ontime_rate_24m", 0.45, "higher_is_better"),
-    ("arrears_events_12m", 0.25, "count_penalty"),
-    ("months_since_last_arrears", 0.15, "recency_credit"),
-    ("restructures_36m", 0.10, "count_penalty"),
-    ("facilities_new_6m", 0.05, "count_penalty"),
-)
-
-CONDUCT_FORMULA_VERSION = "conduct/1.0"
-
-#: A member with no prior facility has no conduct record. Scoring them as
-#: perfect would reward the absence of evidence, and scoring them as zero would
-#: punish a first-time borrower for being one, so the neutral midpoint is used
-#: and the missing inputs are named in the calculation.
-CONDUCT_NEUTRAL = 0.5
-
-#: Presence of this feature is what says a repayment record exists at all. The
-#: count terms all read zero for a member who has never borrowed, which looks
-#: identical to a member who borrowed and never missed. Without this gate a
-#: first-time applicant scores a perfect 1.0 for conduct they have never had
-#: the chance to demonstrate, and that number would then feed the weighted
-#: score as though it were earned.
-CONDUCT_EVIDENCE = "ontime_rate_24m"
+#: How many payment events the on-time rate was computed from. The Decision
+#: Factor Framework parks CONDUCT at neutral below six months of history, and
+#: the feature registry carries no months-of-history feature, so the count the
+#: feature snapshot records as provenance is what answers the question.
+HISTORY_PROVENANCE = ("ontime_rate_24m", "due_events")
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,28 +59,6 @@ class ModelOutput:
 
 
 @dataclass(frozen=True, slots=True)
-class Calculation:
-    """A deterministic number and the arithmetic behind it."""
-
-    calc_id: str
-    name: str
-    value: float
-    formula: str
-    inputs: dict[str, Any]
-    missing: tuple[str, ...] = ()
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "calc_id": self.calc_id,
-            "name": self.name,
-            "value": round(self.value, 6),
-            "formula": self.formula,
-            "inputs": self.inputs,
-            "missing_inputs": list(self.missing),
-        }
-
-
-@dataclass(frozen=True, slots=True)
 class Prediction:
     """Everything `POST /risk/score` returns, before evidence is attached."""
 
@@ -108,7 +66,7 @@ class Prediction:
     version: str
     champion: ModelOutput
     challenger: ModelOutput
-    conduct: Calculation
+    conduct: FactorScore
     drivers: list[Driver]
     reason_codes: list[str]
     inputs_digest: str
@@ -120,9 +78,9 @@ class Prediction:
             "version": self.version,
             "champion": self.champion.as_dict(),
             "challenger": self.challenger.as_dict(),
-            "conduct_score": round(self.conduct.value, 6),
+            "conduct_score": self.conduct.score,
             "conduct_calc_id": self.conduct.calc_id,
-            "conduct_calculation": self.conduct.as_dict(),
+            "conduct_factor": self.conduct.as_contract(),
             "reason_codes": list(self.reason_codes),
             "drivers": [d.as_dict() for d in self.drivers],
             "inputs_digest": self.inputs_digest,
@@ -139,62 +97,46 @@ def _as_float(value: Any) -> float | None:
     return None if np.isnan(number) else number
 
 
-def conduct_score(values: Mapping[str, Any]) -> Calculation:
-    """The CONDUCT factor's deterministic score, in [0, 1]."""
-    used: dict[str, Any] = {}
-    missing: list[str] = []
-    total = 0.0
-    weight_seen = 0.0
+def history_months(provenance: Mapping[str, Any] | None) -> int:
+    """Months of repayment record behind the on-time rate."""
+    if not provenance:
+        return 0
+    feature, key = HISTORY_PROVENANCE
+    entry = provenance.get(feature) or {}
+    try:
+        return int(entry.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
 
-    if _as_float(values.get(CONDUCT_EVIDENCE)) is None:
-        calc_id = derived_id("calc", CONDUCT_FORMULA_VERSION, b"no-repayment-history")
-        return Calculation(
-            calc_id=calc_id,
-            name="conduct_score",
-            value=CONDUCT_NEUTRAL,
-            formula="neutral: no repayment record to score",
-            inputs={},
-            missing=tuple(name for name, _, _ in CONDUCT_TERMS),
-        )
 
-    never_in_arrears = _as_float(values.get("arrears_events_12m")) == 0.0
+def conduct_of(
+    values: Mapping[str, Any],
+    *,
+    grade: str,
+    provenance: Mapping[str, Any] | None = None,
+) -> FactorScore:
+    """The CONDUCT factor score, from the Decision Factor Framework formula.
 
-    for name, weight, kind in CONDUCT_TERMS:
-        raw = _as_float(values.get(name))
-        if raw is None and kind == "recency_credit" and never_in_arrears:
-            # No date of last arrears because there were none. That is the best
-            # possible record, not an absent one, and dropping the term would
-            # quietly hand its weight to the others.
-            used[name] = "no arrears on record"
-            total += weight
-            weight_seen += weight
-            continue
-        if raw is None:
-            missing.append(name)
-            continue
-        if kind == "higher_is_better":
-            term = min(max(raw, 0.0), 1.0)
-        elif kind == "recency_credit":
-            # Twenty-four clean months is treated as a clean record; the credit
-            # accrues in proportion up to that point.
-            term = min(max(raw, 0.0), 24.0) / 24.0
-        else:
-            # Each event costs a third of the term, so three wipe it out.
-            term = max(0.0, 1.0 - raw / 3.0)
-        used[name] = raw
-        total += weight * term
-        weight_seen += weight
+    The arithmetic lives in `cio_dff` because the policy engine consumes this
+    number and the risk service produces it. Two implementations of one
+    formula would be two chances for a decision to be irreproducible, so there
+    is one, and it is asked for a derived calculation id: re-scoring the same
+    frozen snapshot must reproduce the reference as well as the value.
 
-    value = total / weight_seen if weight_seen else CONDUCT_NEUTRAL
-    formula = " + ".join(f"{w:g}·f({n})" for n, w, _ in CONDUCT_TERMS)
-    calc_id = derived_id("calc", CONDUCT_FORMULA_VERSION, canonical_json(used))
-    return Calculation(
-        calc_id=calc_id,
-        name="conduct_score",
-        value=float(value),
-        formula=f"({formula}) / Σw over available terms",
-        inputs=used,
-        missing=tuple(missing),
+    A count of zero arrears from a member who has never borrowed is an absence
+    of evidence, not a clean record, and the framework's thin-file branch is
+    what stops it being read as one.
+    """
+    arrears = _as_float(values.get("arrears_events_12m")) or 0.0
+    since = _as_float(values.get("months_since_last_arrears"))
+    return conduct_score(
+        ontime_rate_24m=_as_float(values.get("ontime_rate_24m")) or 0.0,
+        any_arrears=arrears > 0 or since is not None,
+        months_since_last_arrears=since if since is not None else 0.0,
+        restructures_36m=int(_as_float(values.get("restructures_36m")) or 0),
+        grade=grade,
+        history_months=history_months(provenance),
+        derived=True,
     )
 
 
@@ -226,7 +168,12 @@ class CreditRiskModel:
                 frame[name] = pd.to_numeric(frame[name], errors="coerce")
         return frame
 
-    def predict(self, values: Mapping[str, Any]) -> Prediction:
+    def predict(
+        self,
+        values: Mapping[str, Any],
+        *,
+        provenance: Mapping[str, Any] | None = None,
+    ) -> Prediction:
         frame = self._frame(values)
         digest = sha256(canonical_json({k: values.get(k) for k in sorted(self.features)}))[:16]
 
@@ -261,7 +208,7 @@ class CreditRiskModel:
                 grade=grade_of(challenger_pd),
                 calibration=self.challenger_calibrator.parameters,
             ),
-            conduct=conduct_score(values),
+            conduct=conduct_of(values, grade=grade_of(champion_pd), provenance=provenance),
             drivers=drivers,
             reason_codes=reason_codes(drivers),
             inputs_digest=digest,

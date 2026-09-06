@@ -8,7 +8,7 @@ import pytest
 
 from ml.credit_risk.calibration import grade_of
 from ml.credit_risk.explain import reason_map
-from ml.credit_risk.predict import CONDUCT_TERMS, CreditRiskModel, conduct_score
+from ml.credit_risk.predict import CreditRiskModel, conduct_of, history_months
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 
@@ -148,49 +148,73 @@ def test_every_driver_names_a_characteristic_the_model_uses(model) -> None:
 
 
 # ---------------------------------------------------------------------------
-# the conduct calculation
+# the conduct factor (docs/05 §4, computed here per docs/07 §2.3)
 # ---------------------------------------------------------------------------
-def test_conduct_is_neutral_without_a_repayment_record() -> None:
-    """A first-time borrower has not earned a perfect record, nor a bad one."""
-    calculation = conduct_score(
-        {"arrears_events_12m": 0.0, "restructures_36m": 0.0, "facilities_new_6m": 0.0}
-    )
-    assert calculation.value == 0.5
-    assert len(calculation.missing) == len(CONDUCT_TERMS)
-    assert "no repayment record" in calculation.formula
+HISTORY = {"ontime_rate_24m": {"due_events": 24}}
 
 
-def test_a_spotless_record_scores_at_the_top() -> None:
-    assert conduct_score(CLEAN).value == pytest.approx(1.0)
+def test_conduct_parks_at_neutral_without_a_repayment_record() -> None:
+    """A first-time borrower has not earned a perfect record, nor a bad one.
+
+    Every count reads zero for someone who never borrowed, which looks exactly
+    like someone who borrowed and never missed.
+    """
+    factor = conduct_of({"arrears_events_12m": 0.0, "restructures_36m": 0.0}, grade="A", provenance=None)
+    assert factor.score == 55
 
 
-def test_a_poor_record_scores_low() -> None:
-    assert conduct_score(TROUBLED).value < 0.45
+def test_conduct_uses_the_full_formula_once_there_is_history() -> None:
+    factor = conduct_of(CLEAN, grade="A", provenance=HISTORY)
+    assert factor.score == 85  # 40 on-time + 25 no arrears + 20 grade A
 
 
-def test_conduct_stays_inside_its_range() -> None:
-    for case in (CLEAN, TROUBLED, {"ontime_rate_24m": 0.0, "arrears_events_12m": 99.0}):
-        assert 0.0 <= conduct_score(case).value <= 1.0
+def test_a_poor_record_scores_far_lower() -> None:
+    good = conduct_of(CLEAN, grade="A", provenance=HISTORY)
+    poor = conduct_of(TROUBLED, grade="E", provenance=HISTORY)
+    assert poor.score < good.score - 40
 
 
-def test_never_having_been_in_arrears_counts_as_good() -> None:
-    """No date of last arrears because there were none is the best record."""
-    with_date = conduct_score({**CLEAN, "months_since_last_arrears": 0.0})
-    without = conduct_score(CLEAN)
-    assert without.value > with_date.value
-    assert "months_since_last_arrears" not in without.missing
+def test_conduct_stays_inside_zero_to_one_hundred() -> None:
+    for case, grade in (
+        (CLEAN, "A"),
+        (TROUBLED, "E"),
+        ({"ontime_rate_24m": 0.0, "restructures_36m": 9.0}, "E"),
+    ):
+        assert 0 <= conduct_of(case, grade=grade, provenance=HISTORY).score <= 100
+
+
+def test_a_better_grade_never_lowers_conduct() -> None:
+    scores = [conduct_of(CLEAN, grade=g, provenance=HISTORY).score for g in "EDCBA"]
+    assert scores == sorted(scores)
 
 
 def test_the_same_conduct_inputs_give_the_same_calc_id() -> None:
-    assert conduct_score(CLEAN).calc_id == conduct_score(CLEAN).calc_id
-    assert conduct_score(CLEAN).calc_id != conduct_score(TROUBLED).calc_id
-    assert conduct_score(CLEAN).calc_id.startswith("calc_")
+    """Replaying a frozen snapshot must reproduce the reference, not just the number."""
+    first = conduct_of(CLEAN, grade="A", provenance=HISTORY)
+    second = conduct_of(CLEAN, grade="A", provenance=HISTORY)
+    other = conduct_of(TROUBLED, grade="E", provenance=HISTORY)
+    assert first.calc_id == second.calc_id
+    assert first.calc_id != other.calc_id
+    assert first.calc_id.startswith("calc_")
 
 
-def test_the_conduct_calculation_shows_its_working() -> None:
-    calculation = conduct_score(TROUBLED)
-    assert calculation.formula
-    assert set(calculation.inputs) <= {name for name, _, _ in CONDUCT_TERMS}
+def test_the_conduct_factor_names_the_tool_that_owns_it() -> None:
+    factor = conduct_of(CLEAN, grade="A", provenance=HISTORY)
+    assert factor.family == "CONDUCT"
+    assert factor.tool == "risk.score"
+    assert factor.inputs_digest
+
+
+def test_history_is_read_from_the_snapshot_provenance() -> None:
+    assert history_months({"ontime_rate_24m": {"due_events": 18}}) == 18
+    assert history_months({"ontime_rate_24m": {}}) == 0
+    assert history_months(None) == 0
+
+
+def test_a_thin_file_is_parked_even_with_a_perfect_rate() -> None:
+    """Five months of payments is not enough to judge conduct on."""
+    thin = conduct_of(CLEAN, grade="A", provenance={"ontime_rate_24m": {"due_events": 5}})
+    assert thin.score == 55
 
 
 # ---------------------------------------------------------------------------
