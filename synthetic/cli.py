@@ -40,6 +40,37 @@ def _population(args: argparse.Namespace) -> int:
     return 0
 
 
+def _documents(args: argparse.Namespace) -> int:
+    from synthetic.documents.generate import generate_documents
+
+    started = time.perf_counter()
+    corpus = generate_documents(
+        args.apps,
+        population_dir=Path(args.out),
+        out=Path(args.out) / "documents",
+        seed=args.seed,
+        render_pdf=not args.no_pdf,
+    )
+    elapsed = time.perf_counter() - started
+
+    from collections import Counter
+
+    by_type = Counter(d.type for d in corpus.documents)
+    by_anomaly = Counter(str(a.kind) for a in corpus.anomalies)
+
+    print(
+        f"  {len(corpus.applications):,} applications, "
+        f"{len(corpus.documents):,} documents in {elapsed:.0f}s "
+        f"({elapsed / max(1, len(corpus.documents)) * 1000:.0f} ms each)"
+    )
+    for name, count in sorted(by_type.items()):
+        print(f"    {name:26s} {count:>6,}")
+    print(f"  {len(corpus.anomalies):,} injected anomalies")
+    for name, count in sorted(by_anomaly.items()):
+        print(f"    {name:26s} {count:>6,}")
+    return 0
+
+
 def _load(args: argparse.Namespace) -> int:
     from synthetic.loader import load_population
 
@@ -75,6 +106,12 @@ def main(argv: list[str] | None = None) -> int:
     population.add_argument("--employers", type=int, default=120)
     population.add_argument("--seed", type=int, default=42)
     population.set_defaults(handler=_population)
+
+    documents = sub.add_parser("documents", parents=[common], help="render the document corpus")
+    documents.add_argument("--apps", type=int, default=600)
+    documents.add_argument("--seed", type=int, default=42)
+    documents.add_argument("--no-pdf", action="store_true", help="skip PDF rendering (faster, PNG only)")
+    documents.set_defaults(handler=_documents)
 
     load = sub.add_parser("load", parents=[common], help="load a generated population into the core stub")
     load.add_argument("--base-url", default=None)

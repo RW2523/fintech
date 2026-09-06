@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  @page { size: A4; margin: 16mm; }
+  body { font-family: 'Liberation Sans', sans-serif; font-size: 10pt; margin: 0; }
+  header { background: #0f766e; color: #fff; padding: 10px 14px; margin-bottom: 16px; }
+  header h1 { margin: 0; font-size: 13pt; }
+  dl { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 4px 16px;
+       margin: 0 0 14px; }
+  dt { color: #55606f; } dd { margin: 0; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 5px 7px; border-bottom: 1px solid #e2e6ec; font-size: 9pt; }
+  thead th { background: #ecfdf5; color: #0f766e; text-align: left; }
+  td.amount, th.amount { text-align: right; font-variant-numeric: tabular-nums; }
+  .total { margin-top: 12px; text-align: right; font-weight: 700; font-size: 11pt; }
+</style></head>
+<body>
+  <header><h1>Provident Fund Statement</h1>
+    <div>{{ fund_name }}</div></header>
+
+  <dl>
+    <dt>Member</dt><dd data-field="member_name">{{ member_name }}</dd>
+    <dt>Fund number</dt><dd data-field="fund_number">{{ fund_number }}</dd>
+    <dt>Period</dt><dd data-field="period">{{ period }}</dd>
+    <dt>Employer</dt><dd data-field="employer_name">{{ employer_name }}</dd>
+  </dl>
+
+  <table>
+    <thead><tr><th>Month</th><th class="amount">Employee</th>
+      <th class="amount">Employer</th><th class="amount">Balance</th></tr></thead>
+    <tbody>
+      {% for line in contributions %}
+      <tr><td>{{ line.month }}</td><td class="amount">{{ line.employee }}</td>
+        <td class="amount">{{ line.employer }}</td>
+        <td class="amount">{{ line.balance }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="total">Closing balance
+    <span data-field="closing_balance">{{ closing_balance }}</span></div>
+</body></html>

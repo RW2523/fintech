@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  @page { size: A4; margin: 12mm; }
+  body { font-family: 'Liberation Sans', sans-serif; color: #14181f; font-size: 10pt; margin: 0; }
+  .sheet { padding: 4mm; }
+  header { display: flex; align-items: center; gap: 12px; justify-content: flex-end;
+            border-bottom: 3px solid #7c2d12; padding-bottom: 8px; margin-bottom: 12px; }
+  .employer { font-size: 14pt; font-weight: 700; color: #7c2d12; }
+  .doc-title { letter-spacing: 0.11em; text-transform: uppercase;
+                font-size: 8pt; color: #55606f; }
+  .meta { display: grid; grid-template-columns: auto 1fr; gap: 3px 16px;
+           margin-bottom: 12px; font-size: 9pt; }
+  .meta dt { color: #55606f; }
+  .meta dd { margin: 0; font-weight: 600; }
+  .period { margin-bottom: 12px; border: 1px solid #dde2e9; padding: 8px 10px; }
+  .period h2 { font-size: 9pt; margin: 0 0 6px; color: #7c2d12;
+                text-transform: uppercase; letter-spacing: .08em; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 5px 7px; text-align: left; font-size: 9pt; }
+  thead th { background: #7c2d12; color: #fff; }
+  tbody td { border-bottom: 1px solid #e2e6ec; }
+  td.amount, th.amount { text-align: right; font-variant-numeric: tabular-nums; }
+  .totals { margin-top: 6px; border-top: 2px solid #7c2d12; padding-top: 6px;
+             display: flex; justify-content: flex-end; gap: 24px; font-size: 9.5pt; }
+  .totals .label { color: #55606f; }
+  .net { font-size: 14pt; font-weight: 700; color: #7c2d12; }
+  footer { margin-top: 14px; font-size: 7.5pt; color: #7a8496;
+            border-top: 1px solid #d5dae2; padding-top: 5px; }
+</style></head>
+<body><div class="sheet">
+  <header>
+    <svg width="44" height="44" viewBox="0 0 44 44"><polygon points="22,4 40,38 4,38" fill="#7c2d12"/></svg>
+    <div>
+      <div class="employer" data-field="employer_name">{{ employer_name }}</div>
+      <div class="doc-title">Statement of Earnings &middot; latest three periods
+        &middot; {{ template_id }}</div>
+    </div>
+  </header>
+
+  <dl class="meta">
+    <dt>Employee</dt><dd data-field="employee_name">{{ employee_name }}</dd>
+    <dt>Staff number</dt><dd data-field="staff_number">{{ staff_number }}</dd>
+  </dl>
+
+  {% for p in periods %}
+  <section class="period">
+    <h2>Period <span{% if loop.first %} data-field="period"{% else %} data-field="period_prior_{{ loop.index0 }}"{% endif %}>{{ p.period }}</span>
+      &middot; paid <span{% if loop.first %} data-field="pay_date"{% endif %}>{{ p.pay_date }}</span></h2>
+
+    <table>
+      <thead><tr><th>Item</th><th class="amount">Amount ({{ currency }})</th></tr></thead>
+      <tbody>
+        <tr><td>Basic salary</td>
+          <td class="amount"{% if loop.first %} data-field="gross_salary"{% endif %}>{{ p.gross_salary }}</td></tr>
+        {% for line in p.allowances %}
+        <tr><td>{{ line.label }}</td><td class="amount">{{ line.amount }}</td></tr>
+        {% endfor %}
+        {% for line in p.deductions %}
+        <tr><td>{{ line.label }}</td><td class="amount">{{ line.amount }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="totals">
+      <div><span class="label">Deductions</span>
+        <span{% if loop.first %} data-field="total_deductions"{% endif %}>{{ p.total_deductions }}</span></div>
+      <div><span class="label">Net pay</span>
+        <span class="net"{% if loop.first %} data-field="net_salary" style="{{ net_style }}"{% else %} data-field="net_salary_prior_{{ loop.index0 }}"{% endif %}>{{ p.net_salary }}</span></div>
+    </div>
+  </section>
+  {% endfor %}
+
+  <footer>Generated for demonstration only &middot; synthetic data &middot; {{ employer_name }}</footer>
+</div></body></html>

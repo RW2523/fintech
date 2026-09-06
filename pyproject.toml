@@ -61,6 +61,9 @@ ml = [
   "statsmodels>=0.14",
 ]
 docai = [
+  "jinja2>=3.1",
+  "playwright>=1.49",
+  "pypdf>=5.1",
   "pillow>=11.0",
   "opencv-python-headless>=4.10",
   "pytesseract>=0.3.13",

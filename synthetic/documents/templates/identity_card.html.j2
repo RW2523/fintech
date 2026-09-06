@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  @page { size: 100mm 64mm; margin: 0; }
+  body { margin: 0; font-family: 'DejaVu Sans', sans-serif; }
+  .card { width: 100mm; height: 64mm; box-sizing: border-box; padding: 6mm;
+          background: linear-gradient(135deg, #eef2f7 0%, #dbe3ee 100%);
+          border: 1px solid #b9c3d2; display: grid;
+          grid-template-columns: 26mm 1fr; gap: 6mm; }
+  .photo { background: #c8d2e0; border: 1px solid #9fadc0; display: flex;
+           align-items: flex-end; justify-content: center; }
+  .avatar { width: 100%; }
+  h1 { font-size: 8pt; letter-spacing: .18em; text-transform: uppercase;
+       color: #0d2a5c; margin: 0 0 3mm; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 2mm 4mm;
+       font-size: 8.5pt; margin: 0; }
+  dt { color: #55606f; } dd { margin: 0; font-weight: 700; }
+  .band { margin-top: 3mm; font-size: 6.5pt; color: #7a8496; }
+</style></head>
+<body><div class="card">
+  <div class="photo" style="background: {{ avatar.background }}">
+    <svg class="avatar" viewBox="0 0 60 76">
+      <rect width="60" height="76" fill="{{ avatar.background }}"/>
+      <circle cx="30" cy="{{ avatar.head_y }}" r="{{ avatar.head_r }}"
+              fill="{{ avatar.skin }}"/>
+      <path d="M4 76c0-{{ avatar.shoulder }} 12-26 26-26s26 10 26 {{ avatar.shoulder }}z"
+            fill="{{ avatar.clothing }}"/>
+      <path d="M{{ 30 - avatar.head_r }} {{ avatar.head_y - 2 }}
+               a{{ avatar.head_r }},{{ avatar.hair }} 0 0,1 {{ 2 * avatar.head_r }},0z"
+            fill="{{ avatar.hair_colour }}"/>
+    </svg>
+  </div>
+  <div>
+    <h1>National Identity Card</h1>
+    <dl>
+      <dt>Name</dt><dd data-field="name">{{ name }}</dd>
+      <dt>ID number</dt><dd data-field="id_number">{{ id_number }}</dd>
+      <dt>Date of birth</dt><dd data-field="dob">{{ dob }}</dd>
+      <dt>Expires</dt><dd data-field="expiry">{{ expiry }}</dd>
+    </dl>
+    <div class="band">Synthetic specimen &middot; not a real identity document</div>
+  </div>
+</div></body></html>

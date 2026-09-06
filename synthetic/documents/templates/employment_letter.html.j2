@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  @page { size: A4; margin: 20mm; }
+  body { font-family: 'DejaVu Serif', serif; font-size: 11pt; color: #14181f;
+         line-height: 1.55; margin: 0; }
+  .letterhead { border-bottom: 2px solid #0d2a5c; padding-bottom: 8px;
+                margin-bottom: 20px; }
+  .letterhead h1 { font-size: 14pt; margin: 0; color: #0d2a5c; }
+  .date { text-align: right; margin-bottom: 18px; }
+  p { margin: 0 0 12px; }
+  .fields { margin: 16px 0; }
+  .fields div { margin-bottom: 4px; }
+  .label { display: inline-block; width: 46mm; color: #55606f; }
+  .sign { margin-top: 28px; }
+  .rule { width: 60mm; border-top: 1px solid #14181f; margin-top: 26px;
+          padding-top: 4px; font-size: 9pt; color: #55606f; }
+</style></head>
+<body>
+  <div class="letterhead"><h1 data-field="employer_name">{{ employer_name }}</h1>
+    <div>Human Resources Department</div></div>
+  <div class="date" data-field="letter_date">{{ letter_date }}</div>
+
+  <p>To whom it may concern,</p>
+  <p>This letter confirms the employment of the person named below with
+     {{ employer_name }}. It is issued at the employee's request in support of a
+     financing application.</p>
+
+  <div class="fields">
+    <div><span class="label">Employee name</span>
+      <strong data-field="employee_name">{{ employee_name }}</strong></div>
+    <div><span class="label">Position</span>
+      <strong data-field="position">{{ position }}</strong></div>
+    <div><span class="label">Start date</span>
+      <strong data-field="start_date">{{ start_date }}</strong></div>
+    <div><span class="label">Monthly salary</span>
+      <strong data-field="monthly_salary">{{ currency }} {{ monthly_salary }}</strong></div>
+    <div><span class="label">Employment type</span>
+      <strong>Permanent, full time</strong></div>
+  </div>
+
+  <p>Salary is paid monthly by direct transfer. Please contact this department
+     should you require anything further.</p>
+
+  <div class="sign"><div class="rule">Authorised signatory &middot; Human Resources</div></div>
+</body></html>
