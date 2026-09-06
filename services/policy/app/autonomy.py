@@ -14,7 +14,7 @@ from typing import Any
 __all__ = ["AutonomyInputs", "RouteDecision", "band_for", "route", "sampling_draw"]
 
 #: recommendation -> the route it takes before the dial is consulted.
-_BASE_ROUTE = {
+BASE_ROUTE = {
     "APPROVE": "OFFICER_REVIEW",
     "DECLINE": "OFFICER_REVIEW",
     "REVIEW": "OFFICER_REVIEW",
@@ -113,7 +113,7 @@ def route(
         return RouteDecision(route="OFFICER_REVIEW", reasons=["KILL_SWITCH"])
 
     # 2. The base route comes from the recommendation, then authority raises it.
-    base = _BASE_ROUTE.get(inputs.recommendation, "OFFICER_REVIEW")
+    base = BASE_ROUTE.get(inputs.recommendation, "OFFICER_REVIEW")
     if inputs.recommendation not in ("COMPLIANCE_REVIEW", "ENHANCED_ASSESSMENT"):
         base = _AUTHORITY_ROUTE.get(inputs.required_authority, base)
 

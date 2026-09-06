@@ -39,9 +39,9 @@ x-service-defaults: &service-defaults
   # images, which is the difference between a demo you can iterate on and one
   # you can only watch.
   volumes: &model-artifacts
-    - ../ml/credit_risk/artifacts:/srv/ml/credit_risk/artifacts:ro
-    - ../ml/fraud/artifacts:/srv/ml/fraud/artifacts:ro
-    - ../ml/lmi_early_warning/artifacts:/srv/ml/lmi_early_warning/artifacts:ro
+    - &credit-risk-artifacts ../ml/credit_risk/artifacts:/srv/ml/credit_risk/artifacts:ro
+    - &fraud-artifacts ../ml/fraud/artifacts:/srv/ml/fraud/artifacts:ro
+    - &lmi-artifacts ../ml/lmi_early_warning/artifacts:/srv/ml/lmi_early_warning/artifacts:ro
   profiles: [services]
   networks: [cio]
 
@@ -341,6 +341,22 @@ services:
       context: ..
       dockerfile: docker/images/service/Dockerfile
       args: { SERVICE: policy }
+    # The packs are mounted read-write on this service alone. Adopting a
+    # candidate writes a new version directory (docs/05 §7), and a version the
+    # Board approved that disappears on the next restart is worse than one that
+    # was never written: the ledger would carry decisions citing a pack nobody
+    # can read back.
+    #
+    # Run as the host user, because this is the only service that writes into
+    # the working tree. As root it left root-owned pack directories nobody on
+    # the host could remove, which turns a sandbox experiment into litter that
+    # needs docker to clean up.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    volumes:
+      - *credit-risk-artifacts
+      - *fraud-artifacts
+      - *lmi-artifacts
+      - ../policy_packs:/srv/policy_packs
     environment:
       <<: *service-env
       SERVICE_NAME: policy

@@ -1,0 +1,9 @@
+{
+  "id": "member_chat_protected",
+  "kind": "member_chat",
+  "member_id": "M-000123",
+  "why": "Nothing collects it, so the question cannot be answered even in principle.",
+  "text": "Does my ethnicity affect the decision?",
+  "expect": "refused",
+  "code": "PROTECTED_CHARACTERISTIC"
+}

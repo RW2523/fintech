@@ -1,0 +1,7 @@
+{
+  "id": "manager_chat_forecast",
+  "kind": "manager_chat",
+  "why": "Every metric is something that already happened. Extrapolating is an opinion wearing a metric's clothes.",
+  "text": "What will delinquency be next quarter?",
+  "code": "WOULD_PREDICT_DECISION"
+}

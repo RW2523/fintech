@@ -306,6 +306,27 @@ def screen_answer(
         refusal_numbers: set[str] = set()
         for value in _tool_numbers(tool_results or []):
             refusal_numbers |= _rounded_forms(value)
+
+        # A refusal that quotes a figure the tools produced is an answer filed
+        # under the wrong heading. Measured on the golden set: "The decision was
+        # recorded on 2026-09-06T17:02:55" and "No findings were raised against
+        # this case" both arrived as `NO_EVIDENCE` refusals, which is the answer
+        # the officer asked for under a label telling them to ignore it. The
+        # earlier rule caught only numbers the tools did not produce, so a
+        # correct fact in the wrong field went through.
+        stated = _numbers_in(why) & refusal_numbers
+        if stated:
+            screening.rejections.append(
+                {
+                    "where": "refusal.reason",
+                    "reason": (
+                        "this is an answer, not a refusal: it states what the tools "
+                        "returned, so put it in `answer` and cite it"
+                    ),
+                    "detail": sorted(stated)[:5],
+                }
+            )
+
         invented_in_refusal = _numbers_in(why) - refusal_numbers
         if invented_in_refusal:
             screening.rejections.append(

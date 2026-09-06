@@ -175,6 +175,10 @@ changepoint-eval:  ## measure detection lead time and false alarms (needs 'make 
 member-drill:  ## walk a member through S10 and grade what they were told (needs 'make up')
 	@$(UV) run python scripts/member_assistant_eval.py
 
+.PHONY: sandbox-drill
+sandbox-drill:  ## S6: change the weights, replay, adopt (needs 'make up'; writes a pack version)
+	@$(UV) run python scripts/sandbox_drill.py
+
 .PHONY: cockpit-eval
 cockpit-eval:  ## grade the cockpit and the manager copilot (needs 'make up')
 	@$(UV) run python scripts/cockpit_eval.py
@@ -198,8 +202,12 @@ test-e2e:  ## Playwright smoke over the officer workbench (needs 'make up')
 	@cd apps/web && npx playwright test
 
 .PHONY: harness
-harness:  ## evaluation harness over golden + adversarial sets
-	@$(MAKE) todo TASK=T-080
+harness:  ## evaluation harness over golden + adversarial sets (needs 'make up')
+	@$(UV) run python -m ai.evals.harness --set all --provider real
+
+.PHONY: harness-fast
+harness-fast:  ## the harness without the Council: deterministic path and adversarial only
+	@$(UV) run python -m ai.evals.harness --set all --provider fake --no-agents
 
 .PHONY: security
 security:  ## tool denial, injection, token replay, secret and dependency scans

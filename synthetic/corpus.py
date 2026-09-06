@@ -422,11 +422,28 @@ def build_corpus(out: Path = CORPUS_ROOT, *, packs: Path = PACK_ROOT) -> list[Do
 
     for pack in loaded:
         content, clauses = _product_document(pack)
-        path = out / f"product_{pack['product']}.md"
+        # One file per version, not per product. Every version was writing to
+        # the same name, so the corpus described whichever pack sorted last and
+        # `policy.lookup` would answer a question about the version in force
+        # with clauses from a version nobody decided under. The index carries
+        # the version per chunk and callers can filter on it, so the versions
+        # are kept side by side rather than collapsed.
+        path = out / f"product_{pack['product']}_{pack['version']}.md"
         path.write_text(content)
         written.append(
             Document(path=path, product=pack["product"], version=pack["version"], clauses=tuple(clauses))
         )
+
+    # The cross-product documents describe policy as it stands, so they are
+    # written from the newest version of each product rather than from every
+    # one: a credit policy that appeared four times, once per adopted version,
+    # would be four near-identical answers to the same question.
+    newest: dict[str, dict[str, Any]] = {}
+    for pack in loaded:
+        current = newest.get(pack["product"])
+        if current is None or str(pack["version"]) >= str(current["version"]):
+            newest[pack["product"]] = pack
+    loaded = [newest[product] for product in sorted(newest)]
 
     content, clauses = _credit_policy(loaded)
     path = out / "credit_policy.md"

@@ -83,6 +83,15 @@ export function Shell() {
             Manager
           </NavLink>
           <NavLink
+            to="/sandbox"
+            data-testid="nav-sandbox"
+            className={({ isActive }) =>
+              isActive ? "font-semibold text-[--color-accent]" : "text-[--color-muted]"
+            }
+          >
+            Sandbox
+          </NavLink>
+          <NavLink
             to="/member"
             data-testid="nav-member"
             className={({ isActive }) =>

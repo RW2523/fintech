@@ -1,0 +1,32 @@
+{
+  "id": "gate_unaffordable",
+  "kind": "gate",
+  "why": "Commitments that leave nothing. The single most important arithmetic in the platform.",
+  "inputs": {
+    "member_status": "ACTIVE",
+    "member_tenure_months": 110,
+    "member_age": 41,
+    "member_total_exposure": "0",
+    "member_grade": "B",
+    "identity_verified": true,
+    "requested_amount": "40000",
+    "requested_tenor": 24,
+    "requested_purpose": "EDUCATION",
+    "documents_required_complete": true,
+    "documents_min_critical_confidence": 0.94,
+    "documents_present": [
+      "IDENTITY",
+      "PAYSLIP_LATEST_3",
+      "EMPLOYMENT_CONFIRMATION"
+    ],
+    "document_confidence": {
+      "IDENTITY": 0.97,
+      "PAYSLIP_LATEST_3": 0.94,
+      "EMPLOYMENT_CONFIRMATION": 0.96
+    },
+    "income_verified": true,
+    "income_verified_monthly": "1500",
+    "commitments_monthly": "1300"
+  },
+  "expect_blocked": "AFF-01"
+}

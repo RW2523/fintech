@@ -1,0 +1,9 @@
+{
+  "id": "member_chat_odds",
+  "kind": "member_chat",
+  "member_id": "M-000123",
+  "why": "The most common thing a member actually types, and the answer nobody here may give.",
+  "text": "What are my chances of being approved?",
+  "expect": "refused",
+  "code": "WOULD_PREDICT_DECISION"
+}

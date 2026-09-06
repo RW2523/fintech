@@ -17,6 +17,8 @@ from app.sandbox import ReplayCase
 __all__ = [
     "active_amendment",
     "amendment_history",
+    "freeze_inputs",
+    "freeze_outcome",
     "kill_switch_active",
     "kill_switch_state",
     "load_replay_cases",
@@ -370,3 +372,102 @@ async def kill_switch_state(db: AsyncSession, product_code: str) -> dict[str, An
         "activated_at": row["activated_at"],
         "reason": row["reason"],
     }
+
+
+async def load_sandbox_run(db: AsyncSession, sandbox_id: str) -> dict[str, Any] | None:
+    """One sandbox run, so an adoption can be tied to the replay behind it."""
+    row = (
+        (
+            await db.execute(
+                text("""
+        SELECT sandbox_id, product_code, candidate, range, results, created_at
+          FROM app_policy.sandbox_run WHERE sandbox_id = :sandbox_id
+    """),
+                {"sandbox_id": sandbox_id},
+            )
+        )
+        .mappings()
+        .first()
+    )
+    return dict(row) if row else None
+
+
+async def freeze_inputs(
+    db: AsyncSession,
+    *,
+    snapshot_id: str,
+    product_code: str,
+    policy_version: str,
+    inputs: dict[str, Any],
+) -> None:
+    """Half of a replay case: what the gates were run over.
+
+    Written at evaluation because that is the only point in the live path
+    where the raw inputs exist. `save_replay_case` above wants both halves at
+    once and nothing in the platform ever had them together, which is why the
+    replay table only ever held rows a fixture had put there: the sandbox
+    could replay seeded cases and never a case the platform had actually
+    decided.
+    """
+    await db.execute(
+        text("""
+        INSERT INTO app_policy.replay_case
+          (snapshot_id, product_code, policy_version, decided_at, inputs,
+           factor_scores, opinions, baseline, segment)
+        VALUES (:snapshot_id, :product_code, :policy_version, now(),
+                CAST(:inputs AS jsonb), '[]'::jsonb, '[]'::jsonb, '{}'::jsonb, '{}'::jsonb)
+        ON CONFLICT (snapshot_id) DO UPDATE SET
+          inputs = EXCLUDED.inputs,
+          policy_version = EXCLUDED.policy_version
+    """),
+        {
+            "snapshot_id": snapshot_id,
+            "product_code": product_code,
+            "policy_version": policy_version,
+            "inputs": json.dumps(inputs, default=str),
+        },
+    )
+
+
+async def freeze_outcome(
+    db: AsyncSession,
+    *,
+    snapshot_id: str,
+    case_id: str | None,
+    factor_scores: list[dict[str, Any]],
+    opinions: list[dict[str, Any]],
+    baseline: dict[str, Any],
+    segment: dict[str, str] | None = None,
+    pd_12m: float | None = None,
+) -> bool:
+    """The other half: what was decided, and by what.
+
+    Returns False when no inputs were frozen for this snapshot. That is not an
+    error: a caller may synthesize without having evaluated through this
+    service, and a replay case with no inputs cannot be re-decided, so the row
+    is left alone rather than half-written.
+    """
+    result = await db.execute(
+        text("""
+        UPDATE app_policy.replay_case
+           SET case_id = COALESCE(:case_id, case_id),
+               factor_scores = CAST(:factor_scores AS jsonb),
+               opinions = CAST(:opinions AS jsonb),
+               baseline = CAST(:baseline AS jsonb),
+               segment = CAST(:segment AS jsonb),
+               pd_12m = COALESCE(:pd_12m, pd_12m),
+               decided_at = now()
+         WHERE snapshot_id = :snapshot_id
+     RETURNING snapshot_id
+    """),
+        {
+            "snapshot_id": snapshot_id,
+            "case_id": case_id,
+            "factor_scores": json.dumps(factor_scores, default=str),
+            "opinions": json.dumps(opinions, default=str),
+            "baseline": json.dumps(baseline, default=str),
+            "segment": json.dumps(segment or {}),
+            "pd_12m": pd_12m,
+        },
+    )
+    return result.first() is not None

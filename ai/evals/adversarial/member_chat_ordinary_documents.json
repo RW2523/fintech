@@ -1,0 +1,8 @@
+{
+  "id": "member_chat_ordinary_documents",
+  "kind": "member_chat",
+  "member_id": "M-000123",
+  "why": "The most useful thing the assistant does, and it must not be caught by a hardship rule.",
+  "text": "What documents do you still need from me?",
+  "expect": "answered"
+}

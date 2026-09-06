@@ -58,29 +58,60 @@ def _tool(case: Any, name: str) -> Any:
     return result["result"] if result else None
 
 
+class IncompleteCaseError(ValueError):
+    """A fixture that cannot be evaluated, said rather than filled in."""
+
+
 def case_inputs(case: Any) -> dict[str, Any]:
-    """Assemble the flat facts the gates read, from the golden tool results."""
-    profile = _tool(case, "member.profile") or {}
-    documents = _tool(case, "documents.list") or []
+    """Assemble the flat facts the gates read.
+
+    The snapshot is authoritative for what a member is and what is on the file:
+    tenure and documents are frozen at submission and every fixture carries
+    them. The tool results supply only what was computed from them.
+
+    It used to read both from the tool results, with `.get(..., 0)` behind
+    each. Four of the five fixtures hold a partial, per-agent view -- the fraud
+    agent's case carries no member profile, the affordability agent's carries
+    one document -- so tenure came out as 0 and the document set as incomplete,
+    and S2, S4 and S5 failed eligibility gates that no scenario intended. They
+    have been routing to COMPLIANCE in the demo for fabricated reasons since
+    they were seeded. A missing value is not a value.
+    """
+    snapshot = case.snapshot
     affordability = _tool(case, "affordability.compute") or {}
     fraud = _tool(case, "fraud.assess") or {}
     history = _tool(case, "history.get") or {}
     bureau = _tool(case, "bureau.get") or {}
-    snapshot = case.snapshot
+    profile = _tool(case, "member.profile") or {}
 
-    confidence = {d["type"]: float(d["classified_conf"]) for d in documents}
+    documents = snapshot.get("documents") or []
+    if not documents:
+        raise IncompleteCaseError(f"{case.case_id} carries no documents; the gates cannot be run")
+    confidence = {d["type"]: float(d["confidence"]) for d in documents}
     present = sorted(confidence)
+
+    tenure = snapshot.get("member", {}).get("tenure_months", profile.get("tenure_months"))
+    if tenure is None:
+        raise IncompleteCaseError(f"{case.case_id} carries no tenure; ELG-02 cannot be evaluated")
+
     # The instalment and residual are the affordability tool's own numbers, so
     # monthly income is recovered from them rather than guessed: the gate must
-    # see the same figures the CAPACITY score was computed from.
-    instalment = float(affordability.get("instalment", 0.0))
-    dsr = float(affordability.get("dsr", 0.0))
-    income = round(instalment / dsr, 2) if dsr else 0.0
-    commitments = round(income - instalment - float(affordability.get("residual", 0.0)), 2)
+    # see the same figures the CAPACITY score was computed from. A fixture with
+    # no affordability result has no income to recover, and a zero there is an
+    # unaffordable case rather than an unknown one.
+    if affordability:
+        instalment = float(affordability.get("instalment", 0.0))
+        dsr = float(affordability.get("dsr", 0.0))
+        income = round(instalment / dsr, 2) if dsr else 0.0
+        commitments = round(income - instalment - float(affordability.get("residual", 0.0)), 2)
+    else:
+        income, commitments = 0.0, 0.0
+
+    required = {"IDENTITY", "PAYSLIP_LATEST_3", "EMPLOYMENT_CONFIRMATION"}
 
     return {
         "member_status": profile.get("status", "ACTIVE"),
-        "member_tenure_months": int(profile.get("tenure_months", 0)),
+        "member_tenure_months": int(tenure),
         "member_age": DEMO_AGE,
         "member_total_exposure": "0",
         "member_grade": bureau.get("grade", "C"),
@@ -88,7 +119,7 @@ def case_inputs(case: Any) -> dict[str, Any]:
         "requested_amount": str(snapshot["amount"]),
         "requested_tenor": int(snapshot["tenor_months"]),
         "requested_purpose": snapshot["purpose"],
-        "documents_required_complete": len(present) >= 3,
+        "documents_required_complete": required.issubset(present),
         "documents_min_critical_confidence": min(confidence.values()) if confidence else 0.0,
         "documents_present": present,
         "document_confidence": confidence,

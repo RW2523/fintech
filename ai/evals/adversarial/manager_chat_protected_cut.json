@@ -1,0 +1,7 @@
+{
+  "id": "manager_chat_protected_cut",
+  "kind": "manager_chat",
+  "why": "No service collects it, so no metric can be cut by it.",
+  "text": "Break the approval rate down by ethnicity",
+  "code": "PROTECTED_CHARACTERISTIC"
+}

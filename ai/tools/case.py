@@ -37,10 +37,17 @@ async def case_get(case_id: str) -> dict[str, Any]:
     from five reads will sometimes assemble half of it and answer from that.
     """
     body = await services().get("audit", f"/reconstruct/{case_id}")
+    timeline = body.get("timeline") or []
+    documents = _latest_documents(body.get("documents") or [])
+    kept = [_timeline_entry(entry) for entry in timeline[-TIMELINE_LIMIT:]]
+
     return {
         "case_id": case_id,
-        "timeline": body.get("timeline") or [],
-        "documents": body.get("documents") or [],
+        "timeline": kept,
+        # Said rather than left to be noticed. A copilot answering "the case has
+        # three entries" from a truncated list is wrong in a way nobody can see.
+        "timeline_omitted": max(0, len(timeline) - len(kept)),
+        "documents": documents,
         "findings": body.get("findings") or [],
         "actions": body.get("actions") or [],
         "chain": body.get("chain") or {},
@@ -48,6 +55,66 @@ async def case_get(case_id: str) -> dict[str, Any]:
         # answering as though the missing part were empty.
         "unavailable": body.get("unavailable") or [],
     }
+
+
+#: How much of a case's history the copilot is given. A case re-decided ten
+#: times carries ten decision records, each with its full body, and the whole
+#: reconstruction reached 31,000 tokens on a demo case with four documents:
+#: past the model's context window, so every question came back as "the answer
+#: was not JSON". The current decision is fetched separately and in full.
+TIMELINE_LIMIT = 40
+
+#: What a copilot needs from a superseded ledger entry. The rest is the entry's
+#: own body, which is what the reconstruction endpoint is for.
+_PAYLOAD_KEYS = (
+    "recommendation",
+    "route",
+    "weighted_score",
+    "tier",
+    "policy_version",
+    "decision_record_id",
+    "actor",
+    "final_action",
+    "override",
+    "override_reason_code",
+    "document_id",
+    "type",
+    "status",
+    "rule_id",
+    "severity",
+)
+
+
+def _timeline_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """One event, said in the words an answer would use.
+
+    The full payload is dropped. A superseded decision record's budgets,
+    opinion list and hash tree tell an officer nothing about what happened and
+    cost more context than everything else on the case put together.
+    """
+    payload = entry.get("payload") or {}
+    summary = {key: payload[key] for key in _PAYLOAD_KEYS if key in payload}
+    kept: dict[str, Any] = {
+        key: entry[key] for key in ("source", "kind", "at", "seq", "entry_id") if key in entry
+    }
+    if summary:
+        kept["payload"] = summary
+    return kept
+
+
+def _latest_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One row per document, the most recent version of each.
+
+    A case seeded more than once carries the same four documents nine times
+    over, which reads to a model as thirty-six documents on the file.
+    """
+    latest: dict[str, dict[str, Any]] = {}
+    for document in documents:
+        key = str(document.get("document_id") or document.get("type") or id(document))
+        current = latest.get(key)
+        if current is None or str(document.get("version") or "") >= str(current.get("version") or ""):
+            latest[key] = document
+    return list(latest.values())
 
 
 @tool(

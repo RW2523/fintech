@@ -362,6 +362,30 @@ def _tampered_case() -> GoldenCase:
                 _ev(21),
                 _ev(22),
             ),
+            # A fraud scenario is still a case with an income. Without this the
+            # gates saw no income at all and failed affordability, which routed
+            # S3 on the wrong reason entirely: the case is about an altered
+            # document and it was being blocked for being unaffordable.
+            "affordability.compute": _result(
+                "affordability.compute",
+                {
+                    # Internally consistent, because the gates recover income
+                    # from these figures: income = instalment / dsr, and the
+                    # residual has to be what is left after the commitments
+                    # that income implies. An inconsistent set makes the
+                    # residual rule fail on a case that is comfortably
+                    # affordable, which is how S5 came to be blocked by AFF-03
+                    # in a scenario about a guarantee ring.
+                    "dsr": 0.1849,
+                    "dsr_limit": 0.5,
+                    "headroom": 0.3151,
+                    "instalment": 573.10,
+                    "residual": 1826.90,
+                    "capacity_score": 76,
+                    "calc_id": "calc_S3CAPACITY",
+                },
+                _ev(7),
+            ),
             "forensics.get": _result(
                 "forensics.get",
                 [
@@ -543,6 +567,22 @@ def _guarantor_ring_case() -> GoldenCase:
                 },
                 _ev(42),
             ),
+            # Same reason as S3. The ring is the scenario; the member's own
+            # affordability is unremarkable and has to be present or the gates
+            # block the case for the wrong thing.
+            "affordability.compute": _result(
+                "affordability.compute",
+                {
+                    "dsr": 0.0896,
+                    "dsr_limit": 0.5,
+                    "headroom": 0.4104,
+                    "instalment": 286.55,
+                    "residual": 2311.45,
+                    "capacity_score": 79,
+                    "calc_id": "calc_S5CAPACITY",
+                },
+                _ev(7),
+            ),
             "graph.neighbours": _result(
                 "graph.neighbours",
                 {
@@ -584,7 +624,11 @@ def _guarantor_ring_case() -> GoldenCase:
         expected={
             "fraud_level": "HIGH",
             "finding": "INT-05",
-            "route": "COMPLIANCE_REVIEW",
+            # The route, not the recommendation. `COMPLIANCE_REVIEW` is what
+            # the platform recommends and `COMPLIANCE` is where the case goes
+            # (docs/11 S3), and the fixture had the recommendation's name in
+            # the route's field.
+            "route": "COMPLIANCE",
             "cycle_length": 7,
         },
     )

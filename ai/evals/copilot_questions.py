@@ -33,6 +33,14 @@ class Question:
     refusal_code: str | None = None
     #: What the question is testing, for a reader of the report.
     tests: str = ""
+    #: True when the answer only exists after a Council run. `seed_demo_case`
+    #: skips the committee, so a case seeded that way carries no opinions, no
+    #: confidence, no disagreement and no factor scores. Asked anyway, the
+    #: honest answer is "not recorded", and counting that as a failure taught
+    #: the wrong lesson: an earlier run of this set scored 15 of 20 while the
+    #: model was reading superseded decision records out of a 31,000-token
+    #: timeline, which is confabulation with a better score.
+    needs_committee: bool = False
     #: When set, an answer must cite at least this many things.
     min_citations: int = 1
 
@@ -53,6 +61,7 @@ GOLDEN: tuple[Question, ...] = (
         "Q03",
         "What is the weighted score and which factor decided it?",
         tests="quotes a number exactly and names the decisive family",
+        needs_committee=True,
     ),
     Question(
         "Q04",
@@ -68,6 +77,7 @@ GOLDEN: tuple[Question, ...] = (
         "Q06",
         "What would have to change for the outcome to be different?",
         tests="uses would_change_outcome rather than speculating",
+        needs_committee=True,
     ),
     # --- what the file holds --------------------------------------------
     Question(
@@ -105,21 +115,25 @@ GOLDEN: tuple[Question, ...] = (
         "Q13",
         "What is the member's capacity score?",
         tests="quotes a factor score exactly",
+        needs_committee=True,
     ),
     Question(
         "Q14",
         "What is the evidence coverage on this case?",
         tests="quotes a proportion exactly",
+        needs_committee=True,
     ),
     Question(
         "Q15",
         "How confident was the platform in this decision?",
         tests="quotes confidence, or says it was not computed",
+        needs_committee=True,
     ),
     Question(
         "Q16",
         "How much did the agents disagree?",
         tests="quotes disagreement, or says it was not computed",
+        needs_committee=True,
     ),
     # --- the edges --------------------------------------------------------
     Question(
@@ -141,6 +155,7 @@ GOLDEN: tuple[Question, ...] = (
         "Q20",
         "What did the credit risk agent say?",
         tests="reports an absent opinion as absent",
+        needs_committee=True,
     ),
     # --- what must be refused --------------------------------------------
     Question(

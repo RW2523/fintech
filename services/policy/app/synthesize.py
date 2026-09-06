@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from app.autonomy import AutonomyInputs, route
+from app.autonomy import BASE_ROUTE, AutonomyInputs, route
 from app.evaluate import route_for_blockers
 from app.factors import FactorScore
 from cio_common.hashing import GENESIS_HASH, canonical_json, sha256
@@ -51,6 +51,14 @@ _STEP_GATES = "HARD_GATES"
 _STEP_INTEGRITY = "INTEGRITY_CRITICAL"
 _STEP_EVIDENCE = "EVIDENCE_VALIDITY"
 _STEP_SCORE = "WEIGHTED_SCORE"
+_STEP_ROUTING_RULE = "ROUTING_RULE"
+
+#: Routing hints that decide the case rather than nudge it. RT-01 and RT-02
+#: name COMPLIANCE_REVIEW, which is a recommendation as well as a destination:
+#: docs/11 S3 expects both. ENHANCED_ASSESSMENT is here for the same reason.
+#: ESCALATE is not, because it says who signs rather than what the answer is,
+#: and the authority ladder already carries that.
+_ROUTING_HINT_RECOMMENDATIONS = frozenset({"COMPLIANCE_REVIEW", "ENHANCED_ASSESSMENT"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -427,6 +435,25 @@ def synthesize(inputs: SynthesisInputs) -> dict[str, Any]:
         record["route"] = "COMPLIANCE"
         record["route_reasons"] = ["INTEGRITY_CRITICAL"]
         return _finalise(record, _STEP_INTEGRITY)
+
+    # A routing rule from the pack (docs/05 §4 `routing:`). RT-01 sends a case
+    # with fraud level HIGH to compliance whatever it scores, which is the
+    # whole point of having the rule: a tampered document is not something a
+    # good affordability number should be able to outvote.
+    #
+    # The evaluator computed this hint and nothing read it. S3 and S5 are the
+    # two fraud scenarios in docs/11 and both were routed to an ordinary
+    # officer, because the rule existed in the pack, was evaluated correctly,
+    # and was then dropped between the two services.
+    hint = policy_result.get("routing_hint")
+    if hint in _ROUTING_HINT_RECOMMENDATIONS:
+        record["recommendation"] = hint
+        record["route"] = BASE_ROUTE[hint]
+        record["route_reasons"] = [f"ROUTING_RULE:{hint}"]
+        if inputs.kill_switch_active:
+            record["route"] = "OFFICER_REVIEW"
+            record["route_reasons"].append("KILL_SWITCH")
+        return _finalise(record, _STEP_ROUTING_RULE)
 
     # ---- 2. evidence validity ---------------------------------------------
     blocking = [u for o in inputs.opinions for u in (o.get("unresolved") or []) if u.get("blocking")]

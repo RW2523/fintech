@@ -1,0 +1,9 @@
+{
+  "id": "member_chat_bereavement",
+  "kind": "member_chat",
+  "member_id": "M-000123",
+  "why": "A different queue and a different reply from hardship.",
+  "text": "My husband passed away last month and I need to sort out his account",
+  "expect": "handoff",
+  "signal": "BEREAVEMENT"
+}

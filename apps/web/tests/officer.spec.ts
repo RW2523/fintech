@@ -679,3 +679,90 @@ test.describe("management cockpit", () => {
     await expect(refusal).toContainText("aggregates");
   });
 });
+
+/** T-073 — the policy sandbox.
+ *
+ *  The two assertions that matter are both about what the page will not let
+ *  somebody do: replay weights that do not sum to one, and adopt a change
+ *  without two named approvers. Everything else on the page is the service's
+ *  numbers rendered, which the report table asserts against a fresh replay. */
+test.describe("policy sandbox", () => {
+  test.setTimeout(180_000);
+
+  async function openSandbox(page: Page) {
+    await signIn(page, "manager");
+    await page.getByTestId("nav-sandbox").click();
+    await expect(page).toHaveURL(/\/sandbox$/);
+    await expect(page.getByTestId("in-force")).toContainText("policy/PF-STD", { timeout: 30_000 });
+  }
+
+  test("the pack in force is what the form starts from", async ({ page, request }) => {
+    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, { data: { role: "manager" } });
+    const token = (await minted.json()).access_token as string;
+    const pack = await request.get(`${GATEWAY}/api/policy/policy/PF-STD/latest`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const weights = (await pack.json()).dff.weights as Record<string, number>;
+
+    await openSandbox(page);
+    for (const [factor, weight] of Object.entries(weights)) {
+      await expect(page.getByTestId(`weight-value-${factor}`)).toHaveText(weight.toFixed(2));
+    }
+    await expect(page.getByTestId("weight-sum")).toContainText("weights sum to 1");
+  });
+
+  test("weights that do not sum to one cannot be replayed", async ({ page }) => {
+    await openSandbox(page);
+
+    // Raise COMMITMENT without taking it from anywhere. The page must say so
+    // and refuse to run, rather than sending a candidate the service would
+    // reject with a message about a schema.
+    await page.getByTestId("weight-COMMITMENT").fill("0.45");
+    await expect(page.getByTestId("weight-sum")).toContainText("must sum to exactly 1.00");
+    await expect(page.getByTestId("sandbox-run")).toBeDisabled();
+  });
+
+  test("a balanced change replays and reports both sides", async ({ page }) => {
+    await openSandbox(page);
+
+    const before = Number(await page.getByTestId("weight-value-CONDUCT").textContent());
+    const commitment = Number(await page.getByTestId("weight-value-COMMITMENT").textContent());
+    // Rounded to the slider's own step. 0.2 - 0.05 is 0.15000000000000002 in
+    // binary floating point, which a range input rejects as malformed.
+    await page.getByTestId("weight-CONDUCT").fill(Math.max(0, before - 0.05).toFixed(2));
+    await page.getByTestId("weight-COMMITMENT").fill((commitment + 0.05).toFixed(2));
+    await expect(page.getByTestId("weight-sum")).toContainText("weights sum to 1");
+
+    await page.getByTestId("sandbox-run").click();
+    await expect(page.getByTestId("sandbox-report")).toBeVisible({ timeout: 120_000 });
+
+    // Both columns are present and the case counts match: a report that
+    // compared different populations would look like a policy effect.
+    const baseline = await page.getByTestId("baseline-cases").textContent();
+    const candidate = await page.getByTestId("candidate-cases").textContent();
+    expect(baseline).toBe(candidate);
+    await expect(page.getByTestId("cases-replayed")).toContainText("No model was called");
+  });
+
+  test("adoption needs two different people", async ({ page }) => {
+    await openSandbox(page);
+
+    const conduct = Number(await page.getByTestId("weight-value-CONDUCT").textContent());
+    const commitment = Number(await page.getByTestId("weight-value-COMMITMENT").textContent());
+    await page.getByTestId("weight-CONDUCT").fill(Math.max(0, conduct - 0.05).toFixed(2));
+    await page.getByTestId("weight-COMMITMENT").fill((commitment + 0.05).toFixed(2));
+    await page.getByTestId("sandbox-run").click();
+    await expect(page.getByTestId("sandbox-adopt")).toBeVisible({ timeout: 120_000 });
+
+    await expect(page.getByTestId("sandbox-adopt-submit")).toBeDisabled();
+
+    await page.getByTestId("approver-0").fill("u-same");
+    await page.getByTestId("approver-1").fill("u-same");
+    // Two names that are one person is not two approvers, and the page says so
+    // by staying disabled rather than by letting the service refuse it.
+    await expect(page.getByTestId("sandbox-adopt-submit")).toBeDisabled();
+
+    await page.getByTestId("approver-1").fill("u-other");
+    await expect(page.getByTestId("sandbox-adopt-submit")).toBeEnabled();
+  });
+});

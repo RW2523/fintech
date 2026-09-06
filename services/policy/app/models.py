@@ -184,6 +184,20 @@ class Approver(Strict):
     actor_id: str = Field(min_length=1, max_length=64)
 
 
+class AdoptVersionRequest(Strict):
+    """Write a sandbox candidate into a new pack version (docs/05 §7)."""
+
+    #: The sandbox run whose candidate is being adopted. Required: adopting a
+    #: change nobody replayed is exactly the thing the sandbox exists to stop,
+    #: and the run id is what ties the new version to the evidence for it.
+    sandbox_id: str = Field(min_length=3, max_length=64)
+    approvers: list[Approver]
+    reason: str = Field(default="", max_length=500)
+    #: Written when given, otherwise derived from today and the next free
+    #: sequence. Supplied only so a test can be deterministic.
+    version: str | None = Field(default=None, pattern=r"^\d{4}\.\d{2}\.\d+$")
+
+
 class AutonomyChangeRequest(Strict):
     """Move the dial. Only the parts of the autonomy document a dial change is
     allowed to touch are here: the action levels and the kill-switch owners

@@ -71,6 +71,43 @@ PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "delimiter_escape",
         re.compile(r"(```|</?(system|instruction|prompt)>|\[/?INST\]|<\|im_(start|end)\|>)", re.I),
     ),
+    (
+        # Text shaped like the message structure around it, so it reads as part
+        # of the conversation rather than as content inside one. Missed by the
+        # authority pattern above, which looks for a `SYSTEM:` prefix on a line
+        # and not for a role field in an object.
+        "role_impersonation",
+        re.compile(
+            r'["\']?\brole["\']?\s*[:=]\s*["\']?(system|assistant|developer|tool)["\']?'
+            r'|["\']?\b(content|message)["\']?\s*:\s*["\'].{0,10}(ignore|disregard|approve|skip)',
+            re.I,
+        ),
+    ),
+    (
+        # An instruction to leave a step out. The forced-outcome pattern catches
+        # "approve this application anyway" and misses "skip the document
+        # check", which asks for the same thing by removing what would stop it.
+        "skip_a_control",
+        re.compile(
+            r"\b(skip|bypass|omit|waive|suppress|disable|turn off|do not (run|apply|perform))\b"
+            r"[^.]{0,40}\b(check|verification|gate|rule|policy|review|screening|"
+            r"affordability|документ\w*|document\w*|kyc|aml)\b",
+            re.I,
+        ),
+    ),
+    (
+        # Borrowed authority. "From compliance", "the head of credit says", "as
+        # agreed with the committee": a claim that somebody who could authorise
+        # this already has. A payslip has no reason to carry one.
+        "borrowed_authority",
+        re.compile(
+            r"\b(urgent\s+)?from\s+(compliance|risk|credit|management|the board|head office)\b"
+            r"|\b(compliance|the committee|head of (credit|risk)|management)\s+"
+            r"(has\s+)?(approved|authorised|authorized|says|instructs|confirms)\b"
+            r"|\bpre.?approved\b",
+            re.I,
+        ),
+    ),
 )
 
 

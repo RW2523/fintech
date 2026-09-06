@@ -174,7 +174,25 @@ case "$PHASE" in
     step "outreach drill"         uv run python scripts/outreach_drill.py
     step "workbench smoke"        bash -c 'cd apps/web && npx playwright test'
     ;;
-  P7|P8)
+  P7)
+    # docs/14 P7: S6 and S10 pass, the copilots are grounded, and the cockpit
+    # and sandbox UIs work.
+    step "make lint"              make lint
+    step "make typecheck"         make typecheck
+    step "guardrails"             uv run pytest ai/tests -q
+    step "policy service"         bash -c 'cd services/policy && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "agent runtime"          bash -c 'cd services/agent_runtime && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "governance service"     bash -c 'cd services/governance && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "llm gateway"            bash -c 'cd services/llm_gateway && uv run pytest -c "$OLDPWD/pyproject.toml" --rootdir=. -o testpaths=tests tests -q'
+    step "stack healthy"          scripts/wait_healthy.sh 120
+    step "every service routed"   scripts/check_routes.sh
+    step "officer copilot"        uv run python scripts/copilot_eval.py
+    step "S10 member assistant"   uv run python scripts/member_assistant_eval.py
+    step "cockpit and metrics"    uv run python scripts/cockpit_eval.py
+    step "S6 sandbox and adopt"   uv run python scripts/sandbox_drill.py
+    step "workbench smoke"        bash -c 'cd apps/web && npx playwright test'
+    ;;
+  P8)
     echo "  phase ${PHASE} verification not implemented yet" >&2
     exit 1
     ;;

@@ -22,6 +22,7 @@ from app.dial import (
 from app.evaluate import evaluate_case
 from app.factors import FactorScore, score_family
 from app.models import (
+    AdoptVersionRequest,
     AffordabilityRequest,
     AutonomyChangeRequest,
     EvaluateRequest,
@@ -31,18 +32,22 @@ from app.models import (
     SandboxReplayRequest,
     SynthesizeRequest,
 )
-from app.packs import PackError, PolicyPack, available_packs, load_pack
+from app.packs import PackError, PolicyPack, available_packs, load_pack, write_pack
 from app.repository import (
     active_amendment,
     amendment_history,
+    freeze_inputs,
+    freeze_outcome,
     kill_switch_active,
     kill_switch_state,
     load_replay_cases,
+    load_sandbox_run,
     next_amendment_sequence,
     save_amendment,
     save_sandbox_run,
     set_kill_switch,
 )
+from app.sandbox import apply_candidate
 from app.sandbox import replay as run_replay
 from app.synthesize import SynthesisInputs
 from app.synthesize import synthesize as run_synthesis
@@ -103,7 +108,23 @@ async def get_pack(product: str, version: str) -> dict[str, Any]:
 async def evaluate(body: EvaluateRequest) -> dict[str, Any]:
     """Deterministic gates, affordability, exposure and authority (docs/05 §3)."""
     pack = _pack(body.product_code, body.policy_version)
-    return evaluate_case(pack, body.inputs.to_policy_inputs(), snapshot_id=body.snapshot_id)
+    result = evaluate_case(pack, body.inputs.to_policy_inputs(), snapshot_id=body.snapshot_id)
+
+    if body.snapshot_id:
+        # Half of a replay case. This is the only point in the live path where
+        # the raw inputs exist, and without them the sandbox can replay only
+        # what a fixture seeded: before this, a case the platform had actually
+        # decided could never be replayed under a candidate pack.
+        async with session() as db:
+            await freeze_inputs(
+                db,
+                snapshot_id=body.snapshot_id,
+                product_code=pack.product,
+                policy_version=pack.policy_version,
+                inputs=body.inputs.model_dump(mode="json"),
+            )
+            await db.commit()
+    return result
 
 
 @router.post("/affordability", summary="The affordability calculation on its own")
@@ -201,7 +222,7 @@ async def synthesize(body: SynthesizeRequest) -> dict[str, Any]:
         )
         for f in body.factor_scores
     )
-    return run_synthesis(
+    record = run_synthesis(
         SynthesisInputs(
             snapshot_id=body.snapshot_id,
             case_type=body.case_type,
@@ -224,6 +245,27 @@ async def synthesize(body: SynthesizeRequest) -> dict[str, Any]:
             budgets=body.budgets,
         )
     )
+
+    # The other half. Written after the decision rather than with it, because
+    # only now is there an outcome to compare a candidate against.
+    async with session() as db:
+        await freeze_outcome(
+            db,
+            snapshot_id=body.snapshot_id,
+            case_id=record.get("case_id"),
+            factor_scores=body.factor_scores,
+            opinions=body.opinions,
+            baseline={
+                "recommendation": record.get("recommendation"),
+                "route": record.get("route"),
+                "weighted_score": record.get("weighted_score"),
+                "decisive": record.get("decisive_factor"),
+            },
+            segment={"grade": str(body.policy_result.get("member_grade") or "")},
+        )
+        await db.commit()
+
+    return record
 
 
 @router.post("/route", summary="Evaluate the Autonomy Dial for a record")
@@ -469,3 +511,117 @@ async def release_kill_switch(product: str, body: KillSwitchRequest) -> dict[str
         "setting": autonomy.get("setting"),
         "effective_setting": effective_setting(autonomy, kill_switch=False),
     }
+
+
+@router.post("/{product}/versions", summary="Adopt a sandbox candidate as a new version")
+async def adopt_version(product: str, body: AdoptVersionRequest) -> dict[str, Any]:
+    """docs/05 §7 — the Board writes the policy, having tested it first.
+
+    Two distinct approvers, both heads, exactly as a dial change needs. The
+    difference is what is being approved: the dial says how much the platform
+    may do on its own, and this says what it decides by.
+
+    Adoption is refused unless the candidate was replayed. A weight change
+    adopted without a replay is the one thing the sandbox exists to prevent,
+    and the sandbox id on the row is what ties the version to the evidence for
+    it: the report is still readable years later, beside the decisions that
+    used it.
+    """
+    async with session() as db:
+        run = await load_sandbox_run(db, body.sandbox_id)
+    if run is None:
+        raise NotFound(f"no sandbox run {body.sandbox_id!r}")
+    if str(run["product_code"]) != product:
+        raise ValidationFailed(
+            f"sandbox run {body.sandbox_id!r} replayed {run['product_code']}, not {product}",
+            product=product,
+        )
+
+    candidate = run["candidate"] or {}
+    if not candidate:
+        raise ValidationFailed(
+            "that sandbox run replayed the current pack unchanged; there is nothing to adopt",
+            sandbox_id=body.sandbox_id,
+        )
+
+    try:
+        check_approvers([a.model_dump() for a in body.approvers])
+    except AmendmentError as exc:
+        raise ValidationFailed(str(exc), product=product) from exc
+
+    current = _pack(product, None)
+    amended = apply_candidate(current, candidate)
+    version = body.version or _next_version(product)
+
+    try:
+        write_pack(
+            product,
+            version,
+            {"policy": amended.policy, "dff": amended.dff, "autonomy": amended.autonomy},
+        )
+    except PackError as exc:
+        raise ValidationFailed(str(exc), problems=exc.problems) from exc
+
+    # The version is stamped into the documents themselves as well as into the
+    # directory name. A pack whose `version` field disagrees with where it
+    # lives is one nobody can cite unambiguously.
+    _stamp_version(product, version)
+
+    async with session() as db:
+        await emit(
+            db,
+            "policy.version_adopted",
+            {
+                "product_code": product,
+                "policy_version": f"policy/{product}/{version}",
+                "adopted_from": body.sandbox_id,
+                "previous_version": current.version,
+                "candidate": candidate,
+                "approved_by": [f"{a.role}:{a.actor_id}" for a in body.approvers],
+                "reason": body.reason,
+            },
+            key=product,
+            producer="policy",
+        )
+        await db.commit()
+
+    return {
+        "product_code": product,
+        "version": version,
+        "policy_version": f"policy/{product}/{version}",
+        "adopted_from": body.sandbox_id,
+        "previous_version": current.version,
+        "approved_by": [f"{a.role}:{a.actor_id}" for a in body.approvers],
+    }
+
+
+def _next_version(product: str) -> str:
+    """The next free version for this year and month.
+
+    `2026.09.1` then `2026.09.2`. Derived from what is on disk rather than
+    from a counter, so a version restored from a backup does not collide with
+    one adopted since.
+    """
+    from datetime import UTC, datetime
+
+    stamp = datetime.now(UTC).strftime("%Y.%m")
+    taken = {v for p, v in available_packs() if p == product and v.startswith(f"{stamp}.")}
+    sequence = 1
+    while f"{stamp}.{sequence}" in taken:
+        sequence += 1
+    return f"{stamp}.{sequence}"
+
+
+def _stamp_version(product: str, version: str) -> None:
+    """Write the version into each document of the pack just written."""
+    import yaml
+
+    from cio_common.assets import policy_pack_root
+
+    base = policy_pack_root() / product / version
+    for kind in ("policy", "dff", "autonomy"):
+        path = base / f"{kind}.yaml"
+        body = yaml.safe_load(path.read_text())
+        if isinstance(body, dict) and "version" in body:
+            body["version"] = version
+            path.write_text(yaml.safe_dump(body, sort_keys=False, allow_unicode=True))

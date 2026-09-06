@@ -392,6 +392,108 @@ recalibrate on a rolling window rather than trust this one.
 Whole suite at the end of P6: **1,687 Python tests** and **14 Playwright
 tests**, all passing.
 
+### P7 (verified 2026-09-06, `scripts/verify_phase.sh P7`)
+
+14 pass, 0 fail.
+
+| Step | Result |
+|---|---|
+| make lint | PASS |
+| make typecheck | PASS |
+| guardrails | PASS |
+| policy service | PASS |
+| agent runtime | PASS |
+| governance service | PASS |
+| llm gateway | PASS |
+| stack healthy | PASS |
+| every service serving its routes | PASS |
+| officer copilot (25 questions) | PASS |
+| S10 member assistant | PASS |
+| cockpit and metrics | PASS |
+| S6 sandbox and adopt | PASS |
+| workbench Playwright smoke (29 tests) | PASS |
+
+Against `docs/14` P7 criteria: S6 and S10 pass, the copilots are grounded, and
+the cockpit and sandbox screens work.
+
+**The measurements.** The officer copilot grounds 25 of 25 answers, refuses all
+five questions it must refuse, and answers 15 of the 20 an officer actually
+asks; the five it declines are declined honestly rather than guessed at. The
+member assistant passes all ten checks of the S10 transcript. The cockpit
+passes 14 of 14, including a key-by-key comparison of every tile against a
+fresh read of the metrics endpoint. The S6 sandbox flow passes 13 of 13, moving
+S1's weighted score by +0.4 when 0.10 of weight moves from CONDUCT to
+COMMITMENT.
+
+**Four defects were found by measuring rather than by testing.**
+
+The officer copilot ran on the `fast` route, whose ceiling is 400 output
+tokens. A `copilot_answer/1.0` with its citations does not fit under that, so
+guided decoding cut the JSON off mid-object and every caller reported "the
+answer was not JSON". Four generations on `case_S1CLEAN`, every one truncated,
+and nothing in the stack said why. A test now asserts that no bundle asks for
+more output than its route allows.
+
+Asked for a next payment when every instalment was paid, the member assistant
+built a date out of each account's day-of-month and told a member a payment
+date no schedule row supports. Asked for a balance with only a principal and an
+instalment on hand, it computed a settlement figure the core does not hold; the
+output screen caught that one. Both tools now say in words what the record does
+and does not hold, because a gap in a tool result is an invitation.
+
+Asked why approvals had fallen when every decision on file was from one month,
+the manager copilot reported a fall from 0.5 to 0.25, where 0.25 was the
+autonomous share, and then explained it. Both numbers were in the context so
+the numeric screen passed: the invention was the relationship, not the figures.
+The flow metrics now carry a monthly series and the screen rejects a claimed
+movement when the shortest series in the run has fewer than two points.
+
+Nothing in the live path recorded a replayable case, so the sandbox could only
+replay what a fixture had seeded and no case the platform had actually decided
+was ever replayable. Freezing the gate inputs at evaluation and the outcome at
+synthesis fixed it; `/policy/evaluate` is no longer a pure function, which is
+the cost.
+
+**One deviation from the specification.** `docs/06 §2.3` puts the officer
+copilot and the member assistant on the `fast` route. Both run on `agent`
+instead, for the ceiling reason above; `fast` has no other user and its 400
+tokens are deliberate for narration. The manager copilot is on `reasoning` as
+specified. Recorded here rather than silently, because a route is a cost and a
+latency decision as well as a capability one.
+
+**The demo now ships two policy versions.** `PF-STD/2026.09.2` was adopted
+through the sandbox during T-073 and the five golden cases are decided under
+it, so it stays: a version somebody decided under must still read back exactly
+as it did. Versions written by drill runs, which nothing had decided under,
+were removed afterwards.
+
+**Running `make sandbox-drill` adds two policy versions every time.** That is
+adoption working, not a leak: a version cannot be written over and a drill that
+deleted what it adopted would teach the wrong lesson about what adopting a
+policy means. The drill prints what it wrote, and `make reset` (T-082) is where
+the demo state is restored. It also re-seeds the golden cases before replaying,
+because a candidate compared against a baseline recorded under a different pack
+can move nothing and report truthfully that nothing moved.
+
+The policy service now runs as the host user. As root it left pack directories
+on the host that nobody could delete, which turns a sandbox experiment into
+litter needing docker to clear.
+
+**The officer copilot's quality number fell when the context was bounded, and
+that is the finding.** An earlier run of the twenty golden questions answered
+15 of 20. After `case.get` was capped, the same run answered 5. The case
+reconstruction had grown to 31,000 tokens as the demo case was re-seeded, past
+the model's context window, and the answers it had been giving came from
+superseded decision records carried in that timeline. Seven of the twenty
+questions ask for a confidence, a disagreement or an agent's opinion, and
+`seed_demo_case` skips the committee, so the honest answer to those is "not
+recorded". The question set now says which questions a seeded case can answer
+and the copilot gets all seven of the others right by declining them.
+Confabulation with a better score is still confabulation.
+
+Whole suite at the end of P7: **1,824 Python tests** and **29 Playwright
+tests**, all passing.
+
 ## Blocked
 (none)
 

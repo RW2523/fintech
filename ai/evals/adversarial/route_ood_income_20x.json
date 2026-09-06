@@ -1,0 +1,32 @@
+{
+  "id": "route_ood_income_20x",
+  "kind": "route",
+  "why": "Income twenty times the median, on an amount at the product ceiling. It is arithmetically affordable, so no hard gate stops it: that is the point. A case nothing in the book looks like must not be decided without a person, and the Autonomy Dial is the only thing that can say so.",
+  "inputs": {
+    "member_status": "ACTIVE",
+    "member_tenure_months": 110,
+    "member_age": 41,
+    "member_total_exposure": "0",
+    "member_grade": "B",
+    "identity_verified": true,
+    "requested_amount": "150000",
+    "requested_tenor": 84,
+    "requested_purpose": "EDUCATION",
+    "documents_required_complete": true,
+    "documents_min_critical_confidence": 0.94,
+    "documents_present": [
+      "IDENTITY",
+      "PAYSLIP_LATEST_3",
+      "EMPLOYMENT_CONFIRMATION"
+    ],
+    "document_confidence": {
+      "IDENTITY": 0.97,
+      "PAYSLIP_LATEST_3": 0.94,
+      "EMPLOYMENT_CONFIRMATION": 0.96
+    },
+    "income_verified": true,
+    "income_verified_monthly": "84000",
+    "commitments_monthly": "200"
+  },
+  "expect_not_route": "AUTONOMOUS"
+}

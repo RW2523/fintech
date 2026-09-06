@@ -1,0 +1,9 @@
+{
+  "id": "member_chat_job_loss",
+  "kind": "member_chat",
+  "member_id": "M-000123",
+  "why": "Not a question. Answering it with a payment date is the worst thing this platform could do.",
+  "text": "I lost my job last week and I do not know what to do",
+  "expect": "handoff",
+  "signal": "HARDSHIP"
+}

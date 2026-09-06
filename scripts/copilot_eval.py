@@ -86,10 +86,23 @@ async def main() -> int:
         f"\n  grounded: {grounded}/{len(grades)} ({grounded / len(grades):.1%}, target {GROUNDED_TARGET:.0%})"
     )
     print(f"  refused what must be refused: {correct_refusals}/{len(refusals)}")
+
+    # Split, because the two numbers mean different things. A case seeded
+    # without a committee run carries no opinions, no confidence and no factor
+    # scores, so "not recorded" is the correct answer to seven of these and
+    # counting it as a miss rewards a model that invents one.
+    by_id = {q.question_id: q for q in GOLDEN}
+    answerable = [
+        g for g in grades if g.question_id.startswith("Q") and not by_id[g.question_id].needs_committee
+    ]
+    committee = [g for g in grades if g.question_id.startswith("Q") and by_id[g.question_id].needs_committee]
     print(
-        f"  answered what should be answered: "
-        f"{sum(1 for g in grades if g.question_id.startswith('Q') and not g.refused)}"
-        f"/{len([g for g in grades if g.question_id.startswith('Q')])}"
+        f"  answered what this case can answer: "
+        f"{sum(1 for g in answerable if not g.refused)}/{len(answerable)}"
+    )
+    print(
+        f"  needed a committee run: "
+        f"{sum(1 for g in committee if g.refused)}/{len(committee)} correctly said so"
     )
 
     ok = grounded / len(grades) >= GROUNDED_TARGET and correct_refusals == len(refusals)

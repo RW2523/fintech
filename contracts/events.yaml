@@ -42,6 +42,11 @@ events:
     producer: document
     consumers: [fraud, application]
     payload: "{document_id, code, severity}"
+  policy.version_adopted.v1:
+    key: product_code
+    producer: policy
+    consumers: [committee, governance, audit]
+    payload: "{product_code, policy_version, adopted_from, approved_by}"
   policy.evaluated.v1:
     key: case_id
     producer: policy

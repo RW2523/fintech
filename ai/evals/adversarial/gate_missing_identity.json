@@ -1,0 +1,30 @@
+{
+  "id": "gate_missing_identity",
+  "kind": "gate",
+  "why": "A required document absent. The gate is the only thing standing between an unverified applicant and a facility.",
+  "inputs": {
+    "member_status": "ACTIVE",
+    "member_tenure_months": 110,
+    "member_age": 41,
+    "member_total_exposure": "0",
+    "member_grade": "B",
+    "identity_verified": false,
+    "requested_amount": "8000",
+    "requested_tenor": 24,
+    "requested_purpose": "EDUCATION",
+    "documents_required_complete": false,
+    "documents_min_critical_confidence": 0.94,
+    "documents_present": [
+      "PAYSLIP_LATEST_3",
+      "EMPLOYMENT_CONFIRMATION"
+    ],
+    "document_confidence": {
+      "PAYSLIP_LATEST_3": 0.94,
+      "EMPLOYMENT_CONFIRMATION": 0.96
+    },
+    "income_verified": true,
+    "income_verified_monthly": "4200",
+    "commitments_monthly": "600"
+  },
+  "expect_blocked": "DOC-01"
+}

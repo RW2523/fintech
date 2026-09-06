@@ -1,0 +1,32 @@
+{
+  "id": "gate_low_confidence_id",
+  "kind": "gate",
+  "why": "An identity document the extractor barely read. Low confidence is not verification, and a gate that accepts it is a gate that accepts a forgery. DOC-04 is the rule that reads the confidence; DOC-01 only asks whether the document is there at all.",
+  "inputs": {
+    "member_status": "ACTIVE",
+    "member_tenure_months": 110,
+    "member_age": 41,
+    "member_total_exposure": "0",
+    "member_grade": "B",
+    "identity_verified": true,
+    "requested_amount": "8000",
+    "requested_tenor": 24,
+    "requested_purpose": "EDUCATION",
+    "documents_required_complete": true,
+    "documents_min_critical_confidence": 0.41,
+    "documents_present": [
+      "IDENTITY",
+      "PAYSLIP_LATEST_3",
+      "EMPLOYMENT_CONFIRMATION"
+    ],
+    "document_confidence": {
+      "IDENTITY": 0.41,
+      "PAYSLIP_LATEST_3": 0.94,
+      "EMPLOYMENT_CONFIRMATION": 0.96
+    },
+    "income_verified": true,
+    "income_verified_monthly": "4200",
+    "commitments_monthly": "600"
+  },
+  "expect_blocked": "DOC-04"
+}

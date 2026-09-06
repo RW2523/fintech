@@ -272,3 +272,30 @@ def available_packs(root: Path | None = None) -> list[tuple[str, str]]:
         if version.is_dir() and (version / "policy.yaml").is_file()
     ]
     return found
+
+
+def write_pack(product: str, version: str, bodies: dict[str, Any], *, root: Path | None = None) -> Path:
+    """Write a new pack version, once.
+
+    Write-once on purpose. A version somebody decided under must still read
+    back exactly as it did, and overwriting one would make every ledger entry
+    citing it a claim about a document that no longer exists. Re-adopting the
+    same change gets the next sequence rather than replacing the last.
+
+    The bodies are validated by loading them back before this returns, so a
+    version that would fail to load is never left on disk for a later request
+    to trip over.
+    """
+    base = (root or pack_root()) / product / version
+    if base.exists():
+        raise PackError(product, version, ["that version already exists on disk"])
+
+    base.mkdir(parents=True)
+    for kind in _KINDS:
+        body = bodies.get(kind)
+        if body is None:
+            raise PackError(product, version, [f"{kind}.yaml is missing from the candidate"])
+        (base / f"{kind}.yaml").write_text(yaml.safe_dump(body, sort_keys=False, allow_unicode=True))
+
+    load_pack(product, version, root=root)
+    return base

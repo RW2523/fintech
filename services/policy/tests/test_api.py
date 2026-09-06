@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -9,6 +10,8 @@ from httpx import ASGITransport, AsyncClient
 
 import cio_contracts
 from app.main import app
+
+ROOT = Path(__file__).resolve().parents[3]
 
 CLEAN: dict[str, Any] = {
     "member_tenure_months": 110,
@@ -25,16 +28,65 @@ CLEAN: dict[str, Any] = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _database_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`/evaluate` freezes a replay case, so it needs a database.
+
+    It did not before T-073: it was pure, and the sandbox could only replay
+    cases a fixture had seeded, so no case the platform actually decided was
+    ever replayable. Freezing the inputs at evaluation is what fixed that, and
+    the cost is that this endpoint now touches the database.
+    """
+    from cio_common.testing import postgres_is_up, prepared_test_database_url
+
+    if not postgres_is_up():
+        pytest.skip("PostgreSQL not reachable; run `make up`")
+    monkeypatch.setenv("DATABASE_URL", prepared_test_database_url(ROOT))
+
+    from app.db import engine, sessions
+    from app.settings import settings
+
+    settings.cache_clear()
+    engine.cache_clear()
+    sessions.cache_clear()
+    _apply_schema()
+
+
+def _apply_schema() -> None:
+    """Create this service's tables in the test database.
+
+    Synchronous, because the fixture is: an async fixture would run inside the
+    loop the test is about to use, and the engine is cached per loop.
+    """
+    import asyncio
+
+    from app.db import dispose, engine
+    from app.schema import apply_ddl
+
+    async def create() -> None:
+        async with engine().begin() as connection:
+            await apply_ddl(connection)
+        await dispose()
+
+    asyncio.run(create())
+
+
 @pytest.fixture
 async def client() -> AsyncClient:
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://policy")
 
 
 async def test_versions_lists_what_is_on_file(client: AsyncClient) -> None:
+    """The newest version on disk is the active one.
+
+    Asserted as a property rather than as the literal "2026.09.1": adopting a
+    sandbox candidate writes 2026.09.2, which is the point of T-073, and a test
+    naming today's version fails the first time the Board changes the policy.
+    """
     async with client as http:
         body = (await http.get("/policy/PF-STD/versions")).json()
-    assert body["active"] == "2026.09.1"
     assert "2026.09.1" in body["versions"]
+    assert body["active"] == sorted(body["versions"])[-1]
 
 
 async def test_an_unknown_product_is_not_found(client: AsyncClient) -> None:
