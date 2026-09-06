@@ -536,3 +536,173 @@ def test_the_record_is_hashed_over_its_own_content(std_pack: PolicyPack) -> None
     record = synth(std_pack)
     assert len(record["hash"]) == 64
     assert record["prev_hash"] == "0" * 64, "the ledger relinks this on append"
+
+
+# ---------------------------------------------------------------------------
+# T-050 — a Challenger reservation, and what it does and does not change
+# ---------------------------------------------------------------------------
+def _autonomous(pack: PolicyPack) -> dict[str, Any]:
+    """The dial set to act alone, so a reservation has something to stop."""
+    autonomy = dict(pack.autonomy)
+    autonomy["setting"] = "AUTONOMOUS_WITHIN_LIMITS"
+    return autonomy
+
+
+def test_a_blocking_reservation_stops_the_case_at_the_evidence_step(std_pack: PolicyPack) -> None:
+    """docs/05 §5 — evidence validity sits above the weighted score.
+
+    This is the S2 shape: the case is sound on its factors, and the Challenger
+    has a reservation the run could not close. The case is not weighed at all,
+    which is a stronger answer than weighing it and routing it to a person.
+    """
+    record = synth(
+        std_pack,
+        autonomy=_autonomous(std_pack),
+        tier="EXTENDED",
+        opinions=opinions(
+            challenger_unresolved=[
+                {
+                    "question": "the payslip is not reconciled against the deduction file",
+                    "requested_evidence": "DEDUCTION_SCHEDULE",
+                    "blocking": True,
+                }
+            ]
+        ),
+    )
+
+    assert record["challenger_open"] is True
+    assert record["recommendation"] == "MORE_INFORMATION_REQUIRED"
+    assert record["route"] == "OFFICER_REVIEW"
+    assert record["route_reasons"] == ["BLOCKING_EVIDENCE_GAP"]
+    assert record["weighted_score"] is None, "a case held for evidence must not be scored"
+    cio_contracts.validate(as_contract(record), "DecisionRecord")
+
+
+def test_the_reservation_appears_in_what_would_change_the_outcome(std_pack: PolicyPack) -> None:
+    """And what it would change is computed by running the same hierarchy with
+    the gap closed, not by assuming an approval."""
+    record = synth(
+        std_pack,
+        autonomy=_autonomous(std_pack),
+        tier="EXTENDED",
+        opinions=opinions(challenger_unresolved=[{"question": "income is unconfirmed", "blocking": True}]),
+    )
+
+    entries = [e for e in record["would_change_outcome"] if e["condition"].startswith("resolved:")]
+    assert entries, "the reservation holding the case is not named as changing it"
+    assert entries[0]["new_recommendation"] == "APPROVE"
+    assert entries[0]["new_route"] == "AUTONOMOUS"
+
+
+def test_the_counterfactual_is_what_the_case_actually_scores_without_the_gap(
+    std_pack: PolicyPack,
+) -> None:
+    """Not an assumed approval, and not a second derivation either.
+
+    The record's claim is checked against the same case run without the
+    reservation, which is the only thing that makes the claim true.
+    """
+    weak = {
+        "factors": factors(CAPACITY=40, CONDUCT=41, COMMITMENT=40, CONDITIONS=30, INTEGRITY=40),
+        "autonomy": _autonomous(std_pack),
+        "tier": "EXTENDED",
+    }
+    held = synth(
+        std_pack,
+        **weak,
+        opinions=opinions(
+            ["OPPOSE"] * 5,
+            challenger_unresolved=[{"question": "income is unconfirmed", "blocking": True}],
+        ),
+    )
+    resolved = synth(std_pack, **weak, opinions=opinions(["OPPOSE"] * 5))
+
+    assert held["recommendation"] == "MORE_INFORMATION_REQUIRED"
+    assert resolved["recommendation"] == "DECLINE", "the weak case must not score an approval"
+
+    entries = [e for e in held["would_change_outcome"] if e["condition"].startswith("resolved:")]
+    assert entries
+    assert all(e["new_recommendation"] == resolved["recommendation"] for e in entries)
+
+
+def test_only_a_blocking_reservation_is_offered_as_a_counterfactual(std_pack: PolicyPack) -> None:
+    """A doubt the Challenger did not think fatal is not a thing whose
+    resolution changes the outcome, and listing it would crowd out the ones
+    that do."""
+    record = synth(
+        std_pack,
+        autonomy=_autonomous(std_pack),
+        tier="EXTENDED",
+        opinions=opinions(
+            challenger_unresolved=[{"question": "the employer letter is undated", "blocking": False}]
+        ),
+    )
+
+    assert record["challenger_open"] is True
+    assert not [e for e in record["would_change_outcome"] if e["condition"].startswith("resolved:")]
+
+
+def test_a_non_blocking_reservation_still_stops_autonomy(std_pack: PolicyPack) -> None:
+    """docs/05 §6 — the condition is that the Challenger has nothing open, not
+    that what it has open is blocking. A reservation it did not think fatal is
+    still a reservation nobody has answered."""
+    record = synth(
+        std_pack,
+        autonomy=_autonomous(std_pack),
+        tier="EXTENDED",
+        opinions=opinions(
+            challenger_unresolved=[{"question": "the employer letter is undated", "blocking": False}]
+        ),
+    )
+
+    assert record["challenger_open"] is True
+    assert record["route"] == "OFFICER_REVIEW"
+
+
+def test_high_disagreement_escalates_beyond_an_officer(std_pack: PolicyPack) -> None:
+    """docs/05 §6 — disagreement above the enhanced threshold routes on its own,
+    whatever the dial is set to."""
+    record = synth(
+        std_pack,
+        tier="EXTENDED",
+        opinions=opinions(["SUPPORT", "SUPPORT", "OPPOSE", "OPPOSE", "BLOCK"]),
+    )
+
+    assert record["disagreement"] is not None
+    assert record["disagreement"] > std_pack.dff["disagreement_thresholds"]["enhanced_assessment"]
+    assert record["route"] == "ENHANCED_ASSESSMENT"
+    assert "DISAGREEMENT_HIGH" in record["route_reasons"]
+
+
+def test_moderate_disagreement_takes_an_autonomous_case_to_an_officer(std_pack: PolicyPack) -> None:
+    record = synth(
+        std_pack,
+        autonomy=_autonomous(std_pack),
+        tier="EXTENDED",
+        opinions=opinions(["SUPPORT", "SUPPORT", "SUPPORT", "LEAN_SUPPORT", "REVIEW"]),
+    )
+
+    disagreement = record["disagreement"]
+    thresholds = std_pack.dff["disagreement_thresholds"]
+    assert thresholds["officer_review"] < disagreement <= thresholds["enhanced_assessment"]
+    assert record["route"] == "OFFICER_REVIEW"
+
+
+def test_a_repair_proposal_reaches_the_record(std_pack: PolicyPack) -> None:
+    """The evidence a Tier 2 repair could not fetch is a request for a person,
+    and the officer sees it on the case rather than in a log."""
+    proposal = {
+        "schema": "action_proposal/1.0",
+        "action_id": "act_01JQZK7M8N9P0Q1R2S3T4V5W6X",
+        "level": "L1",
+        "type": "REQUEST_DOCUMENT",
+        "parameters": {"evidence": "DEDUCTION_SCHEDULE", "blocking": True},
+        "rationale": {"text": "the payslip is not reconciled", "evidence_refs": []},
+        "requires": "OFFICER",
+        "proposed_by": "challenger",
+        "state": "PROPOSED",
+    }
+    record = synth(std_pack, tier="EXTENDED", proposed_actions=(proposal,))
+
+    assert record["proposed_actions"] == [proposal]
+    cio_contracts.validate(as_contract(record), "DecisionRecord")

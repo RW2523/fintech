@@ -172,6 +172,7 @@ async def synthesize(body: SynthesizeRequest) -> dict[str, Any]:
             policy_result=body.policy_result,
             factors=factors,
             opinions=tuple(body.opinions),
+            proposed_actions=tuple(body.proposed_actions),
             dff=pack.dff,
             autonomy=pack.autonomy,
             model_versions=body.model_versions,

@@ -127,6 +127,9 @@ class SynthesizeRequest(Strict):
     policy_result: dict[str, Any]
     factor_scores: list[dict[str, Any]] = Field(default_factory=list)
     opinions: list[dict[str, Any]] = Field(default_factory=list)
+    #: Proposals raised outside an opinion, such as the evidence requests a
+    #: Tier 2 repair could not fill with a tool (docs/06 §8).
+    proposed_actions: list[dict[str, Any]] = Field(default_factory=list)
     model_versions: dict[str, str] = Field(default_factory=dict)
     committee_run_id: str | None = None
     model_health: str = Field(default="GREEN", pattern="^(GREEN|AMBER|RED)$")

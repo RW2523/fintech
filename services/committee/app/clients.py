@@ -24,6 +24,8 @@ class UpstreamError(RuntimeError):
 class Clients(Protocol):
     async def invoke_agent(self, body: dict[str, Any]) -> dict[str, Any]: ...
 
+    async def call_tool(self, body: dict[str, Any]) -> dict[str, Any]: ...
+
     async def synthesize(self, body: dict[str, Any]) -> dict[str, Any]: ...
 
     async def narrate(self, body: dict[str, Any]) -> dict[str, Any]: ...
@@ -55,6 +57,9 @@ class HttpClients:
     async def invoke_agent(self, body: dict[str, Any]) -> dict[str, Any]:
         return await self._post(f"{self.agent_runtime_url.rstrip('/')}/agents/invoke", body)
 
+    async def call_tool(self, body: dict[str, Any]) -> dict[str, Any]:
+        return await self._post(f"{self.agent_runtime_url.rstrip('/')}/tools/call", body)
+
     async def synthesize(self, body: dict[str, Any]) -> dict[str, Any]:
         return await self._post(f"{self.policy_url.rstrip('/')}/policy/synthesize", body)
 
@@ -70,6 +75,10 @@ class FakeClients:
     """Scripted upstreams, so a run can be driven through every branch."""
 
     opinions: dict[str, Any] = field(default_factory=dict)
+    #: agent_id -> the reply for its next invocation, popped in order, so a
+    #: test can script an agent answering differently after a REVISE.
+    sequences: dict[str, list[Any]] = field(default_factory=dict)
+    tool_results: dict[str, Any] = field(default_factory=dict)
     synthesis: dict[str, Any] | None = None
     narration: dict[str, Any] | None = None
     recorded: list[dict[str, Any]] = field(default_factory=list)
@@ -77,11 +86,22 @@ class FakeClients:
 
     async def invoke_agent(self, body: dict[str, Any]) -> dict[str, Any]:
         self.calls.append(("invoke", body))
-        reply = self.opinions.get(body["agent_id"])
+        agent = body["agent_id"]
+        queued = self.sequences.get(agent)
+        reply = queued.pop(0) if queued else self.opinions.get(agent)
         if isinstance(reply, Exception):
             raise reply
         if reply is None:
-            raise UpstreamError(f"no scripted opinion for {body['agent_id']}")
+            raise UpstreamError(f"no scripted opinion for {agent}")
+        return reply
+
+    async def call_tool(self, body: dict[str, Any]) -> dict[str, Any]:
+        self.calls.append(("call_tool", body))
+        reply = self.tool_results.get(body["tool"])
+        if isinstance(reply, Exception):
+            raise reply
+        if reply is None:
+            raise UpstreamError(f"no scripted result for {body['tool']}")
         return reply
 
     async def synthesize(self, body: dict[str, Any]) -> dict[str, Any]:

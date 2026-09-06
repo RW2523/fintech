@@ -10,11 +10,15 @@ from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
 
 from ai.agents.bundle import list_bundles, load_bundle
+from ai.tools import registry, tool_names
 from app.gateway_client import GatewayClient, HttpGatewayClient
 from app.guided import prune_defs, simplify
 from app.invoke import OPINION_SCHEMA_ID, Invocation, invoke
-from cio_common.errors import NotFound, ValidationFailed
+from cio_common.errors import Forbidden, NotFound, ValidationFailed
 from cio_contracts import bundle as contract_bundle
+from cio_tools.grants import Grant, GrantRegistry, ToolDenied
+from cio_tools.registry import ToolContext
+from cio_tools.spec import PermittedUse, SideEffect
 
 router = APIRouter(tags=["agent_runtime"])
 
@@ -107,6 +111,93 @@ class InvokeRequest(BaseModel):
     temporal_context: dict[str, Any] | None = None
     run_id: str = ""
     budget_tokens: int = Field(default=0, ge=0)
+
+
+class ToolCallRequest(BaseModel):
+    """A tool call made by the orchestrator, not by an agent (docs/06 §8).
+
+    The Challenger names a gap and the tool that would fill it; the
+    orchestrator calls that tool itself. An agent allowed to fill its own gap
+    would be deciding what counts as evidence about its own case.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = Field(min_length=3, max_length=64)
+    args: dict[str, Any] = Field(default_factory=dict)
+    committee_run_id: str = Field(min_length=3, max_length=64)
+    #: Whose behalf. Only the workflow may repair evidence; an agent id here
+    #: would be an agent calling a tool outside its own invocation.
+    principal: str = Field(default="workflow", pattern="^workflow$")
+    purpose: str = Field(default="UNDERWRITING")
+    case_id: str | None = None
+    member_id: str | None = None
+    max_calls: int = Field(default=2, ge=1, le=10)
+
+
+@router.get("/tools", summary="Every registered tool")
+async def tools() -> dict[str, Any]:
+    return {"tools": list(tool_names()), "count": len(tool_names())}
+
+
+@router.post("/tools/call", summary="Call one tool as the workflow")
+async def call_tool(body: ToolCallRequest) -> dict[str, Any]:
+    """Run a tool outside any agent's invocation, for evidence repair.
+
+    The grant is minted for this call rather than read from an agent bundle:
+    the caller is the orchestrator, which has no bundle, and the tool's own
+    purpose tags and field purposes still decide what comes back.
+    """
+    try:
+        purpose = PermittedUse[body.purpose.upper()]
+    except KeyError as exc:
+        raise ValidationFailed(
+            f"unknown purpose {body.purpose!r}",
+            purposes=[p.name for p in PermittedUse],
+        ) from exc
+
+    try:
+        spec = registry.get(body.tool)
+    except KeyError as exc:
+        raise NotFound(str(exc)) from exc
+
+    if spec.side_effects is SideEffect.WRITE_PROPOSAL and spec.name != "evidence.request":
+        # Repair may read, and may register a request for something missing.
+        # It may not act on the case: acting is a person's to do, and a
+        # Challenger that could name an action tool could move the case by
+        # asking for it.
+        raise Forbidden(
+            f"tool {body.tool!r} writes, and evidence repair may only read",
+            tool=body.tool,
+        )
+
+    scoped = registry.with_grants(
+        GrantRegistry([Grant(agent_id=body.principal, tool=body.tool, max_calls=body.max_calls)])
+    )
+
+    context = ToolContext(
+        agent_id=body.principal,
+        run_id=body.committee_run_id,
+        purpose=purpose,
+        principal=body.principal,
+        case_id=body.case_id,
+        member_id=body.member_id,
+    )
+
+    try:
+        result = await scoped.call(body.tool, dict(body.args), context)
+    except ToolDenied as denied:
+        raise Forbidden(str(denied), tool=body.tool, reason=denied.reason) from denied
+
+    invocation = scoped.invocations[-1] if scoped.invocations else None
+    return {
+        "tool": body.tool,
+        "version": spec.version,
+        "result": result,
+        "call_id": invocation.call_id if invocation else None,
+        "evidence_ids": list(invocation.evidence_ids) if invocation else [],
+        "seconds": round(invocation.seconds, 4) if invocation else 0.0,
+    }
 
 
 @router.get("/agents", summary="Every agent bundle and its version")

@@ -11,7 +11,9 @@ numbers come from tools; this code decides.
 
 from __future__ import annotations
 
+import dataclasses
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -67,6 +69,9 @@ class SynthesisInputs:
     autonomy: dict[str, Any]
     model_versions: dict[str, str]
     committee_run_id: str | None = None
+    #: Proposals raised outside any opinion, such as the evidence requests a
+    #: Tier 2 repair could not fill with a tool.
+    proposed_actions: tuple[dict[str, Any], ...] = ()
     model_health: str = "GREEN"
     kill_switch_active: bool = False
     member_watchlist: bool = False
@@ -139,6 +144,10 @@ def _counterfactuals(
     inputs: SynthesisInputs,
     factor_scores: dict[str, dict[str, Any]],
     weighted: float | None,
+    *,
+    recommendation: str = "REVIEW",
+    current_route: str = "OFFICER_REVIEW",
+    without_reservations: Callable[[], dict[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     """What would have to change for the outcome to change (docs/05 §5.1)."""
     entries: list[dict[str, Any]] = []
@@ -168,16 +177,37 @@ def _counterfactuals(
                     )
                     break
 
+    # What resolving a reservation would actually do is not assumed here. It
+    # is computed by running the same hierarchy over the same case with the
+    # gap closed, because a second derivation of the answer can disagree with
+    # the first, and then the record contradicts itself.
+    lifted = without_reservations() if without_reservations else None
     for opinion in inputs.opinions:
         for unresolved in opinion.get("unresolved") or []:
-            if unresolved.get("blocking"):
+            if not unresolved.get("blocking"):
+                continue
+            if lifted is None:
                 entries.append(
                     {
                         "condition": f"resolved: {unresolved['question']}",
-                        "new_recommendation": "APPROVE",
+                        "new_recommendation": recommendation,
                     }
                 )
+                continue
+            if lifted["recommendation"] == recommendation and lifted["route"] == current_route:
+                # Nothing about the case would move, and saying so is noise.
+                continue
+            entry = {
+                "condition": f"resolved: {unresolved['question']}",
+                "new_recommendation": lifted["recommendation"],
+            }
+            if lifted["route"] != current_route:
+                entry["new_route"] = lifted["route"]
+            entries.append(entry)
 
+    # Confirming the income is a different matter: THIN_HEADROOM is a flag on
+    # a case whose affordability is already computed, and confirming the
+    # stated figure is what would move it.
     if "THIN_HEADROOM" in inputs.policy_result.get("flags", []):
         entries.append(
             {
@@ -193,6 +223,27 @@ def _empty_narrative() -> dict[str, Any]:
     """Narratives are generated last, by the orchestrator (docs/06 §8)."""
     blank = {"text": "", "status": "NONE"}
     return {"member": dict(blank), "officer": dict(blank), "auditor": dict(blank)}
+
+
+def _proposed_actions(inputs: SynthesisInputs) -> list[dict[str, Any]]:
+    """Every proposal on the case: the agents' and the orchestrator's.
+
+    Deduplicated by action id, because a repair proposal and an agent asking
+    for the same document are one request to the officer, not two. The first
+    occurrence wins, so an agent's own rationale survives.
+    """
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for proposal in [
+        *inputs.proposed_actions,
+        *(p for o in inputs.opinions for p in o.get("proposed_actions") or []),
+    ]:
+        key = str(proposal.get("action_id") or "")
+        if key and key in seen:
+            continue
+        seen.add(key)
+        out.append(dict(proposal))
+    return out
 
 
 def _skeleton(inputs: SynthesisInputs) -> dict[str, Any]:
@@ -221,7 +272,7 @@ def _skeleton(inputs: SynthesisInputs) -> dict[str, Any]:
         "required_authority": policy_result["required_authority"],
         "narrative": _empty_narrative(),
         "would_change_outcome": [],
-        "proposed_actions": [],
+        "proposed_actions": _proposed_actions(inputs),
         "opinions": [o["opinion_id"] for o in inputs.opinions if "opinion_id" in o],
         "policy_version": policy_result["policy_version"],
         "dff_version": f"dff/{inputs.product_code}/{inputs.dff['version']}",
@@ -253,14 +304,20 @@ def synthesize(inputs: SynthesisInputs) -> dict[str, Any]:
     record = _skeleton(inputs)
     policy_result = inputs.policy_result
 
-    def route_now(recommendation: str, disagreement: float | None, confidence: float | None) -> None:
-        decision = route(
+    def route_with(
+        recommendation: str,
+        disagreement: float | None,
+        confidence: float | None,
+        *,
+        challenger_open: bool,
+    ) -> Any:
+        return route(
             inputs.autonomy,
             AutonomyInputs(
                 recommendation=recommendation,
                 confidence=confidence,
                 disagreement=disagreement,
-                challenger_open=record["challenger_open"],
+                challenger_open=challenger_open,
                 required_authority=record["required_authority"],
                 requested_amount=inputs.requested_amount,
                 case_type=inputs.case_type,
@@ -274,6 +331,11 @@ def synthesize(inputs: SynthesisInputs) -> dict[str, Any]:
             ),
             inputs.dff,
         )
+
+    def route_now(recommendation: str, disagreement: float | None, confidence: float | None) -> None:
+        decision = route_with(
+            recommendation, disagreement, confidence, challenger_open=record["challenger_open"]
+        )
         record["route"] = decision.route
         record["route_reasons"] = [*record["route_reasons"], *decision.reasons]
         record["sampled"] = decision.sampled
@@ -281,6 +343,24 @@ def synthesize(inputs: SynthesisInputs) -> dict[str, Any]:
     record["challenger_open"] = any(
         o.get("agent_id") == "challenger" and o.get("unresolved") for o in inputs.opinions
     )
+
+    def without_reservations() -> dict[str, str]:
+        """The same case with every reservation closed, run through the same
+        hierarchy rather than reasoned about.
+
+        One level deep only: the copy has no unresolved item, so `reserved`
+        below is false for it and it passes no callback of its own.
+        """
+        closed = tuple({**opinion, "unresolved": []} for opinion in inputs.opinions)
+        hypothetical = synthesize(dataclasses.replace(inputs, opinions=closed))
+        return {
+            "recommendation": str(hypothetical["recommendation"]),
+            "route": str(hypothetical["route"]),
+        }
+
+    #: Whether there is anything to close. Without this the hypothetical would
+    #: be the case itself, and computing it would not terminate.
+    reserved = any(opinion.get("unresolved") for opinion in inputs.opinions)
 
     # ---- 1. hard gates -----------------------------------------------------
     if policy_result["blockers"]:
@@ -314,7 +394,14 @@ def synthesize(inputs: SynthesisInputs) -> dict[str, Any]:
         record["route_reasons"] = (
             ["BLOCKING_EVIDENCE_GAP"] if blocking else ["EVIDENCE_COVERAGE_BELOW_MINIMUM"]
         )
-        record["would_change_outcome"] = _counterfactuals(inputs, {}, None)
+        record["would_change_outcome"] = _counterfactuals(
+            inputs,
+            {},
+            None,
+            recommendation=record["recommendation"],
+            current_route=record["route"],
+            without_reservations=without_reservations if reserved else None,
+        )
         if inputs.kill_switch_active:
             record["route_reasons"].append("KILL_SWITCH")
         return _finalise(record, _STEP_EVIDENCE)
@@ -358,7 +445,14 @@ def synthesize(inputs: SynthesisInputs) -> dict[str, Any]:
 
     # ---- 7. route ----------------------------------------------------------
     route_now(record["recommendation"], record["disagreement"], record["confidence"])
-    record["would_change_outcome"] = _counterfactuals(inputs, record["factor_scores"], weighted)
+    record["would_change_outcome"] = _counterfactuals(
+        inputs,
+        record["factor_scores"],
+        weighted,
+        recommendation=record["recommendation"],
+        current_route=record["route"],
+        without_reservations=without_reservations if reserved else None,
+    )
     return _finalise(record, _STEP_SCORE)
 
 

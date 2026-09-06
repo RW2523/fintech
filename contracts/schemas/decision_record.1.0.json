@@ -308,6 +308,10 @@
           },
           "new_recommendation": {
             "type": "string"
+          },
+          "new_route": {
+            "type": "string",
+            "description": "Where the case would route instead, when the change moves the route rather than the recommendation."
           }
         }
       }

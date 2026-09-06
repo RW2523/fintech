@@ -93,6 +93,19 @@ class ToolRegistry:
         self.invocations.clear()
         self.grants = GrantRegistry()
 
+    def with_grants(self, grants: GrantRegistry) -> ToolRegistry:
+        """The same tools under a different set of grants.
+
+        The specs are shared, not copied: a tool is one implementation with one
+        schema, and two registries holding different copies of it could drift.
+        What differs is who may call what, which is the whole question. The
+        returned registry keeps its own invocation log, so a caller can see
+        exactly what it did without reading everyone else's calls.
+        """
+        narrowed = ToolRegistry(grants)
+        narrowed._tools = self._tools
+        return narrowed
+
     # -- invocation --------------------------------------------------------
     async def call(self, name: str, args: dict[str, Any], ctx: ToolContext) -> Any:
         started = time.perf_counter()
