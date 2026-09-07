@@ -275,6 +275,15 @@ def agent_tool_results(case: Any) -> dict[str, list[dict[str, Any]]]:
     return found
 
 
+def bodies_only(rows: Any) -> list[dict[str, Any]]:
+    """The opinion bodies out of a list that may hold ids instead."""
+    found = []
+    for row in rows or []:
+        if isinstance(row, dict):
+            found.append(row.get("body") or row)
+    return found
+
+
 async def convene(
     client: httpx.AsyncClient,
     base: str,
@@ -282,61 +291,56 @@ async def convene(
     policy_result: dict[str, Any],
     tier: str,
 ) -> tuple[str | None, list[dict[str, Any]]]:
-    """Run the council over this case and wait for it to finish.
+    """Run the council over this case and return what it said.
 
-    The agents get the golden tool results — the same numbers the deterministic
-    path scored — because an agent arguing from different figures than the ones
-    the record carries is an agent arguing about a different case.
+    `POST /committee/runs` answers 202 but awaits the whole deliberation, so
+    the response is the finished run and there is nothing to poll for. This
+    waited on a `status` field the API does not have — it is `state` — and
+    polled a completed run for fifteen minutes before anybody noticed.
+
+    The agents get the golden tool results, the same numbers the deterministic
+    path scored. An agent arguing from different figures than the record
+    carries is an agent arguing about a different case.
+
+    A FAST case has no council by design (docs/06): policy and the models have
+    already decided and a committee that adds nothing costs time. Nothing here
+    treats that as a failure.
     """
     started = await client.post(
         f"{base}/api/committee/committee/runs",
         json={
             "snapshot": case.snapshot,
             "policy_result": policy_result,
-            # What each agent is allowed to have read, from its own bundle.
-            # The same numbers the deterministic path scored: an agent arguing
-            # from different figures than the record carries is an agent
-            # arguing about a different case.
             "tool_results": agent_tool_results(case),
             "case_type": "ORIGINATION",
             "tier": tier,
         },
-        timeout=60.0,
+        # Six agents at thirteen tokens a second. This is the real duration of
+        # the thing, not a guess at it.
+        timeout=1800.0,
     )
     if started.status_code not in (200, 202):
         print(f"  {case.scenario}: council refused {started.status_code} {started.text[:200]}")
         return None, []
 
-    run_id = str(started.json().get("run_id") or "")
-    if not run_id:
-        return None, []
+    body = started.json()
+    run_id = str(body.get("run_id") or "")
 
-    # Deliberation is minutes on the GB10, so this waits rather than polls
-    # tightly. A run that never finishes is reported rather than hung on.
-    #
-    # The field is `state`, not `status`. Reading the wrong one meant the loop
-    # never saw a finished run and polled a completed deliberation for fifteen
-    # minutes before anybody noticed.
-    finished = False
-    for _ in range(240):
-        await asyncio.sleep(5)
-        state = await client.get(f"{base}/api/committee/committee/runs/{run_id}", timeout=30.0)
-        if state.status_code != 200:
-            continue
-        if str(state.json().get("state", "")).upper() in ("DONE", "FAILED"):
-            finished = True
-            break
-    if not finished:
-        print(f"  {case.scenario}: council {run_id} did not finish; carrying on without it")
+    # A run lists its opinions as ids in some shapes and as whole bodies in
+    # others; the opinions endpoint always returns bodies. Taking whichever is
+    # already there and asking for the rest costs one request, and stops this
+    # crashing on `'str' object has no attribute 'get'`.
+    opinions = bodies_only(body.get("opinions"))
+    if not opinions and run_id:
+        fetched = await client.get(f"{base}/api/committee/committee/runs/{run_id}/opinions", timeout=60.0)
+        if fetched.status_code == 200:
+            opinions = bodies_only(fetched.json().get("opinions"))
 
-    opinions = await client.get(f"{base}/api/committee/committee/runs/{run_id}/opinions", timeout=30.0)
-    bodies = (
-        [row.get("body") or row for row in (opinions.json().get("opinions") or [])]
-        if opinions.status_code == 200
-        else []
+    print(
+        f"  {case.scenario}: council {run_id} finished {body.get('state')} "
+        f"with {len(opinions)} opinions over {', '.join(body.get('rounds') or [])}"
     )
-    print(f"  {case.scenario}: council {run_id} gave {len(bodies)} opinions")
-    return run_id, bodies
+    return (run_id or None), opinions
 
 
 async def seed_case(

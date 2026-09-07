@@ -114,11 +114,17 @@ export function DecisionCard({ record }: { record: DecisionRecord }) {
                 : undefined
             }
           />
-          <Figure label="Tier" testId="tier" value={record.tier ?? "unknown"} />
           <Figure
-            label="Required authority"
+            label="Deliberation"
+            testId="tier"
+            value={record.tier ?? "unknown"}
+            hint={means("tier", record.tier)}
+          />
+          <Figure
+            label="Who signs it off"
             testId="required-authority"
             value={record.required_authority ?? "not set"}
+            hint={say("authority", record.required_authority)}
           />
           <Figure
             label="Evidence coverage"

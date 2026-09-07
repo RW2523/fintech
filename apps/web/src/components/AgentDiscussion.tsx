@@ -107,13 +107,30 @@ export function AgentDiscussion({
   onEvidence: (evidenceId: string) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // One row per seat, holding what that agent last said.
+  //
+  // A deliberation that goes ASSESS → CHALLENGE → REPAIR → REVISE records an
+  // opinion per agent per round, so the Risk Agent appeared twice with two
+  // different stances and no indication which one counted. The last is the one
+  // the Synthesizer read; the earlier ones are how it got there, and the row
+  // says so rather than pretending there was only ever one.
+  const latest = new Map<string, { opinion: Opinion; rounds: string[] }>();
+  for (const opinion of opinions) {
+    const seen = latest.get(opinion.agent_id);
+    latest.set(opinion.agent_id, {
+      opinion,
+      rounds: [...(seen?.rounds ?? []), opinion.round],
+    });
+  }
+  const rows = [...latest.values()];
   const ordered = [
-    ...opinions.filter((o) => o.agent_id === "challenger"),
-    ...opinions.filter((o) => o.agent_id !== "challenger"),
+    ...rows.filter((r) => r.opinion.agent_id === "challenger"),
+    ...rows.filter((r) => r.opinion.agent_id !== "challenger"),
   ];
 
-  const dissenting = ordered.filter((o) =>
-    ["LEAN_OPPOSE", "OPPOSE", "BLOCK", "REVIEW", "NEED_MORE_EVIDENCE"].includes(o.stance),
+  const dissenting = ordered.filter(({ opinion }) =>
+    ["LEAN_OPPOSE", "OPPOSE", "BLOCK", "REVIEW", "NEED_MORE_EVIDENCE"].includes(opinion.stance),
   ).length;
 
   function toggle(id: string) {
@@ -147,7 +164,7 @@ export function AgentDiscussion({
                 setExpanded((was) =>
                   was.size === ordered.length
                     ? new Set()
-                    : new Set(ordered.map((o) => o.opinion_id)),
+                    : new Set(ordered.map((r) => r.opinion.opinion_id)),
                 )
               }
             >
@@ -165,7 +182,7 @@ export function AgentDiscussion({
         </Empty>
       ) : (
         <ul className="divide-line divide-y overflow-hidden rounded-xl border border-line">
-          {ordered.map((opinion) => {
+          {ordered.map(({ opinion, rounds }) => {
             const who = seat(opinion.agent_id);
             const open = expanded.has(opinion.opinion_id);
             const headline = opinion.claims?.[0]?.text ?? who.about;
@@ -209,8 +226,14 @@ export function AgentDiscussion({
                         </span>
                       </span>
                       <span className="font-mono">
-                        {opinion.round} · {opinion.agent_version}
+                        {rounds.join(" → ")} · {opinion.agent_version}
                       </span>
+                      {rounds.length > 1 ? (
+                        <Chip tone="note">
+                          revised after {rounds.length - 1} more round
+                          {rounds.length > 2 ? "s" : ""}
+                        </Chip>
+                      ) : null}
                     </div>
 
                     {Object.entries(opinion.factor_scores ?? {}).map(([family, score]) => (
