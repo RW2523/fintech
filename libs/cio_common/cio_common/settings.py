@@ -40,6 +40,33 @@ class Settings(BaseSettings):
     internal_key: str = "dev-only-insecure-internal-key-do-not-ship"
     jwt_ttl_seconds: int = 8 * 3600
 
+    # --- how somebody signs in (docs/13 §1) ---
+    #: `auto` follows the environment: the role picker and `/api/auth/dev-token`
+    #: on `dev` and `demo`, an account and an Argon2id password on `pilot` and
+    #: `prod`. Set it to `password` to require sign-in on a demo machine that
+    #: is reachable from outside itself.
+    #:
+    #: Deriving it rather than adding a second knob is deliberate. The existing
+    #: `CIO_ENV` already gates prompt logging and placeholder secrets, and a
+    #: platform with two switches for "is this exposed" is a platform where one
+    #: of them is wrong.
+    auth_mode: str = "auto"
+    #: Where the accounts live. Git-ignored.
+    user_store: str = "docker/users.yaml"
+    #: *Failed* sign-ins per address per minute. Low on purpose: a password
+    #: store with no lockout needs the rate limit to do that work, and what a
+    #: lockout stops is guessing. Successes are not counted here — a person
+    #: signing in five times is not an attack, and counting them locked the
+    #: browser suite out of the platform it was meant to be testing.
+    login_attempts_per_minute: int = 5
+    #: Sign-in *requests* per address per minute, successes included. Higher,
+    #: and guarding something else: verifying a password is deliberately
+    #: expensive, so an endpoint that hashes as often as it is asked is a way
+    #: to spend this machine's CPU from outside it.
+    login_requests_per_minute: int = 60
+    #: Requests per principal per minute across the API.
+    requests_per_minute: int = 240
+
     # --- observability ---
     otel_exporter_otlp_endpoint: str = "http://localhost:4318"
     otel_enabled: bool = True
@@ -80,9 +107,29 @@ class Settings(BaseSettings):
             raise ValueError("CIO_DEBUG_PROMPTS is refused outside dev (docs/13 §2)")
         return value
 
+    @field_validator("auth_mode")
+    @classmethod
+    def _known_auth_mode(cls, value: str) -> str:
+        if value not in ("auto", "dev", "password"):
+            raise ValueError("AUTH_MODE must be auto, dev or password")
+        return value
+
     @property
     def is_demo(self) -> bool:
         return self.cio_env == "demo"
+
+    @property
+    def passwords_required(self) -> bool:
+        """Whether somebody must have an account to get in.
+
+        True on `pilot` and `prod`, and on anything that asked for it. The role
+        picker and `/api/auth/dev-token` are refused when this holds: that
+        endpoint mints a `head_of_credit` token for whoever asks, which is
+        right on a bench and an open admin panel anywhere else.
+        """
+        if self.auth_mode != "auto":
+            return self.auth_mode == "password"
+        return self.cio_env in ("pilot", "prod")
 
     def sync_database_url(self) -> str:
         """The same database over psycopg/asyncpg-free drivers, for Alembic."""

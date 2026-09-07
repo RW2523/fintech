@@ -34,6 +34,10 @@ UPSTREAMS: dict[str, int] = {
 PUBLIC_PREFIXES: tuple[str, ...] = (
     "/health",
     "/version",
+    # Signing in cannot require being signed in. Both are rate limited, and
+    # `dev-token` refuses outright once a password is required.
+    "/api/auth/login",
+    "/api/auth/mode",
     "/api/auth/dev-token",
     "/api/openapi.json",
     "/docs",

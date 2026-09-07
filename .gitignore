@@ -20,6 +20,9 @@ apps/web/.vite/
 .env.*
 !.env.example
 docker/.env
+# Who may sign in, with their password hashes. Never in git.
+docker/users.yaml
+docker/.env.*.bak
 
 # Build and model artifacts
 dist/
@@ -43,3 +46,4 @@ synthetic/out/
 # Playwright run artefacts
 apps/web/test-results/
 apps/web/playwright-report/
+docker/test-accounts.json

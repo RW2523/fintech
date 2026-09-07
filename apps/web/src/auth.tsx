@@ -2,6 +2,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -39,11 +40,20 @@ export const AUTHORITY: Record<
   member: { approves: 0, label: "Member", authority: null },
 };
 
-type Session = { role: Role; token: string; memberId?: string };
+type Session = { role: Role; token: string; memberId?: string; name?: string };
+
+/** How this deployment expects somebody to sign in. Asked rather than assumed,
+ *  so one build serves a bench where the role picker is the point and a
+ *  deployment where an account is required. */
+export type AuthMode = "dev" | "password" | "unknown";
 
 type AuthValue = {
   session: Session | null;
+  mode: AuthMode;
   signIn: (role: Role, memberId?: string) => Promise<void>;
+  /** Resolves with the role the account turned out to have, because that
+   *  is what decides where the reader lands and only the server knows it. */
+  signInWithPassword: (email: string, password: string) => Promise<Role>;
   signOut: () => void;
   /** The trace id of the last API call, so a reader can find it in the logs. */
   lastTraceId: string | null;
@@ -57,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // demo, which is more exposure than a stub token needs (docs/09 §1).
   const [session, setSession] = useState<Session | null>(null);
   const [lastTraceId, setLastTraceId] = useState<string | null>(null);
+  const [mode, setMode] = useState<AuthMode>("unknown");
 
   // A member signs in as themselves, so the token has to name them. The
   // member assistant reads the member from the token and nothing else: an id
@@ -75,11 +86,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession({ role, token: body.access_token, memberId });
   }, []);
 
+  const signInWithPassword = useCallback(async (email: string, password: string) => {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!response.ok) {
+      // The server says the same thing for a wrong address and a wrong
+      // password, and so does this: telling them apart is how somebody finds
+      // out who has an account here.
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.error?.message ?? "That email and password do not match an account.");
+    }
+    const body = (await response.json()) as {
+      access_token: string;
+      role: Role;
+      name?: string;
+      member_id?: string;
+    };
+    setSession({
+      role: body.role,
+      token: body.access_token,
+      memberId: body.member_id ?? undefined,
+      name: body.name,
+    });
+    return body.role;
+  }, []);
+
   const signOut = useCallback(() => setSession(null), []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/auth/mode")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (!cancelled && body?.mode) setMode(body.mode as AuthMode);
+      })
+      .catch(() => {
+        // A gateway that cannot be reached is not a reason to offer the role
+        // picker: the safer screen is the one that asks for a password.
+        if (!cancelled) setMode("password");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const value = useMemo(
-    () => ({ session, signIn, signOut, lastTraceId, noteTraceId: setLastTraceId }),
-    [session, signIn, signOut, lastTraceId],
+    () => ({
+      session,
+      mode,
+      signIn,
+      signInWithPassword,
+      signOut,
+      lastTraceId,
+      noteTraceId: setLastTraceId,
+    }),
+    [session, mode, signIn, signInWithPassword, signOut, lastTraceId],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

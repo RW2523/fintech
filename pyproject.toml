@@ -24,6 +24,10 @@ dependencies = [
   "jsonschema>=4.23",
   # --- auth / crypto ------------------------------------------------------
   "pyjwt>=2.10",
+  # Password hashing for the gateway's sign-in. Argon2id is the current
+  # recommendation and the library carries its own parameters, so nothing here
+  # has to choose a cost factor and get it wrong.
+  "argon2-cffi>=23.1",
   # --- workflow -----------------------------------------------------------
   "temporalio>=1.8",
   # --- observability ------------------------------------------------------

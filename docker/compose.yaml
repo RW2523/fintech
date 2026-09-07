@@ -284,6 +284,19 @@ services:
       <<: *service-env
       SERVICE_NAME: gateway
       SERVICE_PORT: "8000"
+      # `auto` follows CIO_ENV: the role picker on a bench, an account and a
+      # password on pilot and prod. Set AUTH_MODE=password in docker/.env for
+      # anything reachable from outside this machine (docs/adr/0001).
+      AUTH_MODE: ${AUTH_MODE:-auto}
+      USER_STORE: /srv/users.yaml
+      LOGIN_ATTEMPTS_PER_MINUTE: ${LOGIN_ATTEMPTS_PER_MINUTE:-5}
+      LOGIN_REQUESTS_PER_MINUTE: ${LOGIN_REQUESTS_PER_MINUTE:-60}
+      REQUESTS_PER_MINUTE: ${REQUESTS_PER_MINUTE:-240}
+    volumes:
+      # Read-only, and absent on a bench: the gateway only opens this when a
+      # password is required, and says so rather than letting anybody in when
+      # it cannot be read.
+      - ../docker/users.yaml:/srv/users.yaml:ro
     ports: ["${BIND_ADDR:-0.0.0.0}:${GATEWAY_PORT:-8000}:8000"]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
@@ -610,8 +623,14 @@ services:
   web:
     image: nginx:alpine
     restart: unless-stopped
+    depends_on:
+      gateway: { condition: service_healthy }
     volumes:
       - ../apps/web/dist:/usr/share/nginx/html:ro
+      # Serves the app and proxies /api to the gateway, so the browser makes no
+      # cross-origin request and anything in front of this has one thing to
+      # point at (docs/13 §1).
+      - ../docker/images/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports: ["${BIND_ADDR:-0.0.0.0}:${WEB_PORT:-8080}:80"]
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://localhost/ >/dev/null 2>&1 || exit 1"]
