@@ -294,25 +294,27 @@ async def test_signing_in_as_a_role_finds_the_account(hardened: None, client: As
     assert response.json()["role"] == "officer"
 
 
+@pytest.fixture
+def two_officers(store: Path) -> Iterator[None]:
+    """A second account holding a role another already holds."""
+    accounts = yaml.safe_load(store.read_text())
+    accounts["accounts"].append(
+        {"email": "bob@example.com", "role": "officer", "password_hash": hash_password(PASSWORD)}
+    )
+    store.write_text(yaml.safe_dump(accounts))
+    load_accounts.cache_clear()
+    yield
+    load_accounts.cache_clear()
+
+
 async def test_a_role_two_accounts_share_is_refused(
-    hardened: None, client: AsyncClient, store: Path
+    hardened: None, two_officers: None, client: AsyncClient
 ) -> None:
     """Ambiguous means no.
 
     Resolving "sign in as the officer" by taking the first match is how
     somebody ends up signed in as a colleague.
     """
-    accounts = yaml.safe_load(store.read_text())
-    accounts["accounts"].append(
-        {
-            "email": "bob@example.com",
-            "role": "officer",
-            "password_hash": hash_password(PASSWORD),
-        }
-    )
-    store.write_text(yaml.safe_dump(accounts))
-    load_accounts.cache_clear()
-
     async with client as http:
         response = await http.post("/api/auth/login", json={"role": "officer", "password": PASSWORD})
 
