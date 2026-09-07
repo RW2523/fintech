@@ -182,11 +182,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const switchRole = useCallback(
     async (role: Role) => {
+      // On a bench there is nothing to prove, so switching is just another
+      // token. Where a password is required, the one this session already
+      // gave is replayed; with none remembered there is nothing to replay and
+      // the caller sends the reader back to the sign-in screen.
+      if (mode !== "password") {
+        await signIn(role);
+        return true;
+      }
       if (!secret.current) return false;
       await login({ role }, secret.current);
       return true;
     },
-    [login],
+    [login, mode, signIn],
   );
 
   const signOut = useCallback(() => {
@@ -224,12 +232,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signInWithPassword,
       signInAsRole,
       switchRole,
-      canSwitch: secret.current != null,
+      // On a bench, always. With a password, only once one has been given.
+      canSwitch: mode !== "password" || secret.current != null,
       signOut,
       lastTraceId,
       noteTraceId: setLastTraceId,
     }),
-    [session, mode, signable, signIn, signInWithPassword, signInAsRole, switchRole, signOut, lastTraceId],
+    [
+      session,
+      mode,
+      signable,
+      signIn,
+      signInWithPassword,
+      signInAsRole,
+      switchRole,
+      signOut,
+      lastTraceId,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

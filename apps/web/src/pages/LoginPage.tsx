@@ -55,11 +55,11 @@ export function LoginPage() {
         onwards(await signInAsRole(role, password));
         return;
       }
-      const member = role === "member" ? memberId.trim() : undefined;
-      if (role === "member" && !member) {
-        throw new Error("enter a membership number to sign in as a member");
-      }
-      await signIn(role, member);
+      // A membership number is optional now: left blank, the gateway picks a
+      // member who has records to talk about. Nobody demonstrating this knows
+      // a membership number off the top of their head, and being made to find
+      // one was the only step on this screen that required homework.
+      await signIn(role, role === "member" ? memberId.trim() || undefined : undefined);
       onwards(role);
     } catch (caught) {
       setError(caught);
@@ -168,12 +168,12 @@ export function LoginPage() {
                   />
                 </Field>
               ) : (
-                <Field label="Membership number, to sign in as a member">
+                <Field label="Membership number — optional, only for the member persona">
                   <input
                     data-testid="member-id"
                     value={memberId}
                     onChange={(event) => setMemberId(event.target.value)}
-                    placeholder="M-000042"
+                    placeholder="Left blank, a member with a history is chosen"
                     className="w-full rounded-lg border border-[--color-line] bg-[--color-surface] px-3 py-2 text-sm"
                   />
                 </Field>

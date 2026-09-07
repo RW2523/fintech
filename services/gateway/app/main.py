@@ -224,13 +224,52 @@ async def dev_token(body: dict[str, Any]) -> dict[str, Any]:
     if role not in ROLES:
         raise ValidationFailed(f"unknown role {role!r}", roles=sorted(ROLES))
 
+    member_id = body.get("member_id")
+    if role == "member" and not member_id:
+        # A member token that names nobody is a member who cannot be shown
+        # anything: the assistant reads the member from the token and refuses
+        # when there is none. Rather than making a reader type a membership
+        # number they have no way of knowing, pick one with a history to talk
+        # about. Demo-only, in the endpoint that is already demo-only.
+        member_id = await _a_member_with_history()
+        if member_id is None:
+            raise ValidationFailed(
+                "no member has both an application and an account; run 'make seed', or pass member_id"
+            )
+
     token = issue_token(
-        body.get("sub") or f"{role}-demo",
+        body.get("sub") or (member_id if role == "member" else f"{role}-demo"),
         role,
         branch=body.get("branch"),
-        member_id=body.get("member_id"),
+        member_id=member_id,
     )
-    return {"access_token": token, "token_type": "bearer", "role": role}
+    return {"access_token": token, "token_type": "bearer", "role": role, "member_id": member_id}
+
+
+async def _a_member_with_history() -> str | None:
+    """A member the assistant will have something to say about.
+
+    Asked of the core rather than guessed at: a membership number written into
+    this file is right on the day it is written and wrong the next time the
+    population is generated.
+    """
+    upstream = upstream_for("core_stub")
+    if upstream is None:  # pragma: no cover - the service is in every profile
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            token = issue_token("dev-token", "system")
+            auth = {"authorization": f"Bearer {token}"}
+            feed = await client.get(f"{upstream}/core/changes?limit=400", headers=auth)
+            rows = feed.json() if feed.status_code == 200 else []
+            members = list(dict.fromkeys(r["pk"] for r in rows if r.get("table_name") == "member"))
+            for candidate in members:
+                accounts = await client.get(f"{upstream}/core/members/{candidate}/accounts", headers=auth)
+                if accounts.status_code == 200 and accounts.json():
+                    return str(candidate)
+    except (httpx.HTTPError, ValueError, KeyError) as exc:
+        log.warning("could not find a member for a dev token: %s", exc)
+    return None
 
 
 @router.api_route(
