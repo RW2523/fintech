@@ -525,45 +525,20 @@ test.describe("ask the file", () => {
 test.describe("member assistant", () => {
   test.setTimeout(180_000);
 
-  /** A member who has both an application and a facility, found from the API.
+  /** The member this session is signed in as.
    *
-   *  Not hard-coded: a membership number written into this file passes on the
-   *  day it was written and fails the next time the population is generated. */
+   *  Read from the token rather than searched for. This used to scan the core
+   *  change feed for a member holding both an application and an account, and
+   *  failed intermittently: the feed is a moving window, and on some runs its
+   *  first four hundred rows held no member with both. A test that fails
+   *  because of which rows happened to be at the top of a feed is a test
+   *  nobody can read a result from.
+   *
+   *  Both modes now answer this the same way, because the platform picks the
+   *  member itself — `/api/auth/dev-token` for a member with none named, and
+   *  the member account where one is required. */
   async function aMember(request: APIRequestContext): Promise<string> {
-    const token = await mintToken(request, "system");
-    const auth = { authorization: `Bearer ${token}` };
-
-    const feed = await request.get(`${GATEWAY}/api/core_stub/core/changes?limit=400`, {
-      headers: auth,
-    });
-    const rows = (await feed.json()) as { table_name: string; pk: string }[];
-    const members = [...new Set(rows.filter((r) => r.table_name === "member").map((r) => r.pk))];
-
-    for (const memberId of members) {
-      // Both places an application can live. The platform's own service holds
-      // what was submitted through it; the incumbent core holds what the
-      // generated population applied for, which after a reset is all of them.
-      const applications = await request.get(
-        `${GATEWAY}/api/application/applications/by-member?member_id=${memberId}`,
-        { headers: auth },
-      );
-      let hasApplication =
-        applications.ok() && ((await applications.json()).applications as unknown[]).length > 0;
-      if (!hasApplication) {
-        const core = await request.get(
-          `${GATEWAY}/api/core_stub/core/members/${memberId}/applications`,
-          { headers: auth },
-        );
-        hasApplication = core.ok() && ((await core.json()) as unknown[]).length > 0;
-      }
-      if (!hasApplication) continue;
-      const accounts = await request.get(
-        `${GATEWAY}/api/core_stub/core/members/${memberId}/accounts`,
-        { headers: auth },
-      );
-      if (accounts.ok() && ((await accounts.json()) as unknown[]).length > 0) return memberId;
-    }
-    throw new Error("no member with both an application and an account; run make seed");
+    return memberOfAccount(request);
   }
 
   async function signInAsMember(page: Page, request: APIRequestContext, memberId: string) {

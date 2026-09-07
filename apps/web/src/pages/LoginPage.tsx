@@ -189,7 +189,7 @@ export function LoginPage() {
                         data-testid={`role-${role}`}
                         disabled={busy !== null || (needsPassword && !password)}
                         onClick={() => void choose(role)}
-                        className="flex w-full flex-col gap-0.5 rounded-lg border border-[--color-line] bg-[--color-surface] px-3 py-2.5 text-left transition hover:border-[--color-accent] hover:bg-[--color-accent-bg] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex w-full flex-col gap-0.5 rounded-lg border border-[--color-line] bg-[--color-surface] px-3 py-2.5 text-left transition hover:border-[--color-accent] hover:bg-[--color-accent-soft] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <span className="text-sm font-medium">
                           {busy === role ? "Signing in…" : AUTHORITY[role].label}

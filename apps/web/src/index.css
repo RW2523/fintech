@@ -1,61 +1,142 @@
+/* Inter, bundled rather than fetched. The published app runs under a policy
+   that allows no external asset, so a webfont from a CDN would silently fail
+   and leave the whole interface in the fallback. */
+@import "@fontsource-variable/inter";
 @import "tailwindcss";
 
-/* The workbench's colours, in one place.
+/* The workbench's design language.
  *
- * The rule this build has always followed is that colour means something: it
- * is reserved for the things that change what an officer does — a gate that
- * failed, a route that needs a person, a risk band, whether a document is
- * verified. Everything structural is grey. The palette below is wider than it
- * was, because the screens now show more kinds of state, but the rule is the
- * same one: if a colour is not carrying a meaning, it is grey.
+ * Taken from the owner's prototype (`Credit_Intelligence_OS_Advanced_UIUX_
+ * Prototype_Fixed.zip`) so the built application and the design it was
+ * approved from are the same colours, radii and shadows rather than two
+ * interpretations of one idea.
  *
- * Bands are paired: a `-bg` to sit behind, a `-line` to edge it, and the base
- * for text and fills, so a chip, a bar and a dot for the same state cannot
+ * The rule underneath it is unchanged: colour carries meaning. Blue is the
+ * platform speaking — a route, a link, anything it is telling you. Green is
+ * passed, verified, on time. Amber is watch this. Red is failed, missing,
+ * high. Purple is the challenger, deliberately not red, because a challenge
+ * doing its job is the system working rather than the case going wrong.
+ *
+ * Each family has `-soft` to sit behind, `-line` to edge it, and `-deep` for
+ * text on top, so a chip, a bar, a dot and an icon tile for one state cannot
  * drift apart. */
 @theme {
   /* --- structure ------------------------------------------------------- */
-  --color-ink: #14171f;
-  --color-muted: #5b6472;
-  --color-faint: #8a93a2;
-  --color-line: #e2e6ec;
+  --color-canvas: #f7f9fd;
   --color-surface: #ffffff;
-  --color-canvas: #f5f7fa;
-  --color-raised: #fbfcfe;
+  --color-raised: #fbfcff;
+  --color-sunken: #f3f7ff;
+  --color-ink: #0d1534;
+  --color-body: #24324f;
+  --color-muted: #7885a6;
+  --color-faint: #9aa6c2;
+  --color-line: #e5ebf5;
+  --color-line-2: #d8e2f1;
 
   /* --- meaning --------------------------------------------------------- */
-  --color-pass: #17724a;
-  --color-pass-bg: #ecfdf3;
-  --color-pass-line: #b6e7cc;
+  --color-accent: #215cf6;
+  --color-accent-deep: #1746c8;
+  --color-accent-soft: #eaf1ff;
+  --color-accent-line: #c3d7ff;
 
-  --color-warn: #8a5a00;
-  --color-warn-bg: #fffaeb;
-  --color-warn-line: #f3dda0;
+  --color-pass: #12a861;
+  --color-pass-deep: #0b7d48;
+  --color-pass-soft: #e9f9f1;
+  --color-pass-line: #b3e7cd;
 
-  --color-fail: #a32020;
-  --color-fail-bg: #fef3f2;
-  --color-fail-line: #f4c4c0;
+  --color-warn: #f59e0b;
+  --color-warn-deep: #b26a05;
+  --color-warn-soft: #fff5df;
+  --color-warn-line: #fadfa4;
 
-  --color-accent: #1f4e79;
-  --color-accent-bg: #eff6fc;
-  --color-accent-line: #bcd8ef;
+  --color-fail: #ef4444;
+  --color-fail-deep: #c22a2a;
+  --color-fail-soft: #fff0f1;
+  --color-fail-line: #f9c8cb;
 
-  /* The council's sixth voice. Distinct from the four above so a challenge
-     never reads as a failure: a challenger doing its job is the system
-     working, not the case going wrong. */
-  --color-note: #5b3fa8;
-  --color-note-bg: #f5f2ff;
-  --color-note-line: #d6cbf5;
+  --color-note: #7c5cff;
+  --color-note-deep: #5b3fd6;
+  --color-note-soft: #f2efff;
+  --color-note-line: #d9d0ff;
+
+  --color-teal: #16b8b0;
+
+  /* --- depth and shape -------------------------------------------------- */
+  --shadow-card: 0 6px 20px rgba(37, 78, 150, 0.06);
+  --shadow-lift: 0 12px 34px rgba(37, 78, 150, 0.08);
+  --shadow-pop: 0 20px 48px rgba(20, 34, 58, 0.16);
+  --radius-panel: 18px;
+  --radius-card: 14px;
 }
 
+html,
 body {
+  margin: 0;
   background: var(--color-canvas);
-  color: var(--color-ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--color-body);
+  font-family:
+    "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--color-ink);
+  letter-spacing: -0.02em;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  cursor: pointer;
 }
 
 /* Numbers line up in a column whether or not the font would have let them.
    An officer comparing two amounts should not have to read the digits. */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* A scrollbar that does not shout. Long tables and file lists are everywhere
+   in this app and the default one draws more attention than the data. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #cbd6e8;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Anything that appears in response to a click — a menu, a detail pane, an
+   answer — arrives rather than blinking into place. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 170ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none;
+  }
 }

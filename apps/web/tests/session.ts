@@ -110,7 +110,12 @@ export async function memberSignIn(
   await expect(page).toHaveURL(/\/member$/);
 }
 
-/** Which member the member account is, read from the token it is issued. */
+/** Which member a member token names.
+ *
+ *  With accounts that is the member account's own membership number. On a
+ *  bench the gateway picks one who has both an account and an application, so
+ *  a test never has to know a membership number and never has to hunt for one.
+ */
 export async function memberOfAccount(request: APIRequestContext): Promise<string> {
   const token = await mintToken(request, "member");
   const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());

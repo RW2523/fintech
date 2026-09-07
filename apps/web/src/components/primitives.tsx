@@ -12,12 +12,12 @@ import { Icon, type IconName } from "./icons";
  *  platform has exactly one (CLAUDE.md §2.1). */
 
 const TONE = {
-  neutral: "bg-[--color-canvas] text-[--color-muted] border-[--color-line]",
-  pass: "bg-[--color-pass-bg] text-[--color-pass] border-[--color-pass-line]",
-  warn: "bg-[--color-warn-bg] text-[--color-warn] border-[--color-warn-line]",
-  fail: "bg-[--color-fail-bg] text-[--color-fail] border-[--color-fail-line]",
-  accent: "bg-[--color-accent-bg] text-[--color-accent] border-[--color-accent-line]",
-  note: "bg-[--color-note-bg] text-[--color-note] border-[--color-note-line]",
+  neutral: "bg-[--color-raised] text-[--color-muted] border-[--color-line]",
+  pass: "bg-[--color-pass-soft] text-[--color-pass-deep] border-[--color-pass-line]",
+  warn: "bg-[--color-warn-soft] text-[--color-warn-deep] border-[--color-warn-line]",
+  fail: "bg-[--color-fail-soft] text-[--color-fail-deep] border-[--color-fail-line]",
+  accent: "bg-[--color-accent-soft] text-[--color-accent-deep] border-[--color-accent-line]",
+  note: "bg-[--color-note-soft] text-[--color-note-deep] border-[--color-note-line]",
 } as const;
 
 export type Tone = keyof typeof TONE;
@@ -40,6 +40,28 @@ export const TONE_STROKE: Record<Tone, string> = {
   note: "var(--color-note)",
 };
 
+/** The pastel square an icon sits in. The one piece of colour that repeats
+ *  everywhere — on a card title, a stat, a finding — so a reader learns the
+ *  five meanings once and then reads them by hue. */
+export function Glyph({
+  icon,
+  tone = "accent",
+  size = "md",
+}: {
+  icon: IconName;
+  tone?: Tone;
+  size?: "sm" | "md" | "lg";
+}) {
+  const Drawn = Icon[icon];
+  const box = { sm: "p-1.5", md: "p-2", lg: "p-2.5" }[size];
+  const glyph = { sm: "h-3.5 w-3.5", md: "h-4 w-4", lg: "h-5 w-5" }[size];
+  return (
+    <span className={`inline-flex shrink-0 rounded-xl border ${TONE[tone]} ${box}`}>
+      <Drawn className={glyph} />
+    </span>
+  );
+}
+
 export function Chip({
   children,
   tone = "neutral",
@@ -58,7 +80,7 @@ export function Chip({
     <span
       data-testid={testId}
       title={title}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${TONE[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap ${TONE[tone]}`}
     >
       {dot ? <span className={`h-1.5 w-1.5 rounded-full ${TONE_FILL[tone]}`} /> : null}
       {children}
@@ -85,26 +107,21 @@ export function Card({
   tone?: Tone;
   padded?: boolean;
 }) {
-  const Glyph = icon ? Icon[icon] : null;
   return (
     <section
       data-testid={testId}
-      className="rounded-xl border border-[--color-line] bg-[--color-surface] shadow-[0_1px_2px_rgba(20,23,31,0.04)]"
+      className="rounded-2xl border border-[--color-line] bg-[--color-surface] shadow-[var(--shadow-card)] transition-shadow hover:shadow-[var(--shadow-lift)]"
     >
       {title ? (
-        <header className="flex items-center justify-between gap-3 border-b border-[--color-line] px-4 py-2.5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            {Glyph ? (
-              <span className={`${TONE[tone]} rounded-md border p-1`}>
-                <Glyph className="h-3.5 w-3.5" />
-              </span>
-            ) : null}
+        <header className="flex items-center justify-between gap-3 border-b border-[--color-line] px-5 py-3.5">
+          <h2 className="flex items-center gap-2.5 text-[15px] font-semibold tracking-tight">
+            {icon ? <Glyph icon={icon} tone={tone} size="sm" /> : null}
             {title}
           </h2>
           {right}
         </header>
       ) : null}
-      <div className={padded ? "p-4" : ""}>{children}</div>
+      <div className={padded ? "p-5" : ""}>{children}</div>
     </section>
   );
 }
@@ -179,7 +196,7 @@ export function Problem({ error }: { error: unknown }) {
     <div
       role="alert"
       data-testid="problem"
-      className="flex items-start gap-2 rounded-lg border border-[--color-fail-line] bg-[--color-fail-bg] p-3 text-sm text-[--color-fail]"
+      className="flex items-start gap-2 rounded-lg border border-[--color-fail-line] bg-[--color-fail-soft] p-3 text-sm text-[--color-fail]"
     >
       <Icon.alert className="mt-0.5 h-4 w-4 shrink-0" />
       <span>{message}</span>
@@ -287,24 +304,19 @@ export function Stat({
   series?: number[];
   testId?: string;
 }) {
-  const Glyph = icon ? Icon[icon] : null;
   const rising = delta?.trim().startsWith("+");
   const Arrow = delta ? (rising ? Icon.up : Icon.down) : null;
   return (
-    <section className="rounded-xl border border-[--color-line] bg-[--color-surface] p-4 shadow-[0_1px_2px_rgba(20,23,31,0.04)]">
-      <div className="flex items-start gap-3">
-        {Glyph ? (
-          <span className={`${TONE[tone]} rounded-lg border p-2`}>
-            <Glyph className="h-4 w-4" />
-          </span>
-        ) : null}
+    <section className="group rounded-2xl border border-[--color-line] bg-[--color-surface] p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]">
+      <div className="flex items-start gap-3.5">
+        {icon ? <Glyph icon={icon} tone={tone} size="lg" /> : null}
         <div className="min-w-0 flex-1">
           <p className="text-xs text-[--color-muted]">{label}</p>
           <div className="mt-1 flex items-end justify-between gap-2">
             <div className="flex items-baseline gap-2">
               <span
                 data-testid={testId}
-                className="text-2xl font-semibold tracking-tight tabular-nums"
+                className="text-3xl font-semibold tracking-tight tabular-nums"
               >
                 {value}
               </span>
@@ -349,11 +361,11 @@ export function FactStrip({
   return (
     <section
       data-testid={testId}
-      className="flex flex-wrap items-center gap-x-8 gap-y-4 rounded-xl border border-[--color-line] bg-[--color-surface] px-4 py-3 shadow-[0_1px_2px_rgba(20,23,31,0.04)]"
+      className="flex flex-wrap items-center gap-x-9 gap-y-4 rounded-2xl border border-[--color-line] bg-[--color-surface] px-5 py-4 shadow-[var(--shadow-card)]"
     >
       <div className="flex items-center gap-3">
         {initials ? (
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[--color-accent-bg] text-sm font-semibold text-[--color-accent]">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[--color-accent] to-[--color-accent-deep] text-sm font-semibold text-white shadow-[var(--shadow-card)]">
             {initials}
           </span>
         ) : null}
@@ -363,14 +375,9 @@ export function FactStrip({
         </div>
       </div>
       {facts.map((fact) => {
-        const Glyph = fact.icon ? Icon[fact.icon] : null;
         return (
           <div key={fact.label} className="flex items-center gap-2.5">
-            {Glyph ? (
-              <span className="rounded-md border border-[--color-line] bg-[--color-canvas] p-1.5 text-[--color-muted]">
-                <Glyph className="h-3.5 w-3.5" />
-              </span>
-            ) : null}
+            {fact.icon ? <Glyph icon={fact.icon} tone="accent" size="sm" /> : null}
             <div>
               <p className="text-xs text-[--color-muted]">{fact.label}</p>
               <div className="text-sm font-semibold tracking-tight">{fact.value}</div>
@@ -405,10 +412,10 @@ export function FilterChips<T extends string>({
             data-testid={testIdPrefix ? `${testIdPrefix}-${option.key}` : undefined}
             aria-pressed={active}
             onClick={() => onChange(option.key)}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all ${
               active
-                ? "border-[--color-accent] bg-[--color-accent] text-white"
-                : "border-[--color-line] bg-[--color-surface] text-[--color-muted] hover:border-[--color-accent-line] hover:text-[--color-ink]"
+                ? "border-[--color-accent-deep] bg-gradient-to-b from-[--color-accent] to-[--color-accent-deep] text-white shadow-[var(--shadow-card)]"
+                : "border-[--color-line] bg-[--color-surface] text-[--color-muted] hover:border-[--color-accent-line] hover:bg-[--color-accent-soft] hover:text-[--color-accent-deep]"
             }`}
           >
             {option.label}
@@ -430,11 +437,13 @@ export function FilterChips<T extends string>({
 
 const BUTTON = {
   primary:
-    "bg-[--color-accent] text-white border-[--color-accent] hover:brightness-110 disabled:bg-[--color-faint] disabled:border-[--color-faint]",
+    "bg-gradient-to-b from-[--color-accent] to-[--color-accent-deep] text-white border-[--color-accent-deep] shadow-[var(--shadow-card)] hover:brightness-110 hover:shadow-[var(--shadow-lift)] disabled:from-[--color-faint] disabled:to-[--color-faint] disabled:border-[--color-faint] disabled:shadow-none",
   quiet:
-    "bg-[--color-surface] text-[--color-ink] border-[--color-line] hover:border-[--color-accent-line] disabled:text-[--color-faint]",
+    "bg-[--color-surface] text-[--color-ink] border-[--color-line] hover:border-[--color-accent-line] hover:bg-[--color-accent-soft] disabled:text-[--color-faint]",
   danger:
-    "bg-[--color-surface] text-[--color-fail] border-[--color-fail-line] hover:bg-[--color-fail-bg] disabled:text-[--color-faint] disabled:border-[--color-line]",
+    "bg-[--color-surface] text-[--color-fail] border-[--color-fail-line] hover:bg-[--color-fail-soft] disabled:text-[--color-faint] disabled:border-[--color-line]",
+  soft:
+    "bg-[--color-accent-soft] text-[--color-accent-deep] border-[--color-accent-line] hover:bg-white disabled:text-[--color-faint]",
 } as const;
 
 export function Button({
@@ -464,7 +473,7 @@ export function Button({
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed ${BUTTON[variant]}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-all disabled:cursor-not-allowed ${BUTTON[variant]}`}
     >
       {Glyph ? <Glyph className="h-4 w-4" /> : null}
       {children}
@@ -654,7 +663,7 @@ export function Row({
       aria-selected={selected}
       className={`border-b border-[--color-line] last:border-0 ${
         onClick ? "cursor-pointer" : ""
-      } ${selected ? "bg-[--color-accent-bg]" : "hover:bg-[--color-raised]"}`}
+      } ${selected ? "bg-[--color-accent-soft]" : "hover:bg-[--color-raised]"}`}
     >
       {children}
     </tr>
@@ -681,7 +690,7 @@ export function Avatar({ name, id }: { name: string; id?: string }) {
     .join("");
   return (
     <span className="flex items-center gap-2.5">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[--color-accent-bg] text-xs font-semibold text-[--color-accent]">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[--color-accent] to-[--color-accent-deep] text-xs font-semibold text-white">
         {initials || "?"}
       </span>
       <span className="min-w-0">
@@ -710,14 +719,9 @@ export function Finding({
   onClick?: () => void;
   testId?: string;
 }) {
-  const Glyph = icon ? Icon[icon] : null;
   const body = (
     <>
-      {Glyph ? (
-        <span className={`${TONE[tone]} mt-0.5 shrink-0 rounded-md border p-1.5`}>
-          <Glyph className="h-3.5 w-3.5" />
-        </span>
-      ) : null}
+      {icon ? <Glyph icon={icon} tone={tone} size="sm" /> : null}
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium">{title}</span>
         {detail ? <span className="block text-xs text-[--color-muted]">{detail}</span> : null}
@@ -730,14 +734,14 @@ export function Finding({
       type="button"
       data-testid={testId}
       onClick={onClick}
-      className="flex w-full items-start gap-3 rounded-lg border border-[--color-line] bg-[--color-surface] p-3 text-left transition hover:border-[--color-accent-line] hover:bg-[--color-raised]"
+      className="flex w-full items-start gap-3 rounded-xl border border-[--color-line] bg-[--color-surface] p-3.5 text-left transition-all hover:border-[--color-accent-line] hover:bg-[--color-accent-soft] hover:shadow-[var(--shadow-card)]"
     >
       {body}
     </button>
   ) : (
     <div
       data-testid={testId}
-      className="flex items-start gap-3 rounded-lg border border-[--color-line] bg-[--color-surface] p-3"
+      className="flex items-start gap-3 rounded-xl border border-[--color-line] bg-[--color-surface] p-3.5"
     >
       {body}
     </div>
