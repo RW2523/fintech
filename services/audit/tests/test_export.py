@@ -8,13 +8,24 @@ export claims and what it does when the storage cannot back the claim up.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 from httpx import AsyncClient
 
 from app.worm import object_key, serialise
 from tests.conftest import entry
+
+
+def _today() -> str:
+    """The platform's today, which is UTC's (CLAUDE.md §7).
+
+    Not `date.today()`. Entries are stamped `timestamptz` and the export filters
+    on the UTC date, so for the hours when the local date and the UTC date
+    differ — every evening, in this timezone — a local `today` names a day with
+    nothing in it, and these tests failed on the clock rather than on the code.
+    """
+    return datetime.now(UTC).date().isoformat()
 
 
 class FakeWorm:
@@ -45,7 +56,7 @@ def bucket(monkeypatch: pytest.MonkeyPatch) -> FakeWorm:
 
 async def test_a_day_is_written_once_and_recorded(client: AsyncClient, bucket: FakeWorm) -> None:
     await client.post("/audit", json=entry())
-    today = date.today().isoformat()
+    today = _today()
 
     body = (await client.post("/audit/export", json={"day": today})).json()
     assert body["entries"] == 1
@@ -62,7 +73,7 @@ async def test_the_export_carries_the_chain_head(client: AsyncClient, bucket: Fa
     """A later export whose entries do not follow the previous head means rows
     were removed in between, and the gap is visible without reading one."""
     first = await client.post("/audit", json=entry())
-    today = date.today().isoformat()
+    today = _today()
 
     body = (await client.post("/audit/export", json={"day": today})).json()
     assert body["head_hash"] == first.json()["hash"]
@@ -73,7 +84,7 @@ async def test_the_bytes_are_one_entry_per_line(client: AsyncClient, bucket: Fak
     holding a day of entries in memory."""
     await client.post("/audit", json=entry())
     await client.post("/audit", json=entry(action="token.issued"))
-    await client.post("/audit/export", json={"day": date.today().isoformat()})
+    await client.post("/audit/export", json={"day": _today()})
 
     _, written, _ = bucket.written[0]
     assert written.count(b"\n") == 2
@@ -85,7 +96,7 @@ async def test_a_bucket_without_object_lock_says_so(client: AsyncClient, bucket:
     bucket.locked = False
     await client.post("/audit", json=entry())
 
-    body = (await client.post("/audit/export", json={"day": date.today().isoformat()})).json()
+    body = (await client.post("/audit/export", json={"day": _today()})).json()
     assert body["locked"] is False
     assert "not WORM" in body["warning"]
     # The copy is still written: losing the day as well would be worse.
@@ -98,7 +109,7 @@ async def test_a_bucket_that_refuses_fails_the_export(client: AsyncClient, bucke
     bucket.refuse = True
     await client.post("/audit", json=entry())
 
-    response = await client.post("/audit/export", json={"day": date.today().isoformat()})
+    response = await client.post("/audit/export", json={"day": _today()})
     assert response.status_code >= 400
     listed = (await client.get("/audit/exports")).json()
     assert listed["count"] == 0
@@ -108,7 +119,7 @@ async def test_re_exporting_a_day_replaces_its_row(client: AsyncClient, bucket: 
     """A day is one export. Two rows for the same day would leave a reader
     unsure which object holds it."""
     await client.post("/audit", json=entry())
-    today = date.today().isoformat()
+    today = _today()
     await client.post("/audit/export", json={"day": today})
     await client.post("/audit", json=entry(action="token.issued"))
     second = (await client.post("/audit/export", json={"day": today})).json()
