@@ -179,8 +179,15 @@ export function SandboxPage() {
     approvers[0].actor_id.trim() !== approvers[1].actor_id.trim();
 
   return (
-    <div className="flex flex-col gap-4" data-testid="sandbox-page">
-      <Card title="What we decide by" testId="sandbox-form">
+    <div className="flex flex-col gap-5" data-testid="sandbox-page">
+      <header>
+        <h1 className="text-[26px] font-bold tracking-tight">Policy sandbox</h1>
+        <p className="text-sm text-[--color-muted]">
+          Change what the platform decides by, replay it over stored cases, and
+          adopt it only when two people say so.
+        </p>
+      </header>
+      <Card title="What we decide by" icon="sandbox" tone="accent" testId="sandbox-form">
         {pack.error ? <Problem error={pack.error} /> : null}
         {!current ? (
           <Empty>Reading the pack in force…</Empty>
@@ -310,7 +317,7 @@ export function SandboxPage() {
 
       {replay.data ? (
         <>
-          <Card title="Baseline against candidate" testId="sandbox-report">
+          <Card title="Baseline against candidate" icon="chart" tone="accent" testId="sandbox-report">
             <p className="mb-2 text-xs text-[--color-muted]" data-testid="cases-replayed">
               {replay.data.cases_replayed} decided cases replayed under{" "}
               {replay.data.policy_version}. No model was called: stored opinions
@@ -352,7 +359,7 @@ export function SandboxPage() {
             </div>
           </Card>
 
-          <Card title="Cases that would decide differently" testId="sandbox-diffs">
+          <Card title="Cases that would decide differently" icon="alert" tone="warn" testId="sandbox-diffs">
             {replay.data.diffs.length === 0 ? (
               <Empty>
                 No case changes outcome under this candidate. The rates above
@@ -384,7 +391,7 @@ export function SandboxPage() {
             )}
           </Card>
 
-          <Card title="Adopt as a new version" testId="sandbox-adopt">
+          <Card title="Adopt as a new version" icon="shield" tone="pass" testId="sandbox-adopt">
             <div className="flex flex-col gap-3">
               <p className="text-xs text-[--color-muted]">
                 Two named approvers, both heads, and they must be two people.

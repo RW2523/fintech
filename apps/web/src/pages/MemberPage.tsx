@@ -90,7 +90,7 @@ export function MemberPage() {
 
   if (!session?.memberId) {
     return (
-      <Card title="Your account" testId="member-page">
+      <Card title="Your account" icon="members" tone="accent" testId="member-page">
         <Empty>
           Sign in with a membership number to use the assistant. It only ever
           reads the records of the member signed in.
@@ -100,7 +100,13 @@ export function MemberPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4" data-testid="member-page">
+    <div className="flex flex-col gap-5" data-testid="member-page">
+      <header>
+        <h1 className="text-[26px] font-bold tracking-tight">Your account</h1>
+        <p className="text-sm text-[--color-muted]">
+          What we hold about you, and somebody to ask.
+        </p>
+      </header>
       <div className="flex gap-2">
         {(["chat", "inbox"] as const).map((name) => (
           <button
@@ -120,7 +126,7 @@ export function MemberPage() {
       </div>
 
       {tab === "inbox" ? (
-        <Card title="Your messages" testId="member-inbox">
+        <Card title="Your messages" icon="chat" tone="accent" testId="member-inbox">
           {inbox.error ? <Problem error={inbox.error} /> : null}
           {inbox.data && inbox.data.messages.length > 0 ? (
             <ul className="flex flex-col gap-2">
@@ -136,7 +142,7 @@ export function MemberPage() {
           )}
         </Card>
       ) : (
-        <Card title="Ask us" testId="member-chat">
+        <Card title="Ask us" icon="spark" tone="note" testId="member-chat">
           <div className="flex flex-col gap-3">
             <ul className="flex flex-col gap-3" data-testid="member-turns">
               {turns.map((turn, index) => (

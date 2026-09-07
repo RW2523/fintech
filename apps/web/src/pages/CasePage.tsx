@@ -9,21 +9,40 @@ import { AskTheFile } from "../components/AskTheFile";
 import { DecideForm } from "../components/DecideForm";
 import { DecisionCard } from "../components/DecisionCard";
 import { EvidencePanel } from "../components/EvidencePanel";
-import { Card, Chip, Copyable, Empty, Figure, Problem } from "../components/primitives";
+import {
+  Card,
+  Chip,
+  Copyable,
+  Empty,
+  FactStrip,
+  Problem,
+  Stat,
+  Tabs,
+  type Tone,
+} from "../components/primitives";
 import { NARRATIVE_AUDIENCES } from "../types";
 import type { Explanation, HeldRecord, Opinion, Queue } from "../types";
 
-/** docs/09 §3 — the case page.
+/** docs/09 §3 — the officer workbench.
  *
  *  Four things, in the order an officer needs them: what the case is, what was
- *  decided, what the decision rests on, and what they may do about it. The
- *  discussion sits underneath, because it explains the decision rather than
- *  being it. */
+ *  decided, what the decision rests on, and what they may do about it.
+ *
+ *  The strip along the top is the answer to "what am I looking at", in the
+ *  same place on every detail screen in this app. Under it are the three
+ *  signals that decide how much attention the case needs, then the work
+ *  itself. The discussion sits behind a tab rather than below the fold,
+ *  because it explains the decision rather than being it — and an officer who
+ *  scrolls past the deciding factors to reach the actions has been made to
+ *  read six agent opinions to get to a button. */
+type Panel = "evidence" | "narrative";
+
 export function CasePage() {
   const { caseId = "" } = useParams();
   const request = useApi();
   const { session } = useAuth();
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null);
+  const [panel, setPanel] = useState<Panel>("evidence");
 
   // The queue carries the record id for a case. Reading it from there keeps
   // this page from needing a second lookup service just to find the record.
@@ -33,8 +52,8 @@ export function CasePage() {
   });
 
   const entry = queue.data?.decisions.find(
-    (row) => row.case_id === caseId || row.snapshot_id === caseId
-      || row.decision_record_id === caseId,
+    (row) =>
+      row.case_id === caseId || row.snapshot_id === caseId || row.decision_record_id === caseId,
   );
   const recordId = entry?.decision_record_id;
 
@@ -90,85 +109,185 @@ export function CasePage() {
     return passage?.text ? ([[audience, passage]] as const) : [];
   });
 
+  const gates = decision?.hard_gates ?? [];
+  const failedGates = gates.filter((gate) => gate.result === "FAIL");
+  const gateTone: Tone = gates.length === 0 ? "neutral" : failedGates.length ? "fail" : "pass";
+
   return (
-    <div className="flex flex-col gap-4">
-      <Card title="Case" testId="case-header">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-          <Figure label="Case" testId="case-id" value={
-            <span className="font-mono text-xs">{caseId.slice(0, 22)}</span>} />
-          <Figure label="Member" value={
-            <span className="font-mono text-xs">{entry.member_id ?? "not recorded"}</span>} />
-          <Figure label="Tier" value={entry.tier ?? "unknown"} />
-          <Figure
-            label="Reconstruct"
-            testId="reconstruct-link"
-            value={
-              <Link
-                to={`/ledger/${encodeURIComponent(caseId)}`}
-                className="text-xs text-[--color-accent] underline decoration-dotted"
-              >
-                open the ledger
-              </Link>
-            }
-          />
-          <Figure
-            label="Snapshot"
-            value={entry.snapshot_id ? <Copyable value={entry.snapshot_id} label="snapshot id" /> : "none"}
-          />
-          <Figure
-            label="Versions"
-            testId="versions"
-            value={
-              <span className="text-xs font-normal text-[--color-muted]">
+    <div className="flex flex-col gap-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[26px] font-bold tracking-tight">Officer workbench</h1>
+          <p className="text-sm text-[--color-muted]">
+            Evidence-first decision support for one application.
+          </p>
+        </div>
+        <Link
+          to={`/ledger/${encodeURIComponent(caseId)}`}
+          data-testid="reconstruct-link"
+          className="text-sm font-medium text-[--color-accent] underline decoration-dotted"
+        >
+          Reconstruct from the ledger
+        </Link>
+      </header>
+
+      <FactStrip
+        testId="case-header"
+        initials={(entry.member_id ?? "??").replace(/[^A-Za-z0-9]/g, "").slice(-2)}
+        title={entry.member_id ?? "member not recorded"}
+        subtitle={<span className="font-mono text-[11px]">{caseId.slice(0, 26)}</span>}
+        facts={[
+          { label: "Tier", value: entry.tier ?? "unknown", icon: "scale" },
+          {
+            label: "Route",
+            value: (entry.route ?? "unrouted").replaceAll("_", " ").toLowerCase(),
+            icon: "route",
+          },
+          {
+            label: "Authority needed",
+            value: (entry.required_authority ?? "not set").replaceAll("_", " ").toLowerCase(),
+            icon: "shield",
+          },
+          {
+            label: "Snapshot",
+            value: entry.snapshot_id ? (
+              <Copyable value={entry.snapshot_id} label="snapshot id" />
+            ) : (
+              "none"
+            ),
+            icon: "file",
+          },
+          {
+            label: "Policy in force",
+            value: (
+              <span className="text-xs" data-testid="versions">
                 {decision?.policy_version ?? "policy unknown"}
               </span>
-            }
-            hint={decision?.dff_version}
-          />
-        </div>
-      </Card>
+            ),
+            icon: "sandbox",
+          },
+        ]}
+      />
+
+      {/* The three signals that decide how much attention this case needs, and
+          each is a value the record carries rather than one read off a chart. */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Stat
+          label="Hard gates"
+          icon="shield"
+          tone={gateTone}
+          value={
+            gates.length === 0
+              ? "none run"
+              : failedGates.length === 0
+                ? "all passed"
+                : `${failedGates.length} failed`
+          }
+          hint={`${gates.length} evaluated`}
+        />
+        <Stat
+          label="Confidence"
+          icon="chart"
+          tone="accent"
+          value={entry.confidence == null ? "not scored" : entry.confidence.toFixed(2)}
+          hint={decision?.deciding_step ? `settled at ${decision.deciding_step}` : undefined}
+        />
+        <Stat
+          label="Disagreement"
+          icon="chat"
+          tone={entry.disagreement && entry.disagreement > 0.4 ? "warn" : "neutral"}
+          value={entry.disagreement == null ? "not scored" : entry.disagreement.toFixed(2)}
+          hint={
+            decision?.challenger_open ? "the challenger is still open" : "across the council"
+          }
+        />
+      </div>
 
       {record.error ? <Problem error={record.error} /> : null}
       {decision ? <DecisionCard record={decision} /> : null}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* The recommendation and the council that produced it, side by side.
+          They were stacked, and an officer reading why a case was routed to
+          them had to hold the recommendation in their head while scrolling
+          past six opinions to find the one that disagreed. */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <AgentDiscussion
+          opinions={opinions}
+          onEvidence={(reference) => {
+            setSelectedEvidence(reference);
+            setPanel("evidence");
+          }}
+        />
+        <AskTheFile
+          caseId={caseId}
+          decisionRecordId={recordId}
+          onCitation={(reference) => {
+            setSelectedEvidence(reference);
+            setPanel("evidence");
+          }}
+        />
+      </div>
+
+      {/* What the decision rests on. Behind the tabs because an officer needs
+          one of these three at a time and all three at once is a screen nobody
+          reads to the bottom of. */}
+      <Tabs
+        value={panel}
+        onChange={setPanel}
+        testIdPrefix="panel"
+        tabs={[
+          { key: "evidence", label: "Evidence" },
+          { key: "narrative", label: "Narrative", count: written.length || undefined },
+        ]}
+      />
+
+      {panel === "narrative" ? (
+        written.length > 0 ? (
+          <Card title="Narrative" icon="chat" tone="note" testId="narrative">
+            <dl className="flex flex-col gap-4 text-sm">
+              {written.map(([audience, passage]) => (
+                <div key={audience}>
+                  <dt className="flex items-center gap-2 text-xs font-semibold tracking-wide text-[--color-muted] uppercase">
+                    {audience}
+                    {/* The status belongs beside the passage, not above the
+                        card: one audience can be written from the record while
+                        another was written by the model, and a single banner
+                        would misdescribe both. */}
+                    {passage.status === "DEGRADED" ? (
+                      <Chip tone="warn">written without the model</Chip>
+                    ) : null}
+                  </dt>
+                  <dd className="mt-1 leading-relaxed" data-testid={`narrative-${audience}`}>
+                    {passage.text}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Card>
+        ) : (
+          <Card title="Narrative" icon="chat" tone="note" testId="narrative">
+            <Empty>
+              Nothing has been written for this case yet. A narrative is
+              regenerated from the record rather than stored, so an empty one
+              means it has not been asked for.
+            </Empty>
+          </Card>
+        )
+      ) : (
         <EvidencePanel
           explanation={explanation.data}
           selected={selectedEvidence}
           onSelect={setSelectedEvidence}
         />
+      )}
+
+      {/* The actions, pinned. An officer who has read to the bottom of a long
+          case should not have to scroll back up to act on it, and one who has
+          not read to the bottom should still be able to see what acting on it
+          would mean. */}
+      <div className="sticky bottom-4 z-[8] rounded-2xl border border-[--color-line] bg-[--color-surface]/95 shadow-[var(--shadow-lift)] backdrop-blur-md">
         <DecideForm record={decision} caseId={caseId} role={session?.role ?? "officer"} />
       </div>
-
-      <AskTheFile
-        caseId={caseId}
-        decisionRecordId={recordId}
-        onCitation={setSelectedEvidence}
-      />
-
-      <AgentDiscussion opinions={opinions} onEvidence={setSelectedEvidence} />
-
-      {written.length > 0 ? (
-        <Card title="Narrative" testId="narrative">
-          <dl className="flex flex-col gap-3 text-sm">
-            {written.map(([audience, passage]) => (
-              <div key={audience}>
-                <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[--color-muted]">
-                  {audience}
-                  {/* The status belongs beside the passage, not above the
-                      card: one audience can be written from the record while
-                      another was written by the model, and a single banner
-                      would misdescribe both. */}
-                  {passage.status === "DEGRADED" ? (
-                    <Chip tone="warn">written without the model</Chip>
-                  ) : null}
-                </dt>
-                <dd data-testid={`narrative-${audience}`}>{passage.text}</dd>
-              </div>
-            ))}
-          </dl>
-        </Card>
-      ) : null}
     </div>
   );
 }

@@ -354,7 +354,7 @@ export function FactStrip({
 }: {
   initials?: string;
   title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   facts: { label: string; value: React.ReactNode; icon?: IconName }[];
   testId?: string;
 }) {

@@ -31,8 +31,15 @@ export function LedgerPage() {
   });
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card title="Reconstruct a case" testId="ledger-search">
+    <div className="flex flex-col gap-5">
+      <header>
+        <h1 className="text-[26px] font-bold tracking-tight">Decision ledger</h1>
+        <p className="text-sm text-[--color-muted]">
+          One case, in the order it happened, with the hash of every entry and
+          whether the chain still verifies.
+        </p>
+      </header>
+      <Card title="Reconstruct a case" icon="search" tone="accent" testId="ledger-search">
         <form
           className="flex flex-wrap items-center gap-2"
           onSubmit={(event) => {
@@ -99,7 +106,7 @@ function ChainBadge({ data }: { data: Reconstruction }) {
         : "chain not verified";
 
   return (
-    <Card title="Chain" testId="chain-badge">
+    <Card title="Chain" icon="shield" tone="pass" testId="chain-badge">
       <div className="flex flex-wrap items-center gap-3">
         <Chip tone={tone} testId="chain-verdict">
           {label}
@@ -127,7 +134,7 @@ function ChainBadge({ data }: { data: Reconstruction }) {
 
 function Timeline({ events }: { events: TimelineEvent[] }) {
   return (
-    <Card title="Timeline" testId="timeline">
+    <Card title="Timeline" icon="clock" tone="accent" testId="timeline">
       {events.length === 0 ? (
         <Empty>Nothing is recorded against this case.</Empty>
       ) : (
@@ -189,7 +196,7 @@ function TimelineRow({ event }: { event: TimelineEvent }) {
 function Alongside({ data }: { data: Reconstruction }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <Card title="Documents" testId="ledger-documents">
+      <Card title="Documents" icon="documents" tone="accent" testId="ledger-documents">
         {data.documents.length === 0 ? (
           <Empty>No document is held for this case.</Empty>
         ) : (
@@ -204,7 +211,7 @@ function Alongside({ data }: { data: Reconstruction }) {
         )}
       </Card>
 
-      <Card title="Findings" testId="ledger-findings">
+      <Card title="Findings" icon="alert" tone="warn" testId="ledger-findings">
         {data.findings.length === 0 ? (
           <Empty>Nothing was found against this case.</Empty>
         ) : (
@@ -218,7 +225,7 @@ function Alongside({ data }: { data: Reconstruction }) {
         )}
       </Card>
 
-      <Card title="What was carried out" testId="ledger-actions">
+      <Card title="What was carried out" icon="check" tone="pass" testId="ledger-actions">
         {data.actions.length === 0 ? (
           <Empty>Nothing was executed on this case.</Empty>
         ) : (

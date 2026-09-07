@@ -48,8 +48,15 @@ export function CompliancePage() {
   });
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card title="Overrides" testId="overrides">
+    <div className="flex flex-col gap-5">
+      <header>
+        <h1 className="text-[26px] font-bold tracking-tight">Compliance</h1>
+        <p className="text-sm text-[--color-muted]">
+          Where a person departed from the platform, and what is worth reading
+          because of it.
+        </p>
+      </header>
+      <Card title="Overrides" icon="scale" tone="warn" testId="overrides">
         {overrides.error ? <Problem error={overrides.error} /> : null}
         {overrides.data ? (
           <div className="flex flex-col gap-3">
@@ -95,7 +102,7 @@ export function CompliancePage() {
         ) : null}
       </Card>
 
-      <Card title="Worth reading" testId="attention">
+      <Card title="Worth reading" icon="alert" tone="fail" testId="attention">
         {attention.error ? <Problem error={attention.error} /> : null}
         {attention.data ? (
           attention.data.cases.length === 0 ? (

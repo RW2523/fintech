@@ -265,7 +265,9 @@ test.describe("ledger viewer", () => {
     await signIn(page, request);
     await openCase(page, entry.case_id!);
 
-    await page.getByTestId("reconstruct-link").getByRole("link").click();
+    // The test id is on the link itself now, rather than on a label wrapping
+    // one.
+    await page.getByTestId("reconstruct-link").click();
     await expect(page).toHaveURL(new RegExp(`/ledger/${entry.case_id}$`));
     await expect(page.getByTestId("chain-verdict")).toBeVisible();
   });

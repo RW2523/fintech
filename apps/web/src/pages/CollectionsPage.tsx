@@ -3,7 +3,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useApi } from "../api";
 import { useAuth } from "../auth";
-import { Card, Chip, Empty, Problem, type Tone } from "../components/primitives";
+import {
+  Card,
+  Cell,
+  Chip,
+  Empty,
+  Path,
+  Problem,
+  Row,
+  Stat,
+  Table,
+  type Tone,
+} from "../components/primitives";
 import type { HorizonScore, InboxMessage, MemberScore, MemberWatch, WatchAlert } from "../types";
 
 const STATE_TONE: Record<string, Tone> = {
@@ -29,63 +40,110 @@ export function CollectionsPage() {
     queryFn: () => request<{ count: number; alerts: WatchAlert[] }>("/api/lmi/lmi/alerts?limit=50"),
   });
 
+  const alerts = queue.data?.alerts ?? [];
+  const byState = (name: string) => alerts.filter((alert) => alert.state === name).length;
+  // Exposure the platform is worried about, summed by the caller only for
+  // display. Every figure under it is the service's own.
+  const scored = alerts.filter((alert) => alert.p90 !== null);
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[26px] font-bold tracking-tight">Collections intelligence</h1>
+          <p className="text-sm text-[--color-muted]">
+            Members whose behaviour changed, in the order acting on them is
+            worth most.
+          </p>
+        </div>
+      </header>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat
+          label="Open alerts"
+          icon="alert"
+          tone={byState("CRITICAL") ? "fail" : "warn"}
+          value={queue.data?.count ?? "—"}
+          hint="members the engine wants somebody to call"
+          testId="watch-open"
+        />
+        <Stat
+          label="Critical"
+          icon="alert"
+          tone="fail"
+          value={byState("CRITICAL")}
+          hint="the state that will not wait"
+        />
+        <Stat
+          label="Elevated"
+          icon="clock"
+          tone="warn"
+          value={byState("ELEVATED")}
+          hint="drifting, still recoverable"
+        />
+        <Stat
+          label="Scored"
+          icon="chart"
+          tone="accent"
+          value={`${scored.length} of ${alerts.length}`}
+          hint="carry a ninety-day probability"
+        />
+      </div>
+
       <Card
         title="Members worth a call"
+        icon="collections"
+        tone="warn"
         testId="watch-queue"
+        padded={false}
         right={
           queue.data ? (
-            <span className="text-xs text-[--color-muted]">
-              {queue.data.count} open
-            </span>
+            <span className="text-xs text-[--color-muted]">{queue.data.count} open</span>
           ) : null
         }
       >
-        {queue.error ? <Problem error={queue.error} /> : null}
+        {queue.error ? (
+          <div className="p-4">
+            <Problem error={queue.error} />
+          </div>
+        ) : null}
         {queue.data && queue.data.alerts.length === 0 ? (
-          <Empty>
-            Nothing is open. The engine is watching; it has not found anybody it
-            thinks somebody should call.
-          </Empty>
+          <div className="p-4">
+            <Empty>
+              Nothing is open. The engine is watching; it has not found anybody
+              it thinks somebody should call.
+            </Empty>
+          </div>
         ) : null}
         {queue.data && queue.data.alerts.length > 0 ? (
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase tracking-wide text-[--color-muted]">
-              <tr>
-                <th className="pb-2">Member</th>
-                <th className="pb-2">State</th>
-                <th className="pb-2">Exposure</th>
-                <th className="pb-2">p90</th>
-                <th className="pb-2">Why now</th>
-              </tr>
-            </thead>
-            <tbody data-testid="watch-rows">
-              {queue.data.alerts.map((alert) => (
-                <tr
-                  key={alert.alert_id}
-                  data-testid={`watch-row-${alert.member_id}`}
-                  onClick={() => setSelected(alert.member_id)}
-                  className={`cursor-pointer border-b border-[--color-line] last:border-0 hover:bg-[--color-canvas] ${
-                    selected === alert.member_id ? "bg-sky-50" : ""
-                  }`}
-                >
-                  <td className="py-2 font-mono text-xs">{alert.member_id}</td>
-                  <td>
-                    <Chip tone={STATE_TONE[alert.state] ?? "neutral"}>{alert.state}</Chip>
-                  </td>
-                  <td className="tabular-nums">{alert.exposure.toLocaleString()}</td>
-                  <td className="tabular-nums">
-                    {alert.p90 === null ? "not scored" : alert.p90.toFixed(2)}
-                  </td>
-                  {/* The line, not a signal list. An officer deciding which of
-                      twenty-five members to call first reads this and nothing
-                      else. */}
-                  <td className="max-w-lg text-xs text-[--color-muted]">{alert.why_now}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Table
+            bodyTestId="watch-rows"
+            head={["Member", "State", "Exposure", "p90", "Why now"]}
+          >
+            {queue.data.alerts.map((alert) => (
+              <Row
+                key={alert.alert_id}
+                testId={`watch-row-${alert.member_id}`}
+                selected={selected === alert.member_id}
+                onClick={() => setSelected(alert.member_id)}
+              >
+                <Cell className="font-mono text-xs font-medium">{alert.member_id}</Cell>
+                <Cell>
+                  <Chip dot tone={STATE_TONE[alert.state] ?? "neutral"}>
+                    {alert.state}
+                  </Chip>
+                </Cell>
+                <Cell className="tabular-nums">{alert.exposure.toLocaleString()}</Cell>
+                <Cell className="tabular-nums">
+                  {alert.p90 === null ? "not scored" : alert.p90.toFixed(2)}
+                </Cell>
+                {/* The line, not a signal list. An officer deciding which of
+                    twenty-five members to call first reads this and nothing
+                    else. */}
+                <Cell className="max-w-lg text-xs text-[--color-muted]">{alert.why_now}</Cell>
+              </Row>
+            ))}
+          </Table>
         ) : null}
       </Card>
 
@@ -110,9 +168,29 @@ function MemberDrawer({ memberId }: { memberId: string }) {
       }),
   });
 
+  const LADDER = ["STABLE", "WATCH", "ELEVATED", "CRITICAL", "RECOVERY"];
+
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card title="How they got here" testId="member-timeline">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      {/* Where this member sits on the ladder, and where they could go. The
+          transitions below say how they got here; this says what "here" is. */}
+      {watch.data ? (
+        <div className="lg:col-span-2">
+          <Card title="Early-warning path" icon="route" tone="warn" testId="member-path">
+            <Path
+              testId="member-ladder"
+              steps={LADDER.map((state) => ({
+                label: state,
+                tone: STATE_TONE[state] ?? "neutral",
+                current: state === watch.data!.state,
+                caption: state === watch.data!.state ? (watch.data!.since ?? "now") : undefined,
+              }))}
+            />
+          </Card>
+        </div>
+      ) : null}
+
+      <Card title="How they got here" icon="clock" tone="accent" testId="member-timeline">
         {watch.error ? <Problem error={watch.error} /> : null}
         {watch.data ? (
           <div className="flex flex-col gap-2">
@@ -145,7 +223,7 @@ function MemberDrawer({ memberId }: { memberId: string }) {
         ) : null}
       </Card>
 
-      <Card title="What the models expect" testId="member-forecast">
+      <Card title="What the models expect" icon="chart" tone="note" testId="member-forecast">
         {score.error ? <Problem error={score.error} /> : null}
         {score.data ? (
           <div className="flex flex-col gap-3">
