@@ -10,7 +10,7 @@ UV          ?= uv
 ENV_FILE    ?= docker/.env
 COMPOSE     ?= docker compose --env-file $(ENV_FILE) -f docker/compose.yaml
 COMPOSE_SPARK ?= docker compose --env-file $(ENV_FILE) -f docker/compose.yaml -f docker/compose.spark.yaml
-CORE_PROFILES := --profile core --profile services --profile observability
+CORE_PROFILES := --profile core --profile services --profile observability --profile web
 WAIT_TIMEOUT ?= 300
 PHASE       ?=
 SERVICES    := $(notdir $(wildcard services/*))
@@ -45,18 +45,27 @@ env:  ## create .env from the example and check the DGX Spark environment
 	fi
 	@if [ -x scripts/env_check.sh ]; then scripts/env_check.sh; else echo "  scripts/env_check.sh — T-002"; fi
 
+.PHONY: web-build
+web-build:  ## build the workbench bundle the web container serves
+	@# The web container is nginx with apps/web/dist mounted into it, so the
+	@# app that gets served is whatever was last built — not whatever this
+	@# repository currently says. Without this a published deployment can be
+	@# months behind its own source and nothing anywhere says so.
+	@if [ ! -d apps/web/node_modules ]; then 	  echo "  apps/web: run 'npm install' there first"; exit 2; fi
+	@cd apps/web && npm run build >/dev/null && echo "  workbench built into apps/web/dist"
+
 .PHONY: up
-up: $(ENV_FILE)  ## start core + observability + services (no AI)
+up: $(ENV_FILE) web-build  ## start core + observability + services + web (no AI)
 	@$(COMPOSE) $(CORE_PROFILES) up -d --build --remove-orphans
 	@scripts/wait_healthy.sh $(WAIT_TIMEOUT)
 
 .PHONY: up-ai-local
-up-ai-local: $(ENV_FILE)  ## start with vLLM/ollama on the GB10
+up-ai-local: $(ENV_FILE) web-build  ## start with vLLM/ollama on the GB10
 	@$(COMPOSE_SPARK) $(CORE_PROFILES) --profile ai-local up -d --build --remove-orphans
 	@scripts/wait_healthy.sh 900
 
 .PHONY: up-ai-remote
-up-ai-remote: $(ENV_FILE)  ## start with a hosted provider behind the gateway
+up-ai-remote: $(ENV_FILE) web-build  ## start with a hosted provider behind the gateway
 	@$(COMPOSE) $(CORE_PROFILES) --profile ai-remote up -d --build --remove-orphans
 	@scripts/wait_healthy.sh $(WAIT_TIMEOUT)
 

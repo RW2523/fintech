@@ -13,10 +13,10 @@ cd "$ROOT"
 
 GATEWAY="${GATEWAY_URL:-http://localhost:8000}"
 
-TOKEN=$(curl -fsS -X POST "$GATEWAY/api/auth/dev-token" \
-          -H 'content-type: application/json' -d '{"role":"system"}' \
-        | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])') || {
-  echo "  cannot reach the gateway at $GATEWAY" >&2; exit 1; }
+# However this deployment signs people in: dev_token.sh tries the dev endpoint
+# and signs in with an account when that is refused (docs/adr/0001).
+TOKEN=$(GATEWAY_URL="$GATEWAY" "$(dirname "${BASH_SOURCE[0]}")/dev_token.sh" system) || {
+  echo "  cannot get a token from $GATEWAY" >&2; exit 1; }
 
 FAIL=0
 for dir in services/*/; do

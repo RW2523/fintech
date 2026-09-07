@@ -32,6 +32,8 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from scripts.token import token_for_sync  # noqa: E402
+
 BASE = "http://localhost:8000"
 
 pytestmark = [pytest.mark.security, pytest.mark.integration]
@@ -50,10 +52,19 @@ if not _stack_is_up():  # pragma: no cover - the suite is skipped wholesale
 
 
 def mint(role: str, **claims: Any) -> str:
+    """A token for a role, however this deployment signs people in.
+
+    `claims` only reach the dev endpoint, which is the point of it: on a bench
+    a test can ask for a member token naming any membership number. Where an
+    account is required they are dropped, and the account's own claims stand —
+    which is what these tests need anyway. None of them turns on *which*
+    member is signed in, only that a member's token stays a member's token.
+    """
     with httpx.Client(timeout=30.0) as client:
         response = client.post(f"{BASE}/api/auth/dev-token", json={"role": role, **claims})
-        response.raise_for_status()
-        return str(response.json()["access_token"])
+        if response.status_code == 200:
+            return str(response.json()["access_token"])
+        return token_for_sync(client, role, base=BASE)
 
 
 @pytest.fixture(scope="module")

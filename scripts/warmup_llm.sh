@@ -11,10 +11,10 @@ cd "$ROOT"
 [ -f docker/.env ] && { set -a; . docker/.env; set +a; }
 GATEWAY="${GATEWAY_URL:-http://localhost:${GATEWAY_PORT:-8000}}"
 
-TOKEN=$(curl -fsS -X POST "${GATEWAY}/api/auth/dev-token" \
-          -H 'content-type: application/json' -d '{"role":"system"}' \
-        | python3 -c 'import sys, json; print(json.load(sys.stdin)["access_token"])') || {
-  echo "  could not obtain a dev token from ${GATEWAY}" >&2; exit 1; }
+# However this deployment signs people in: dev_token.sh tries the dev endpoint
+# and signs in with an account when that is refused (docs/adr/0001).
+TOKEN=$(GATEWAY_URL="${GATEWAY}" "$(dirname "${BASH_SOURCE[0]}")/dev_token.sh" system) || {
+  echo "  could not obtain a token from ${GATEWAY}" >&2; exit 1; }
 
 echo "  warming every route through ${GATEWAY} ..."
 BODY=$(curl -fsS -X POST "${GATEWAY}/api/llm_gateway/llm/warmup" \

@@ -23,6 +23,7 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from cio_common.ids import new_id
+from scripts.token import token_for
 
 BASE = "http://localhost:8000"
 PRODUCT = "PF-STD"
@@ -77,9 +78,7 @@ async def member_id(client: httpx.AsyncClient) -> str:
 async def main() -> int:
     ok = True
     async with httpx.AsyncClient(timeout=60.0) as anon:
-        token = (await anon.post(f"{BASE}/api/auth/dev-token", json={"role": "system"})).json()[
-            "access_token"
-        ]
+        token = await token_for(anon, "system", base=BASE)
 
     async with httpx.AsyncClient(timeout=60.0, headers={"authorization": f"Bearer {token}"}) as c:
         member = await member_id(c)

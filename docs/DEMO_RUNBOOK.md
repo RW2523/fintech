@@ -37,13 +37,24 @@ Open these tabs in this order and sign in on each:
 | 2 | http://localhost:8080/collections | Collections |
 | 3 | http://localhost:8080/sandbox | Manager |
 | 4 | http://localhost:8080/manager | Manager |
-| 5 | http://localhost:8080/member | Member, membership number from `make demo` |
+| 5 | http://localhost:8080/member | Member |
 | 6 | http://localhost:8080/ledger | Compliance |
 | 7 | http://localhost:3001 | Grafana |
 
-The member tab needs a membership number. `scripts/member_assistant_eval.py`
-prints one that has both an application and a facility, and so does the last
-run of `make demo`.
+**How you sign in depends on the deployment.** On a bench it is a role picker:
+press "Officer" and you are one. On anything reachable from outside this
+machine — anything with `AUTH_MODE=password` — it is an email and a password,
+and the picker is not shown (docs/adr/0001). The login screen tells you which
+you have; you do not need to know in advance.
+
+With the role picker, the member tab also needs a membership number.
+`scripts/member_assistant_eval.py` prints one that has both an application and
+a facility, and so does the last run of `make demo`. With accounts, the member
+account is already one particular member and there is nothing to type.
+
+Accounts come from `docker/users.yaml`, which is not in git. Whoever set the
+deployment up has them; `scripts/add_user.py` adds one and
+`scripts/write_test_accounts.py` creates the full demo set.
 
 ---
 

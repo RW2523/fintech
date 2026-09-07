@@ -1,4 +1,13 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import {
+  authHeader,
+  authMode,
+  expectLoginScreen,
+  memberOfAccount,
+  memberSignIn,
+  mintToken,
+  signIn as signInAs,
+} from "./session";
 
 /** T-046 acceptance — the Officer Workbench against the running stack.
  *
@@ -21,11 +30,7 @@ type QueueEntry = {
 
 /** The record the page is expected to render, read straight from the API. */
 async function fetchRecord(request: APIRequestContext) {
-  const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
-    data: { role: "officer" },
-  });
-  expect(minted.ok(), "the gateway must mint a demo token").toBeTruthy();
-  const token = (await minted.json()).access_token as string;
+  const token = await mintToken(request, "officer");
   const auth = { authorization: `Bearer ${token}` };
 
   const queued = await request.get(`${GATEWAY}/api/decision/queue`, { headers: auth });
@@ -59,10 +64,13 @@ async function fetchRecord(request: APIRequestContext) {
   };
 }
 
-async function signIn(page: Page, role = "officer") {
-  await page.goto("/login");
-  await page.getByTestId(`role-${role}`).click();
-  await expect(page).toHaveURL(/\/officer$/);
+/** Sign in and be on the officer's queue. `./session` knows whether this
+ *  deployment wants a role pressed or an account signed into. */
+async function signIn(page: Page, request: APIRequestContext, role = "officer") {
+  await signInAs(page, request, role);
+  if (role === "officer" || role === "senior_officer") {
+    await expect(page).toHaveURL(/\/officer$/);
+  }
 }
 
 /** Open a case the way an officer does, from the queue.
@@ -88,7 +96,7 @@ test.describe("officer workbench", () => {
   }) => {
     const { entry, record } = await fetchRecord(request);
 
-    await signIn(page);
+    await signIn(page, request);
 
     await openCase(page, entry.case_id!);
 
@@ -144,7 +152,7 @@ test.describe("officer workbench", () => {
     ).toBeGreaterThan(0);
     const cited = boxed[0];
 
-    await signIn(page);
+    await signIn(page, request);
     await openCase(page, entry.case_id!);
 
     const panel = page.getByTestId("evidence-panel");
@@ -177,8 +185,8 @@ test.describe("officer workbench", () => {
     expect(drawn!.y + drawn!.height).toBeLessThanOrEqual(frame!.y + frame!.height + 1);
   });
 
-  test("the synthetic-data badge is on every screen", async ({ page }) => {
-    await signIn(page);
+  test("the synthetic-data badge is on every screen", async ({ page, request }) => {
+    await signIn(page, request);
     await expect(page.getByTestId("synthetic-badge")).toBeVisible();
     await openCase(page, CASE_ID);
     await expect(page.getByTestId("synthetic-badge")).toBeVisible();
@@ -186,14 +194,14 @@ test.describe("officer workbench", () => {
 
   test("a reload has no session, and the shell says so rather than showing a blank case", async ({
     page,
+    request,
   }) => {
-    await signIn(page);
+    await signIn(page, request);
     // The token lives in memory only, so a reload is a sign-out. The point of
     // asserting it is that the app must send the reader to the login screen
     // rather than render a case page with every figure empty.
     await page.reload();
-    await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByTestId("role-officer")).toBeVisible();
+    await expectLoginScreen(page, request);
   });
 });
 
@@ -201,7 +209,7 @@ test.describe("ledger viewer", () => {
   test("reconstructs a case with its chain badge", async ({ page, request }) => {
     const { entry } = await fetchRecord(request);
 
-    await signIn(page);
+    await signIn(page, request);
     await page.getByTestId("nav-ledger").click();
     await page.getByTestId("ledger-search-input").fill(entry.case_id!);
     await page.getByTestId("ledger-search-submit").click();
@@ -223,7 +231,7 @@ test.describe("ledger viewer", () => {
 
   test("a case reached from the workbench keeps its identity", async ({ page, request }) => {
     const { entry } = await fetchRecord(request);
-    await signIn(page);
+    await signIn(page, request);
     await openCase(page, entry.case_id!);
 
     await page.getByTestId("reconstruct-link").getByRole("link").click();
@@ -233,8 +241,9 @@ test.describe("ledger viewer", () => {
 
   test("a case with nothing recorded says so rather than showing an empty page", async ({
     page,
+    request,
   }) => {
-    await signIn(page);
+    await signIn(page, request);
     await page.getByTestId("nav-ledger").click();
     await page.getByTestId("ledger-search-input").fill("case_01ARZ3NDEKTSV4RRFFQ69G5FZZ");
     await page.getByTestId("ledger-search-submit").click();
@@ -250,10 +259,7 @@ test.describe("deciding a case", () => {
   }) => {
     // docs/09 §3.4 — shown disabled with the reason, never hidden: an officer
     // needs to know the action exists and who can take it.
-    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
-      data: { role: "officer" },
-    });
-    const token = (await minted.json()).access_token as string;
+    const token = await mintToken(request, "officer");
     const queued = await request.get(`${GATEWAY}/api/decision/queue`, {
       headers: { authorization: `Bearer ${token}` },
     });
@@ -263,7 +269,7 @@ test.describe("deciding a case", () => {
     );
     test.skip(!beyond, "no seeded case needs more than an officer");
 
-    await signIn(page, "officer");
+    await signIn(page, request, "officer");
     await openCase(page, beyond!.case_id!);
 
     await expect(page.getByTestId("action-approve")).toBeDisabled();
@@ -294,7 +300,7 @@ test.describe("deciding a case", () => {
     const { entry, record } = await fetchRecord(request);
     test.skip(Boolean(entry.route === "AUTONOMOUS"), "an autonomous case has no officer step");
 
-    await signIn(page, "head_of_credit");
+    await signIn(page, request, "head_of_credit");
     await openCase(page, entry.case_id!);
 
     // Choose the action the record did not recommend.
@@ -317,8 +323,8 @@ test.describe("deciding a case", () => {
 });
 
 test.describe("compliance view", () => {
-  test("lists what is worth reading, with the reason on the row", async ({ page }) => {
-    await signIn(page, "compliance");
+  test("lists what is worth reading, with the reason on the row", async ({ page, request }) => {
+    await signIn(page, request, "compliance");
     await page.getByTestId("nav-compliance").click();
 
     await expect(page.getByTestId("overrides")).toBeVisible();
@@ -332,17 +338,14 @@ test.describe("collections workbench", () => {
     page,
     request,
   }) => {
-    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
-      data: { role: "collections" },
-    });
-    const token = (await minted.json()).access_token as string;
+    const token = await mintToken(request, "collections");
     const queued = await request.get(`${GATEWAY}/api/lmi/lmi/alerts?limit=5`, {
       headers: { authorization: `Bearer ${token}` },
     });
     const alerts = (await queued.json()).alerts as { member_id: string; why_now: string }[];
     test.skip(alerts.length === 0, "no open alerts; run the nightly evaluation first");
 
-    await signIn(page, "collections");
+    await signIn(page, request, "collections");
     await page.getByTestId("nav-collections").click();
 
     const rows = page.getByTestId("watch-rows").getByRole("row");
@@ -357,17 +360,14 @@ test.describe("collections workbench", () => {
     page,
     request,
   }) => {
-    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
-      data: { role: "collections" },
-    });
-    const token = (await minted.json()).access_token as string;
+    const token = await mintToken(request, "collections");
     const queued = await request.get(`${GATEWAY}/api/lmi/lmi/alerts?limit=5`, {
       headers: { authorization: `Bearer ${token}` },
     });
     const alerts = (await queued.json()).alerts as { member_id: string }[];
     test.skip(alerts.length === 0, "no open alerts; run the nightly evaluation first");
 
-    await signIn(page, "collections");
+    await signIn(page, request, "collections");
     await page.getByTestId("nav-collections").click();
     await page.getByTestId(`watch-row-${alerts[0].member_id}`).click();
 
@@ -384,17 +384,14 @@ test.describe("collections workbench", () => {
     page,
     request,
   }) => {
-    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
-      data: { role: "collections" },
-    });
-    const token = (await minted.json()).access_token as string;
+    const token = await mintToken(request, "collections");
     const queued = await request.get(`${GATEWAY}/api/lmi/lmi/alerts?limit=5`, {
       headers: { authorization: `Bearer ${token}` },
     });
     const alerts = (await queued.json()).alerts as { member_id: string }[];
     test.skip(alerts.length === 0, "no open alerts; run the nightly evaluation first");
 
-    await signIn(page, "collections");
+    await signIn(page, request, "collections");
     await page.getByTestId("nav-collections").click();
     await page.getByTestId(`watch-row-${alerts[0].member_id}`).click();
 
@@ -408,17 +405,14 @@ test.describe("collections workbench", () => {
   });
 
   test("the screen says what it cannot do", async ({ page, request }) => {
-    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
-      data: { role: "collections" },
-    });
-    const token = (await minted.json()).access_token as string;
+    const token = await mintToken(request, "collections");
     const queued = await request.get(`${GATEWAY}/api/lmi/lmi/alerts?limit=5`, {
       headers: { authorization: `Bearer ${token}` },
     });
     const alerts = (await queued.json()).alerts as { member_id: string }[];
     test.skip(alerts.length === 0, "no open alerts; run the nightly evaluation first");
 
-    await signIn(page, "collections");
+    await signIn(page, request, "collections");
     await page.getByTestId("nav-collections").click();
     await page.getByTestId(`watch-row-${alerts[0].member_id}`).click();
 
@@ -440,7 +434,7 @@ test.describe("ask the file", () => {
   }) => {
     const { entry } = await fetchRecord(request);
 
-    await signIn(page);
+    await signIn(page, request);
     await openCase(page, entry.case_id!);
 
     await expect(page.getByTestId("ask-the-file")).toBeVisible();
@@ -469,7 +463,7 @@ test.describe("ask the file", () => {
   }) => {
     const { entry } = await fetchRecord(request);
 
-    await signIn(page);
+    await signIn(page, request);
     await openCase(page, entry.case_id!);
 
     await page.getByTestId("ask-input").fill("Should I approve this?");
@@ -483,7 +477,7 @@ test.describe("ask the file", () => {
 
   test("the panel says what the assistant will not do", async ({ page, request }) => {
     const { entry } = await fetchRecord(request);
-    await signIn(page);
+    await signIn(page, request);
     await openCase(page, entry.case_id!);
 
     await expect(page.getByTestId("ask-the-file")).toContainText(
@@ -505,10 +499,7 @@ test.describe("member assistant", () => {
    *  Not hard-coded: a membership number written into this file passes on the
    *  day it was written and fails the next time the population is generated. */
   async function aMember(request: APIRequestContext): Promise<string> {
-    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
-      data: { role: "system" },
-    });
-    const token = (await minted.json()).access_token as string;
+    const token = await mintToken(request, "system");
     const auth = { authorization: `Bearer ${token}` };
 
     const feed = await request.get(`${GATEWAY}/api/core_stub/core/changes?limit=400`, {
@@ -544,16 +535,13 @@ test.describe("member assistant", () => {
     throw new Error("no member with both an application and an account; run make seed");
   }
 
-  async function signInAsMember(page: Page, memberId: string) {
-    await page.goto("/login");
-    await page.getByTestId("member-id").fill(memberId);
-    await page.getByTestId("role-member").click();
-    await expect(page).toHaveURL(/\/member$/);
+  async function signInAsMember(page: Page, request: APIRequestContext, memberId: string) {
+    await memberSignIn(page, request, memberId);
   }
 
   test("answers a question about the member's own records", async ({ page, request }) => {
     const memberId = await aMember(request);
-    await signInAsMember(page, memberId);
+    await signInAsMember(page, request, memberId);
 
     await page.getByTestId("member-quick-0").click();
     const answer = page.getByTestId("assistant-said").first();
@@ -583,7 +571,7 @@ test.describe("member assistant", () => {
 
   test("will not say whether an application will be approved", async ({ page, request }) => {
     const memberId = await aMember(request);
-    await signInAsMember(page, memberId);
+    await signInAsMember(page, request, memberId);
 
     await page.getByTestId("member-input").fill("Will my application be approved?");
     await page.getByTestId("member-send").click();
@@ -600,7 +588,7 @@ test.describe("member assistant", () => {
     request,
   }) => {
     const memberId = await aMember(request);
-    await signInAsMember(page, memberId);
+    await signInAsMember(page, request, memberId);
 
     await page.getByTestId("member-input").fill("I lost my job last week and cannot pay");
     await page.getByTestId("member-send").click();
@@ -613,7 +601,7 @@ test.describe("member assistant", () => {
 
   test("the panel says what it will not do", async ({ page, request }) => {
     const memberId = await aMember(request);
-    await signInAsMember(page, memberId);
+    await signInAsMember(page, request, memberId);
 
     const limits = page.getByTestId("member-limits");
     await expect(limits).toContainText("cannot tell you whether an application will be approved");
@@ -630,10 +618,7 @@ test.describe("management cockpit", () => {
   test.setTimeout(180_000);
 
   async function metric(request: APIRequestContext, name: string, days = 90) {
-    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, {
-      data: { role: "manager" },
-    });
-    const token = (await minted.json()).access_token as string;
+    const token = await mintToken(request, "manager");
     const response = await request.get(
       `${GATEWAY}/api/governance/governance/metrics/${name}?days=${days}`,
       { headers: { authorization: `Bearer ${token}` } },
@@ -648,7 +633,7 @@ test.describe("management cockpit", () => {
 
   test("a tile shows what the metrics endpoint returned", async ({ page, request }) => {
     const routing = await metric(request, "routing");
-    await signIn(page, "manager");
+    await signIn(page, request, "manager");
     await page.getByTestId("nav-manager").click();
     await expect(page).toHaveURL(/\/manager$/);
 
@@ -675,15 +660,15 @@ test.describe("management cockpit", () => {
 
   test("a tile publishes what its number means", async ({ page, request }) => {
     const delinquency = await metric(request, "delinquency");
-    await signIn(page, "manager");
+    await signIn(page, request, "manager");
     await page.getByTestId("nav-manager").click();
     await expect(page.getByTestId("means-delinquency")).toContainText(
       delinquency.means.slice(0, 40),
     );
   });
 
-  test("the portfolio copilot answers from the metrics and names them", async ({ page }) => {
-    await signIn(page, "manager");
+  test("the portfolio copilot answers from the metrics and names them", async ({ page, request }) => {
+    await signIn(page, request, "manager");
     await page.getByTestId("nav-manager").click();
 
     await page.getByTestId("portfolio-input").fill("What is the autonomous share?");
@@ -694,8 +679,8 @@ test.describe("management cockpit", () => {
     await expect(page.getByTestId("portfolio-metrics")).toContainText("routing");
   });
 
-  test("a question about one member is refused", async ({ page }) => {
-    await signIn(page, "manager");
+  test("a question about one member is refused", async ({ page, request }) => {
+    await signIn(page, request, "manager");
     await page.getByTestId("nav-manager").click();
 
     await page.getByTestId("portfolio-input").fill("Tell me about member M-000042");
@@ -717,30 +702,29 @@ test.describe("management cockpit", () => {
 test.describe("policy sandbox", () => {
   test.setTimeout(180_000);
 
-  async function openSandbox(page: Page) {
-    await signIn(page, "manager");
+  async function openSandbox(page: Page, request: APIRequestContext) {
+    await signIn(page, request, "manager");
     await page.getByTestId("nav-sandbox").click();
     await expect(page).toHaveURL(/\/sandbox$/);
     await expect(page.getByTestId("in-force")).toContainText("policy/PF-STD", { timeout: 30_000 });
   }
 
   test("the pack in force is what the form starts from", async ({ page, request }) => {
-    const minted = await request.post(`${GATEWAY}/api/auth/dev-token`, { data: { role: "manager" } });
-    const token = (await minted.json()).access_token as string;
+    const token = await mintToken(request, "manager");
     const pack = await request.get(`${GATEWAY}/api/policy/policy/PF-STD/latest`, {
       headers: { authorization: `Bearer ${token}` },
     });
     const weights = (await pack.json()).dff.weights as Record<string, number>;
 
-    await openSandbox(page);
+    await openSandbox(page, request);
     for (const [factor, weight] of Object.entries(weights)) {
       await expect(page.getByTestId(`weight-value-${factor}`)).toHaveText(weight.toFixed(2));
     }
     await expect(page.getByTestId("weight-sum")).toContainText("weights sum to 1");
   });
 
-  test("weights that do not sum to one cannot be replayed", async ({ page }) => {
-    await openSandbox(page);
+  test("weights that do not sum to one cannot be replayed", async ({ page, request }) => {
+    await openSandbox(page, request);
 
     // Raise COMMITMENT without taking it from anywhere. The page must say so
     // and refuse to run, rather than sending a candidate the service would
@@ -750,8 +734,8 @@ test.describe("policy sandbox", () => {
     await expect(page.getByTestId("sandbox-run")).toBeDisabled();
   });
 
-  test("a balanced change replays and reports both sides", async ({ page }) => {
-    await openSandbox(page);
+  test("a balanced change replays and reports both sides", async ({ page, request }) => {
+    await openSandbox(page, request);
 
     const before = Number(await page.getByTestId("weight-value-CONDUCT").textContent());
     const commitment = Number(await page.getByTestId("weight-value-COMMITMENT").textContent());
@@ -772,8 +756,8 @@ test.describe("policy sandbox", () => {
     await expect(page.getByTestId("cases-replayed")).toContainText("No model was called");
   });
 
-  test("adoption needs two different people", async ({ page }) => {
-    await openSandbox(page);
+  test("adoption needs two different people", async ({ page, request }) => {
+    await openSandbox(page, request);
 
     const conduct = Number(await page.getByTestId("weight-value-CONDUCT").textContent());
     const commitment = Number(await page.getByTestId("weight-value-COMMITMENT").textContent());

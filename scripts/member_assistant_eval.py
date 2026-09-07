@@ -23,12 +23,16 @@ is a member assistant nobody has tested.
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 import re
 import sys
 from pathlib import Path
 from typing import Any
 
 import httpx
+
+from scripts.token import token_for
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -89,6 +93,14 @@ async def ask(client: httpx.AsyncClient, question: str, conversation: str | None
     return dict(response.json())
 
 
+def member_of(token: str) -> str | None:
+    """The membership number a token names, or None when it names none."""
+    payload = token.split(".")[1]
+    padded = payload + "=" * (-len(payload) % 4)
+    claims = json.loads(base64.urlsafe_b64decode(padded))
+    return claims.get("member_id")
+
+
 def line(ok: bool, label: str, detail: str = "") -> bool:
     print(f"  {'ok  ' if ok else 'MISS'} {label:<34} {detail[:90]}")
     return ok
@@ -96,17 +108,24 @@ def line(ok: bool, label: str, detail: str = "") -> bool:
 
 async def main() -> int:
     async with httpx.AsyncClient(timeout=60.0) as anon:
-        staff = (await anon.post(f"{BASE}/api/auth/dev-token", json={"role": "system"})).json()[
-            "access_token"
-        ]
-
-    async with httpx.AsyncClient(timeout=300.0, headers={"authorization": f"Bearer {staff}"}) as client:
-        member_id = await a_member(client)
+        staff = await token_for(anon, "system", base=BASE)
 
     async with httpx.AsyncClient(timeout=60.0) as anon:
-        token = (
-            await anon.post(f"{BASE}/api/auth/dev-token", json={"role": "member", "member_id": member_id})
-        ).json()["access_token"]
+        token = await token_for(anon, "member", base=BASE)
+
+    # Which member is decided by the token, never by this script. On a bench
+    # the dev endpoint takes whichever member has records to talk about; with
+    # accounts, the member account is one person and the assistant will only
+    # answer about them. Reading it back from the token means the questions
+    # below are asked about whoever actually signed in.
+    member_id = member_of(token)
+    if member_id is None:
+        async with httpx.AsyncClient(timeout=300.0, headers={"authorization": f"Bearer {staff}"}) as client:
+            member_id = await a_member(client)
+        async with httpx.AsyncClient(timeout=60.0) as anon:
+            token = (
+                await anon.post(f"{BASE}/api/auth/dev-token", json={"role": "member", "member_id": member_id})
+            ).json()["access_token"]
 
     print(f"\n  a member asks: {member_id}\n")
     checks: list[bool] = []

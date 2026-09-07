@@ -7,6 +7,17 @@ import { defineConfig, devices } from "@playwright/test";
  *  show that. `make up` and `scripts/seed_demo_case.py` must have run. */
 const PORT = Number(process.env.WEB_TEST_PORT ?? 5273);
 
+/** Point the suite at a deployment that is already serving instead of a vite
+ *  dev server started here:
+ *
+ *      WEB_BASE_URL=https://…  GATEWAY_URL=https://…  npx playwright test
+ *
+ *  What is published is not what this repository builds — it is what the web
+ *  container was built from, behind whatever terminates TLS, signing in the
+ *  way that deployment signs people in. A suite that can only run against a
+ *  dev server cannot tell you the published thing works. */
+const PUBLISHED = process.env.WEB_BASE_URL;
+
 export default defineConfig({
   testDir: "./tests",
   timeout: 60_000,
@@ -15,11 +26,11 @@ export default defineConfig({
   workers: 1,
   reporter: process.env.CI ? "line" : "list",
   use: {
-    baseURL: `http://localhost:${PORT}`,
+    baseURL: PUBLISHED ?? `http://localhost:${PORT}`,
     trace: "retain-on-failure",
     ...devices["Desktop Chrome"],
   },
-  webServer: {
+  webServer: PUBLISHED ? undefined : {
     command: `npx vite --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: true,

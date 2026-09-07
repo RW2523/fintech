@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from ai.evals.copilot_questions import GOLDEN, grade  # noqa: E402
+from scripts.token import token_for  # noqa: E402
 
 BASE = "http://localhost:8000"
 GROUNDED_TARGET = 0.95
@@ -42,9 +43,7 @@ async def pick_case(client: httpx.AsyncClient) -> tuple[str, str | None]:
 
 async def main() -> int:
     async with httpx.AsyncClient(timeout=120.0) as anon:
-        token = (await anon.post(f"{BASE}/api/auth/dev-token", json={"role": "officer"})).json()[
-            "access_token"
-        ]
+        token = await token_for(anon, "officer", base=BASE)
 
     async with httpx.AsyncClient(timeout=180.0, headers={"authorization": f"Bearer {token}"}) as client:
         case_id, record_id = await pick_case(client)

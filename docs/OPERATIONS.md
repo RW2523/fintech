@@ -32,6 +32,44 @@ Without it the platform still decides every case. The deterministic path does
 not need a model, and the narrative says it is degraded rather than being
 quietly absent. `make failsafe` is the proof.
 
+### Putting a URL in front of it
+
+A bench signs in with a role picker and `/api/auth/dev-token` mints a
+`head_of_credit` token for whoever asks. That is right on a machine nobody else
+can reach and an open administrative interface anywhere else: the token it
+hands out can pull the kill switch and approve a financing. Before anything can
+reach this from outside the machine:
+
+```bash
+scripts/generate_secrets.sh              # real signing secrets, not the shipped ones
+uv run python scripts/write_test_accounts.py   # the demo accounts, with passwords
+scripts/harden.sh --apply                # AUTH_MODE=password, then re-checks the rest
+make down && make up && make up-ai-local # every service re-reads it
+scripts/harden.sh                        # says yes to all four, or names what is missing
+```
+
+Then point a tunnel at the **web** container rather than the gateway: it serves
+the app and proxies `/api`, so one hostname covers both and the browser makes
+no cross-origin request.
+
+```bash
+cloudflared tunnel --url http://localhost:8080
+```
+
+The reasoning, the alternatives and what this does *not* make the platform fit
+for are in `docs/adr/0001-reachable-from-outside-the-bench.md`. In short: it is
+demonstration hardening on synthetic data. No MFA, no password reset, no
+session revocation.
+
+The drills and the browser suite keep working either way.
+`scripts/dev_token.sh` and `scripts/token.py` try the dev endpoint and sign in
+with an account from `docker/test-accounts.json` when it refuses, so a
+published deployment can still be verified rather than only demonstrated:
+
+```bash
+cd apps/web && WEB_BASE_URL=https://… GATEWAY_URL=https://… npx playwright test
+```
+
 ---
 
 ## 2. Every day
@@ -200,3 +238,12 @@ one was a needle in a haystack the platform generated itself.
   which must never be set outside a local demo.
 - **The seed refuses to run against `CIO_ENV=prod`.** There is no real member
   data in this build and nothing here is a place to put any.
+- **Dev tokens refuse themselves once a password is required.** `AUTH_MODE=password`
+  (and `CIO_ENV` of `pilot` or `prod`) closes `/api/auth/dev-token` and hides
+  the role picker. `scripts/harden.sh` checks it rather than trusting it.
+- **Guessing runs out, accounts do not lock.** Five failed sign-ins per address
+  per minute; successes are not counted, so nobody is locked out of their own
+  platform by signing in. A separate, looser cap on sign-in *requests* stops one
+  caller spending this machine's CPU on password hashing. Redis being down
+  allows the request and logs that the limit is not working — a rate limiter
+  that takes the platform down with it has turned a cache outage into an outage.

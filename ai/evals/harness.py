@@ -39,6 +39,8 @@ from typing import Any
 
 import httpx
 
+from scripts.token import token_for
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -685,9 +687,7 @@ async def main(argv: list[str] | None = None) -> int:
 
     run = Run()
     async with httpx.AsyncClient(timeout=60.0) as anon:
-        token = (await anon.post(f"{BASE}/api/auth/dev-token", json={"role": "system"})).json()[
-            "access_token"
-        ]
+        token = await token_for(anon, "system", base=BASE)
 
     async with httpx.AsyncClient(timeout=900.0, headers={"authorization": f"Bearer {token}"}) as client:
         if args.which in ("golden", "all") and not args.offline:

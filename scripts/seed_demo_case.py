@@ -29,6 +29,7 @@ import httpx
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from scripts.token import token_for  # noqa: E402
 from synthetic.golden import GOLDEN  # noqa: E402
 
 #: Which tool's number becomes which Decision Factor, matching what the agents
@@ -317,9 +318,7 @@ async def seed_case(
 
 async def run(base: str, scenarios: list[str]) -> int:
     async with httpx.AsyncClient(timeout=20.0) as anon:
-        minted = await anon.post(f"{base}/api/auth/dev-token", json={"role": "system"})
-        minted.raise_for_status()
-        token = minted.json()["access_token"]
+        token = await token_for(anon, "system", base=base)
 
     corpus = corpus_applications()
     tampered = tampered_applications()

@@ -16,9 +16,15 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+# Run as `python scripts/x.py`, so the repository root is not on the path.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.token import token_for
 
 BASE = "http://localhost:8000"
 COMPOSE = [
@@ -73,9 +79,7 @@ async def verify(client: httpx.AsyncClient, name: str, path: str) -> dict[str, A
 async def main() -> int:
     ok = True
     async with httpx.AsyncClient(timeout=60.0) as anon:
-        token = (await anon.post(f"{BASE}/api/auth/dev-token", json={"role": "head_of_risk"})).json()[
-            "access_token"
-        ]
+        token = await token_for(anon, "head_of_risk", base=BASE)
 
     async with httpx.AsyncClient(timeout=60.0, headers={"authorization": f"Bearer {token}"}) as c:
         print("before:")

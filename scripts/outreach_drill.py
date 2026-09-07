@@ -20,9 +20,15 @@ import asyncio
 import sys
 import time
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+# Run as `python scripts/x.py`, so the repository root is not on the path.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.token import token_for
 
 BASE = "http://localhost:8000"
 MEMBER = "M-000042"
@@ -38,9 +44,7 @@ ACCOUNT = f"A-DRILL{RUN}"
 async def main() -> int:
     ok = True
     async with httpx.AsyncClient(timeout=60.0) as anon:
-        token = (await anon.post(f"{BASE}/api/auth/dev-token", json={"role": "collections"})).json()[
-            "access_token"
-        ]
+        token = await token_for(anon, "collections", base=BASE)
 
     async with httpx.AsyncClient(timeout=60.0, headers={"authorization": f"Bearer {token}"}) as c:
         due = date.today() + timedelta(days=20)

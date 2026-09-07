@@ -18,8 +18,14 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from pathlib import Path
 
 import httpx
+
+# Run as `python scripts/x.py`, so the repository root is not on the path.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.token import token_for
 
 BASE = "http://localhost:8000"
 PRODUCT = "PF-STD"
@@ -86,9 +92,7 @@ async def member_id(client: httpx.AsyncClient) -> str:
 async def main() -> int:
     ok = True
     async with httpx.AsyncClient(timeout=60.0) as anon:
-        token = (await anon.post(f"{BASE}/api/auth/dev-token", json={"role": "system"})).json()[
-            "access_token"
-        ]
+        token = await token_for(anon, "system", base=BASE)
 
     async with httpx.AsyncClient(timeout=60.0, headers={"authorization": f"Bearer {token}"}) as c:
         # --- clean up anything a previous run left -------------------------
@@ -153,9 +157,7 @@ async def main() -> int:
         ok &= entry is not None
 
         # As the senior officer the sample was assigned to, not as the system.
-        senior = (await c.post(f"{BASE}/api/auth/dev-token", json={"role": "senior_officer"})).json()[
-            "access_token"
-        ]
+        senior = await token_for(c, "senior_officer", base=BASE)
         reviewed = await c.post(
             f"{BASE}/api/decision/samples/{appended['sample_id']}/review",
             json={

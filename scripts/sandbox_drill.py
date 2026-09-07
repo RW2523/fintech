@@ -26,6 +26,8 @@ from pathlib import Path
 
 import httpx
 
+from scripts.token import token_for
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -43,9 +45,7 @@ def line(ok: bool, label: str, detail: str = "") -> bool:
 
 async def main() -> int:
     async with httpx.AsyncClient(timeout=60.0) as anon:
-        token = (await anon.post(f"{BASE}/api/auth/dev-token", json={"role": "manager"})).json()[
-            "access_token"
-        ]
+        token = await token_for(anon, "manager", base=BASE)
 
     # Decide the demo cases again first, so every frozen baseline is under the
     # pack in force. Without this the drill compares a candidate against
