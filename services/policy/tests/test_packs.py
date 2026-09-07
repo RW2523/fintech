@@ -277,3 +277,35 @@ def test_packs_are_not_mutated_by_loading(std: PolicyPack) -> None:
     std.rules()
     std.authority_for(50000)
     assert std.policy == before
+
+
+def test_the_newest_version_is_last_past_the_ninth(tmp_path: Path) -> None:
+    """Sorted as text, 2026.09.10 comes before 2026.09.9.
+
+    Which meant that from a product's tenth version onward, `latest` returned
+    an older pack: adoption reported the new version, the sandbox drill showed
+    the old one still in force, and every case decided in between was decided
+    under weights nobody had adopted. Found by the drill, not by a test —
+    nothing here had ever created a tenth version.
+    """
+    product = tmp_path / "PF-STD"
+    for n in list(range(1, 13)):
+        version = product / f"2026.09.{n}"
+        version.mkdir(parents=True)
+        (version / "policy.yaml").write_text("{}")
+
+    versions = [v for p, v in available_packs(tmp_path) if p == "PF-STD"]
+    assert versions[-1] == "2026.09.12"
+    assert versions[:3] == ["2026.09.1", "2026.09.2", "2026.09.3"]
+
+
+def test_a_version_that_is_not_a_number_still_sorts(tmp_path: Path) -> None:
+    """An oddly named directory orders predictably rather than raising."""
+    product = tmp_path / "PF-STD"
+    for name in ("2026.09.2", "2026.09.10", "2026.09.draft"):
+        version = product / name
+        version.mkdir(parents=True)
+        (version / "policy.yaml").write_text("{}")
+
+    versions = [v for p, v in available_packs(tmp_path) if p == "PF-STD"]
+    assert versions == ["2026.09.2", "2026.09.10", "2026.09.draft"]

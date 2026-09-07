@@ -39,11 +39,11 @@ from typing import Any
 
 import httpx
 
-from scripts.token import token_for
-
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+from scripts.signin import token_for  # noqa: E402
 
 REPORTS = ROOT / "ai" / "evals" / "reports"
 ADVERSARIAL = ROOT / "ai" / "evals" / "adversarial"

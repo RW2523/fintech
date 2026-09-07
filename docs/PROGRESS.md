@@ -543,8 +543,56 @@ them had a history. And a member assistant could not see the application its
 member had actually made, because it read only the platform's own service and
 the generated population applied to the incumbent core.
 
+## Post-P8 — published, at the owner's request (2026-09-06)
+
+The owner asked for a link other people can open. `CLAUDE.md` §9 says the demo
+host is the Spark and the UIs are on its LAN address, and everything in the
+build follows from that: sign-in is a role picker, `/api/auth/dev-token` mints a
+`head_of_credit` token for whoever asks, and the signing secrets ship in git.
+Off the LAN those three compose into an open administrative interface with a
+kill switch behind it. Changing that assumption needs an ADR, so there is one.
+
+**What it took.** Accounts in a git-ignored file with Argon2id hashes; the dev
+endpoint refusing once `AUTH_MODE=password`; real secrets enforced rather than
+requested; rate limiting at the gateway; the web container serving the app and
+proxying `/api` so there is one origin. All of it is in
+`docs/adr/0001-reachable-from-outside-the-bench.md`, including what it does not
+make the platform fit for. Verified through the public URL: the app answers,
+`dev-token` is refused, an anonymous API call is refused, an officer signs in,
+the queue returns seven decisions and the ledger verifies eighty-nine entries
+intact.
+
+**Requiring a password broke every check at once.** The browser suite pressed a
+role button that is no longer rendered; every drill, the harness and the
+security suite minted a dev token inline and got a 403. The phase verification
+went from twelve passing to six, and not one of those six failures was about
+the platform. A check that cannot start has not passed, so there is now one
+place that knows how to sign in, for bash, for Python and for the browser, each
+trying the dev endpoint and signing in with an account when it refuses. The
+browser suite passes in both modes and against the published URL — 29 of 29
+each time. `WEB_BASE_URL` points it at a deployment that is already serving, so
+what is published can be tested rather than only demonstrated.
+
+**Two things found by doing that.** The rate limit counted every sign-in, so
+the suite spent its allowance in the first minute and locked itself out of the
+platform it was testing; a person signing in, signing out and signing in again
+would have hit the same wall. It counts failures now, which is both the correct
+rule and the one that lets the suite run. And `make up` never started the web
+container, nor built the bundle it serves — nginx with `apps/web/dist` mounted
+in, so a published deployment could be months behind its own source with
+nothing anywhere saying so.
+
+**A test that was green because of the hour.** Three audit-export tests failed
+at 20:00 having passed all day: entries are stamped `timestamptz` and the
+export filters on the UTC date, while the tests asked for the local one. In
+this timezone the two agree for twenty hours a day. The service is right, the
+tests now ask for the same day it does, and the same mix of civil and UTC days
+elsewhere in the platform is worth a pass of its own.
+
 ## Blocked
 (none)
 
 ## ADRs written
-(none)
+
+- `docs/adr/0001-reachable-from-outside-the-bench.md` — reaching the platform
+  from outside the machine it runs on. Accepted 2026-09-06.

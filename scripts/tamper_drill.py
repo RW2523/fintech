@@ -24,7 +24,7 @@ import httpx
 # Run as `python scripts/x.py`, so the repository root is not on the path.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.token import token_for
+from scripts.signin import token_for
 
 BASE = "http://localhost:8000"
 COMPOSE = [

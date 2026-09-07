@@ -9,7 +9,7 @@ fooled. The screen checks what the agent said before anyone reads it.
 from __future__ import annotations
 
 from ai.guardrails.injection import PATTERNS, Detection, classify, scan
-from ai.guardrails.screen import FORBIDDEN_TERMS, screen_answer, screen_opinion
+from ai.guardrails.screen import FORBIDDEN_TERMS, numbers_in_prose, screen_answer, screen_opinion
 from ai.guardrails.wrapping import NOTE, is_wrapped, wrap, wrap_many
 
 
@@ -266,3 +266,68 @@ def test_an_answer_citing_what_no_tool_returned_is_refused_even_with_no_tools() 
 
     screening = screen_answer(answer, tool_results=[], evidence_ids=set())
     assert not screening.passed
+
+
+# ---------------------------------------------------------------------------
+# dates in prose
+# ---------------------------------------------------------------------------
+def test_a_date_a_tool_supplied_may_be_written_out() -> None:
+    """A balance answer was refused for stating the date it was as of.
+
+    The tool returned `savings_as_of: 2026-08-31`. The model wrote "as of
+    August 31, 2026", and the number rule read that as two quantities no tool
+    had produced — the year because the pattern had swallowed the comma after
+    it and so no longer looked like a year, the day because an ISO date in a
+    tool result matches nothing the prose matcher can see. Every member asking
+    for their balance got "I could not answer that reliably" while the
+    platform held the answer.
+    """
+    tools = [
+        {
+            "tool": "get_my_balance",
+            "result": {"savings_balance": "13923.96", "savings_as_of": "2026-08-31"},
+        }
+    ]
+    screening = screen_answer(
+        {
+            "schema": "copilot_answer/1.0",
+            "answer": "Your savings balance as of August 31, 2026, is 13,923.96.",
+            "citations": [{"ref": "ev_1", "what": "savings", "kind": "EVIDENCE"}],
+        },
+        tool_results=tools,
+        evidence_ids={"ev_1"},
+    )
+    assert screening.passed, screening.rejections
+
+
+def test_a_date_no_tool_supplied_is_still_caught() -> None:
+    """The half of the rule that matters: an invented date.
+
+    Allowing dates the tools did return must not allow dates they did not. The
+    tool here says the balance is as of 31 August; an answer that moves it to
+    15 October has invented both halves of a date, and only the number rule
+    stands between that and a member acting on it.
+
+    (A date built out of a `due_day` this rule cannot catch, because the day is
+    genuinely in the tool result. What stops that is the `note` field saying
+    what the record does not hold — see test_member_guardrails.)
+    """
+    tools = [{"tool": "get_my_balance", "result": {"savings_as_of": "2026-08-31"}}]
+    screening = screen_answer(
+        {
+            "schema": "copilot_answer/1.0",
+            "answer": "Your balance is as of 15 October.",
+            "citations": [{"ref": "ev_1", "what": "schedule", "kind": "EVIDENCE"}],
+        },
+        tool_results=tools,
+        evidence_ids={"ev_1"},
+    )
+    assert not screening.passed
+    assert any("numbers no tool" in str(r.get("reason")) for r in screening.rejections)
+
+
+def test_a_year_is_a_year_whatever_follows_it() -> None:
+    """`\\d[\\d,]*` swallowed the comma, so "2026," was not a year."""
+    assert "2026" not in numbers_in_prose("in 2026, the rate rose")
+    assert "2026" not in numbers_in_prose("in 2026 the rate rose")
+    assert numbers_in_prose("2,201.15 over 31 months") == {"2201.15", "31"}

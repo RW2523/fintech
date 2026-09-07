@@ -1,6 +1,6 @@
 """A token for a role, however this deployment signs people in.
 
-    from scripts.token import token_for
+    from scripts.signin import token_for
     token = await token_for(client, "system")
 
 The bash equivalent is `scripts/dev_token.sh`, and both do the same thing: try

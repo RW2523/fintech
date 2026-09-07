@@ -1,0 +1,88 @@
+schema: dff/1.0
+product: PF-STD
+version: 2026.09.22
+weights:
+  CAPACITY: 0.35
+  CONDUCT: 0.1
+  COMMITMENT: 0.4
+  CONDITIONS: 0.1
+  INTEGRITY: 0.05
+thresholds:
+  approve: 70
+  decline: 45
+min_evidence_coverage: 0.9
+hard_gate_families:
+- COMPLIANCE
+integrity_critical_is_gate: true
+scoring:
+  CAPACITY:
+    tool: affordability.compute
+    formula: 'base = 100 - 120 * max(0, dsr - 0.35)
+
+      base -= 10 * count(stress where not pass)
+
+      base -= 10 if residual_income < residual_income_min * 1.25
+
+      score = clamp(round(base), 0, 100)
+
+      '
+  CONDUCT:
+    tool: risk.score
+    formula: 's = 40 * ontime_rate_24m
+
+      s += min(25, months_since_last_arrears / 24 * 25) if any_arrears else 25
+
+      s -= 15 * restructures_36m
+
+      s += {A: 20, B: 16, C: 12, D: 6, E: 0}[bureau_or_internal_grade]
+
+      s = 55 if history_months < 6 else s
+
+      score = clamp(round(s), 0, 100)
+
+      '
+  COMMITMENT:
+    tool: member.commitment_score
+    formula: 's = min(30, tenure_years * 3)
+
+      s += min(40, 40 * savings_balance / (12 * proposed_instalment))
+
+      s += 30 if share_capital >= product_min_share else 30 * share_capital / product_min_share
+
+      s -= 10 if savings_paused_months >= 3
+
+      score = clamp(round(s), 0, 100)
+
+      '
+  INTEGRITY:
+    tool: fraud.assess
+    formula: 'score = clamp(100 - sum(severity_points(f) for f in open_findings),
+      0, 100)
+
+      '
+    severity_points:
+      LOW: 5
+      MEDIUM: 20
+      HIGH: 45
+  CONDITIONS:
+    tool: portfolio.conditions
+    formula: 's = 100
+
+      s -= 20 if employer_share_of_portfolio > 0.08 else 10 if > 0.05 else 0
+
+      s -= 15 if sector_stress_flag else 0
+
+      score = clamp(round(s), 0, 100)
+
+      '
+decisive_rule: family with the largest |weighted_contribution - mean_contribution|
+reliability_weights:
+  document_evidence: 1.0
+  policy_affordability: 1.0
+  credit_risk: 1.0
+  fraud_integrity: 1.0
+  member_relationship: 1.0
+  challenger: 1.0
+disagreement_thresholds:
+  officer_review: 0.35
+  enhanced_assessment: 0.6

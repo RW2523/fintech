@@ -23,7 +23,7 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from cio_common.ids import new_id
-from scripts.token import token_for
+from scripts.signin import token_for
 
 BASE = "http://localhost:8000"
 PRODUCT = "PF-STD"

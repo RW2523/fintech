@@ -62,7 +62,7 @@ demonstration hardening on synthetic data. No MFA, no password reset, no
 session revocation.
 
 The drills and the browser suite keep working either way.
-`scripts/dev_token.sh` and `scripts/token.py` try the dev endpoint and sign in
+`scripts/dev_token.sh` and `scripts/signin.py` try the dev endpoint and sign in
 with an account from `docker/test-accounts.json` when it refuses, so a
 published deployment can still be verified rather than only demonstrated:
 

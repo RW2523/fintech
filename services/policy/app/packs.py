@@ -261,6 +261,28 @@ def load_pack(product: str, version: str, *, root: Path | None = None) -> Policy
     )
 
 
+def version_order(version: str) -> tuple[Any, ...]:
+    """Sort key for a pack version, by number and not by spelling.
+
+    Versions are dotted sequences — 2026.09.1, then 2026.09.2, up. Sorted as
+    text, 2026.09.10 comes before 2026.09.9, so from the tenth adoption of a
+    product onward the newest version stopped being last and `latest` returned
+    an older pack. Adoption reported the new version and the platform kept
+    deciding under the old one.
+
+    Numeric segments compare as numbers. A segment that is not a number keeps
+    its text, after any number, so an oddly named directory sorts predictably
+    rather than raising.
+    """
+    parts: list[tuple[int, int, str]] = []
+    for segment in version.split("."):
+        if segment.isdigit():
+            parts.append((0, int(segment), ""))
+        else:
+            parts.append((1, 0, segment))
+    return tuple(parts)
+
+
 def available_packs(root: Path | None = None) -> list[tuple[str, str]]:
     """Every (product, version) pair on disk, newest version last."""
     base = root or pack_root()
@@ -268,7 +290,7 @@ def available_packs(root: Path | None = None) -> list[tuple[str, str]]:
         (product.name, version.name)
         for product in sorted(base.iterdir())
         if product.is_dir() and product.name != "schema"
-        for version in sorted(product.iterdir())
+        for version in sorted(product.iterdir(), key=lambda d: version_order(d.name))
         if version.is_dir() and (version / "policy.yaml").is_file()
     ]
     return found

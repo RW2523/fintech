@@ -22,6 +22,7 @@ from typing import Any
 __all__ = [
     "FORBIDDEN_TERMS",
     "Screening",
+    "dates_a_tool_supplied",
     "numbers_a_tool_supplied",
     "numbers_in_prose",
     "rounded_forms",
@@ -73,8 +74,84 @@ FORBIDDEN_PHRASES: tuple[tuple[str, re.Pattern[str]], ...] = (
 #: A number in a claim must have come from a tool. Years and identifiers are
 #: allowed through: a year is not a computed quantity, and an id is checked by
 #: the evidence rule instead.
-_NUMBER = re.compile(r"(?<![\w.-])(\d[\d,]*(?:\.\d+)?)(?![\w-])")
+#:
+#: A comma has to sit between digits to be part of the number. `\d[\d,]*` was
+#: greedy enough to swallow the comma in "August 31, 2026, is", so the match
+#: was "2026," — which the year pattern below, anchored with $, did not
+#: recognise as a year. Every prose date leaked its year into the numbers a
+#: tool was required to have supplied, and a correct answer about a balance was
+#: refused for stating the date the balance was as of.
+_NUMBER = re.compile(r"(?<![\w.-])(\d+(?:,\d{3})*(?:\.\d+)?)(?![\w-])")
 _YEAR = re.compile(r"^(19|20)\d{2}$")
+
+#: Dates, in the forms a model writes them and the form a tool returns them.
+#: A date is not a computed quantity, but it is not free either: an assistant
+#: that invents "your next payment is due on the 22nd" from a `due_day` field
+#: is doing the thing this screen exists to catch. So a date in prose is
+#: allowed exactly when some tool in the run returned that same day, and its
+#: digits are then not counted as loose numbers.
+_MONTHS = [
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+]
+_ISO_DATE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+_PROSE_DATE = re.compile(
+    r"\b(?:(\d{1,2})(?:st|nd|rd|th)?\s+(" + "|".join(_MONTHS) + r")|"
+    r"(" + "|".join(_MONTHS) + r")\s+(\d{1,2})(?:st|nd|rd|th)?)"
+    r"(?:,?\s+(\d{4}))?\b",
+    re.I,
+)
+
+
+def dates_a_tool_supplied(tool_results: Any) -> set[tuple[int, int]]:
+    """Every (month, day) any tool returned as an ISO date, at any depth.
+
+    Month and day rather than the whole date: a tool returns `2026-08-31` and a
+    model writes "31 August", with the year left off as people leave it off.
+    The year is covered by the year rule.
+    """
+    found: set[tuple[int, int]] = set()
+    if isinstance(tool_results, str):
+        for match in _ISO_DATE.finditer(tool_results):
+            found.add((int(match.group(2)), int(match.group(3))))
+    elif isinstance(tool_results, dict):
+        for value in tool_results.values():
+            found |= dates_a_tool_supplied(value)
+    elif isinstance(tool_results, (list, tuple)):
+        for item in tool_results:
+            found |= dates_a_tool_supplied(item)
+    return found
+
+
+def _without_supplied_dates(text: str, supplied: set[tuple[int, int]]) -> str:
+    """`text` with every date a tool actually returned taken out of it.
+
+    What is left goes to the number rule, so a date the tools did supply costs
+    nothing and a date they did not still has to be accounted for.
+    """
+    if not supplied:
+        return text
+
+    def drop(match: re.Match[str]) -> str:
+        day = match.group(1) or match.group(4)
+        month_name = (match.group(2) or match.group(3) or "").lower()
+        if not day or month_name not in _MONTHS:
+            return match.group(0)
+        if (_MONTHS.index(month_name) + 1, int(day)) in supplied:
+            return " "
+        return match.group(0)
+
+    return _PROSE_DATE.sub(drop, text)
 
 
 @dataclass
@@ -371,7 +448,10 @@ def screen_answer(
                 }
             )
 
-        invented_in_refusal = _numbers_in(why) - refusal_numbers
+        invented_in_refusal = (
+            _numbers_in(_without_supplied_dates(why, dates_a_tool_supplied(tool_results or [])))
+            - refusal_numbers
+        )
         if invented_in_refusal:
             screening.rejections.append(
                 {
@@ -406,7 +486,14 @@ def screen_answer(
     known_numbers: set[str] = set()
     for value in numbers_a_tool_supplied(tool_results or []):
         known_numbers |= rounded_forms(value)
-    invented = _numbers_in(text) - known_numbers
+    # Dates the tools returned come out first. A tool returns `2026-08-31` and
+    # writes nothing the number rule can see; a model writes "August 31, 2026"
+    # and the day and the year both look like quantities it invented. A date
+    # the tools did *not* return stays in, and its numbers still have to be
+    # accounted for — an assistant inventing a due date from a `due_day` field
+    # is precisely what this rule is here to catch.
+    prose = _without_supplied_dates(text, dates_a_tool_supplied(tool_results or []))
+    invented = _numbers_in(prose) - known_numbers
     if invented:
         screening.rejections.append(
             {

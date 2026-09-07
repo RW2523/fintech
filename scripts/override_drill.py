@@ -15,17 +15,18 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from pathlib import Path
 from typing import Any
 
 import httpx
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.signin import token_for  # noqa: E402
+
 BASE = "http://localhost:8000"
-
-
-async def token_for(client: httpx.AsyncClient, role: str) -> str:
-    minted = await client.post(f"{BASE}/api/auth/dev-token", json={"role": role})
-    minted.raise_for_status()
-    return str(minted.json()["access_token"])
 
 
 async def queued(client: httpx.AsyncClient, token: str) -> list[dict[str, Any]]:
@@ -53,9 +54,9 @@ async def decide(
 async def main() -> int:
     ok = True
     async with httpx.AsyncClient(timeout=60.0) as c:
-        officer = await token_for(c, "officer")
-        senior = await token_for(c, "senior_officer")
-        compliance = await token_for(c, "compliance")
+        officer = await token_for(c, "officer", base=BASE)
+        senior = await token_for(c, "senior_officer", base=BASE)
+        compliance = await token_for(c, "compliance", base=BASE)
 
         rows = await queued(c, officer)
         undecided = [r for r in rows if not r["decided"] and r["case_id"]]

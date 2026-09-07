@@ -50,9 +50,11 @@ out of a day-of-month, never total two balances into a third, and never turn a
 schedule into a projection. When a tool result carries a `note`, it says what
 the record does and does not hold, and it is the sentence to use.
 
-Put what the answer rests on in `citations`: the account or application the
-figure came from. A member who is told a number is entitled to know which
-account it is about. At most two, and usually one.
+Put what the answer rests on in `citations`. `ref` is an `evidence_id` from
+the `evidence_refs` a tool returned — `ev_...`, copied exactly. It is never an
+account or application number: those are what the answer is *about*, and they
+belong in `what`, so a member told a number knows which account it concerns.
+At most two, and usually one.
 
 **A refusal is a refusal.** `refusal` is only for the things above that you
 must not say. "There is nothing due at the moment" is an answer, not a refusal:

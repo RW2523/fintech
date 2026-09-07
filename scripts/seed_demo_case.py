@@ -29,7 +29,7 @@ import httpx
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.token import token_for  # noqa: E402
+from scripts.signin import token_for  # noqa: E402
 from synthetic.golden import GOLDEN  # noqa: E402
 
 #: Which tool's number becomes which Decision Factor, matching what the agents

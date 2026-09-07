@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from ai.evals.copilot_questions import GOLDEN, grade  # noqa: E402
-from scripts.token import token_for  # noqa: E402
+from scripts.signin import token_for  # noqa: E402
 
 BASE = "http://localhost:8000"
 GROUNDED_TARGET = 0.95

@@ -26,10 +26,10 @@ from pathlib import Path
 
 import httpx
 
-from scripts.token import token_for
-
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+from scripts.signin import token_for  # noqa: E402
 
 BASE = "http://localhost:8000"
 PRODUCT = "PF-STD"

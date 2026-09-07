@@ -138,7 +138,7 @@ been made by breaking every check that could have caught it:
   passes in both modes and against a published URL — `WEB_BASE_URL` points it
   at one instead of a dev server, so what is actually serving can be tested and
   not merely demonstrated.
-- `scripts/dev_token.sh` and `scripts/token.py` do the same for the drills, the
+- `scripts/dev_token.sh` and `scripts/signin.py` do the same for the drills, the
   harness and the security suite, all of which minted dev tokens inline and all
   of which stopped working the first time a password was required. A drill that
   cannot start has not passed.

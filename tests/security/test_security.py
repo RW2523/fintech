@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.token import token_for_sync  # noqa: E402
+from scripts.signin import token_for_sync  # noqa: E402
 
 BASE = "http://localhost:8000"
 
