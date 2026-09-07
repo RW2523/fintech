@@ -102,8 +102,8 @@ export function MemberPage() {
   return (
     <div className="flex flex-col gap-5" data-testid="member-page">
       <header>
-        <h1 className="text-[26px] font-bold tracking-tight">Your account</h1>
-        <p className="text-sm text-[--color-muted]">
+        <h1 className="text-[34px] leading-tight font-extrabold tracking-tight">Your account</h1>
+        <p className="text-sm text-muted">
           What we hold about you, and somebody to ask.
         </p>
       </header>
@@ -116,8 +116,8 @@ export function MemberPage() {
             onClick={() => setTab(name)}
             className={`rounded border px-3 py-1 text-sm ${
               tab === name
-                ? "border-[--color-accent]"
-                : "border-[--color-line] text-[--color-muted]"
+                ? "border-accent"
+                : "border-line text-muted"
             }`}
           >
             {name === "chat" ? "Ask us" : "Your messages"}
@@ -131,8 +131,8 @@ export function MemberPage() {
           {inbox.data && inbox.data.messages.length > 0 ? (
             <ul className="flex flex-col gap-2">
               {inbox.data.messages.map((message) => (
-                <li key={message.message_id} className="rounded border border-[--color-line] p-3">
-                  <p className="text-xs text-[--color-muted]">{message.sent_at ?? "not sent yet"}</p>
+                <li key={message.message_id} className="rounded border border-line p-3">
+                  <p className="text-xs text-muted">{message.sent_at ?? "not sent yet"}</p>
                   <p className="mt-1 text-sm">{message.body}</p>
                 </li>
               ))}
@@ -154,8 +154,8 @@ export function MemberPage() {
                   <div
                     className={`inline-block max-w-[85%] rounded border p-3 text-left text-sm ${
                       turn.role === "you"
-                        ? "border-[--color-line] bg-[--color-surface]"
-                        : "border-[--color-line]"
+                        ? "border-line bg-surface"
+                        : "border-line"
                     }`}
                   >
                     <p className="whitespace-pre-line">{turn.text}</p>
@@ -165,11 +165,11 @@ export function MemberPage() {
                       // before this renders: the assistant does not say
                       // somebody will call unless somebody has been asked to.
                       <div
-                        className="mt-2 rounded border border-[--color-accent] p-2 text-xs"
+                        className="mt-2 rounded border border-accent p-2 text-xs"
                         data-testid="member-handoff"
                       >
                         <Chip tone="warn">A colleague will contact you</Chip>
-                        <p className="mt-1 text-[--color-muted]">
+                        <p className="mt-1 text-muted">
                           Reference {turn.reply.handoff_id.slice(0, 16)}. You do not need to
                           do anything else.
                         </p>
@@ -178,7 +178,7 @@ export function MemberPage() {
 
                     {turn.reply && !turn.reply.refusal && turn.reply.tools_read.length > 0 ? (
                       <p
-                        className="mt-2 text-[11px] text-[--color-muted]"
+                        className="mt-2 text-[11px] text-muted"
                         data-testid="member-provenance"
                       >
                         from your records:{" "}
@@ -191,7 +191,7 @@ export function MemberPage() {
                 </li>
               ))}
               {ask.isPending ? (
-                <li className="text-sm text-[--color-muted]" data-testid="member-thinking">
+                <li className="text-sm text-muted" data-testid="member-thinking">
                   Looking at your records…
                 </li>
               ) : null}
@@ -211,13 +211,13 @@ export function MemberPage() {
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
                 placeholder="Ask about your account"
-                className="flex-1 rounded border border-[--color-line] bg-[--color-surface] px-2 py-1 text-sm"
+                className="flex-1 rounded border border-line bg-surface px-2 py-1 text-sm"
               />
               <button
                 type="submit"
                 data-testid="member-send"
                 disabled={ask.isPending || question.trim().length < 3}
-                className="rounded border border-[--color-accent] px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded border border-accent px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Send
               </button>
@@ -230,7 +230,7 @@ export function MemberPage() {
                   type="button"
                   data-testid={`member-quick-${QUICK.indexOf(suggestion)}`}
                   onClick={() => submit(suggestion)}
-                  className="rounded border border-[--color-line] px-2 py-0.5 text-xs text-[--color-muted] hover:border-[--color-accent]"
+                  className="rounded border border-line px-2 py-0.5 text-xs text-muted hover:border-accent"
                 >
                   {suggestion}
                 </button>
@@ -239,13 +239,13 @@ export function MemberPage() {
                 type="button"
                 data-testid="member-quick-person"
                 onClick={() => submit("I would like to talk to a person")}
-                className="rounded border border-[--color-line] px-2 py-0.5 text-xs text-[--color-muted] hover:border-[--color-accent]"
+                className="rounded border border-line px-2 py-0.5 text-xs text-muted hover:border-accent"
               >
                 Talk to a person
               </button>
             </div>
 
-            <p className="text-xs text-[--color-muted]" data-testid="member-limits">
+            <p className="text-xs text-muted" data-testid="member-limits">
               Answers come from your own records. This assistant cannot tell you
               whether an application will be approved, and it does not give
               financial advice. If anything is difficult, ask to talk to a

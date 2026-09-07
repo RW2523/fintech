@@ -9,9 +9,11 @@ DecisionRecord and appends that record to the hash-chained ledger. Nothing is
 written straight into a table, and every page image an officer sees is a file
 the extractor actually read.
 
-The committee is skipped, so the records carry no agent opinions. This is a
-development convenience for working on the UI without a Temporal worker and
-six agents behind it; `make demo` runs the whole pipeline.
+By default the committee is convened too, so every seeded case carries real
+agent opinions with real evidence behind them — which is what the workbench's
+council panel shows. Pass `--no-council` to skip it: the deliberation is the
+slow part, and somebody working on a screen that does not show opinions should
+not wait for six agents to argue.
 """
 
 from __future__ import annotations
@@ -246,12 +248,105 @@ async def load_documents(
     return loaded
 
 
+def agent_tool_results(case: Any) -> dict[str, list[dict[str, Any]]]:
+    """The tool results each agent in the council is entitled to.
+
+    Read from each agent's own bundle rather than listed here, so an agent that
+    gains or loses a grant is fed correctly without this script being edited.
+    """
+    from ai.agents.bundle import load_bundle
+
+    found: dict[str, list[dict[str, Any]]] = {}
+    for directory in sorted((ROOT / "ai" / "agents").iterdir()):
+        if not (directory / "tools.yaml").is_file():
+            continue
+        try:
+            bundle = load_bundle(directory.name)
+        except (OSError, ValueError, KeyError) as exc:
+            # A bundle that will not load has no grants to read. That is a
+            # problem for that agent, not for this run — but an agent silently
+            # missing from the council is worse than a noisy one.
+            print(f"  {directory.name}: bundle would not load ({exc}); no tools fed")
+            continue
+        granted = [grant.name for grant in bundle.tools]
+        results = case.results_for(granted)
+        if results:
+            found[directory.name] = results
+    return found
+
+
+async def convene(
+    client: httpx.AsyncClient,
+    base: str,
+    case: Any,
+    policy_result: dict[str, Any],
+    tier: str,
+) -> tuple[str | None, list[dict[str, Any]]]:
+    """Run the council over this case and wait for it to finish.
+
+    The agents get the golden tool results — the same numbers the deterministic
+    path scored — because an agent arguing from different figures than the ones
+    the record carries is an agent arguing about a different case.
+    """
+    started = await client.post(
+        f"{base}/api/committee/committee/runs",
+        json={
+            "snapshot": case.snapshot,
+            "policy_result": policy_result,
+            # What each agent is allowed to have read, from its own bundle.
+            # The same numbers the deterministic path scored: an agent arguing
+            # from different figures than the record carries is an agent
+            # arguing about a different case.
+            "tool_results": agent_tool_results(case),
+            "case_type": "ORIGINATION",
+            "tier": tier,
+        },
+        timeout=60.0,
+    )
+    if started.status_code not in (200, 202):
+        print(f"  {case.scenario}: council refused {started.status_code} {started.text[:200]}")
+        return None, []
+
+    run_id = str(started.json().get("run_id") or "")
+    if not run_id:
+        return None, []
+
+    # Deliberation is minutes on the GB10, so this waits rather than polls
+    # tightly. A run that never finishes is reported rather than hung on.
+    #
+    # The field is `state`, not `status`. Reading the wrong one meant the loop
+    # never saw a finished run and polled a completed deliberation for fifteen
+    # minutes before anybody noticed.
+    finished = False
+    for _ in range(240):
+        await asyncio.sleep(5)
+        state = await client.get(f"{base}/api/committee/committee/runs/{run_id}", timeout=30.0)
+        if state.status_code != 200:
+            continue
+        if str(state.json().get("state", "")).upper() in ("DONE", "FAILED"):
+            finished = True
+            break
+    if not finished:
+        print(f"  {case.scenario}: council {run_id} did not finish; carrying on without it")
+
+    opinions = await client.get(f"{base}/api/committee/committee/runs/{run_id}/opinions", timeout=30.0)
+    bodies = (
+        [row.get("body") or row for row in (opinions.json().get("opinions") or [])]
+        if opinions.status_code == 200
+        else []
+    )
+    print(f"  {case.scenario}: council {run_id} gave {len(bodies)} opinions")
+    return run_id, bodies
+
+
 async def seed_case(
     client: httpx.AsyncClient,
     base: str,
     case: Any,
     corpus: dict[str, list[dict[str, Any]]],
     tampered: set[str],
+    *,
+    council: bool = True,
 ) -> str | None:
     chosen = choose_documents(case, corpus, tampered)
     loaded = await load_documents(client, base, case, chosen) if chosen else 0
@@ -273,17 +368,20 @@ async def seed_case(
         return None
     policy_result = evaluated.json()
 
+    tier = case.expected.get("tier", "STANDARD")
+    run_id, opinions = await convene(client, base, case, policy_result, tier) if council else (None, [])
+
     synthesized = await client.post(
         f"{base}/api/policy/policy/synthesize",
         json={
             "product_code": case.snapshot["product_code"],
             "snapshot_id": case.snapshot["snapshot_id"],
             "case_type": "ORIGINATION",
-            "tier": case.expected.get("tier", "STANDARD"),
+            "tier": tier,
             "requested_amount": str(case.snapshot["amount"]),
             "policy_result": policy_result,
             "factor_scores": factor_scores(case),
-            "opinions": [],
+            "opinions": opinions,
             "model_versions": case.snapshot.get("model_versions") or {},
             "model_health": "GREEN",
             "active_hardship_arrangement": bool(
@@ -296,12 +394,36 @@ async def seed_case(
         return None
     record = synthesized.json()
 
+    # The three narratives, written from the record and from nothing else.
+    # Without them the workbench's narrative tab is empty on every case, and a
+    # reader has no plain-language account of what the platform decided or why
+    # — which is the whole point of having one.
+    if council:
+        narrated = await client.post(
+            f"{base}/api/committee/committee/narrate",
+            json={"decision_record": record},
+            timeout=240.0,
+        )
+        if narrated.status_code == 200:
+            record["narrative"] = narrated.json()["narrative"]
+            status = record["narrative"].get("status", "OK")
+            print(f"  {case.scenario}: narrative written ({status})")
+        else:
+            print(f"  {case.scenario}: narrate refused {narrated.status_code}")
+
+    if run_id:
+        # Without this the workbench cannot find the opinions: the record lists
+        # their ids and the panel fetches their bodies from the run.
+        record["committee_run_id"] = run_id
+
     appended = await client.post(
         f"{base}/api/decision/recommendations",
         json={
             "decision_record": record,
             "case_id": case.case_id,
-            "member_id": case.snapshot["member"]["member_ref"],
+            # The real member, not the masked reference. A ledger of five rows
+            # all reading «MEMBER_1» is a ledger nobody can follow.
+            "member_id": (case.snapshot["member"].get("member_id") or case.snapshot["member"]["member_ref"]),
         },
     )
     if appended.status_code not in (200, 201):
@@ -316,7 +438,7 @@ async def seed_case(
     return str(record["decision_record_id"])
 
 
-async def run(base: str, scenarios: list[str]) -> int:
+async def run(base: str, scenarios: list[str], *, council: bool = True) -> int:
     async with httpx.AsyncClient(timeout=20.0) as anon:
         token = await token_for(anon, "system", base=base)
 
@@ -333,7 +455,7 @@ async def run(base: str, scenarios: list[str]) -> int:
         for case in GOLDEN:
             if scenarios and case.scenario not in scenarios:
                 continue
-            if await seed_case(client, base, case, corpus, tampered):
+            if await seed_case(client, base, case, corpus, tampered, council=council):
                 seeded += 1
     return seeded
 
@@ -342,10 +464,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--gateway", default="http://localhost:8000")
     parser.add_argument("--scenario", action="append", default=[], help="seed only these (repeatable)")
+    parser.add_argument(
+        "--no-council",
+        action="store_true",
+        help="skip the deliberation. Faster, and the workbench then has no opinions to show.",
+    )
     args = parser.parse_args(argv)
 
     print(f"Seeding golden cases through {args.gateway} ...")
-    seeded = asyncio.run(run(args.gateway, args.scenario))
+    seeded = asyncio.run(run(args.gateway, args.scenario, council=not args.no_council))
     print(f"\n  {seeded} decision records appended to the ledger")
     return 0 if seeded else 1
 

@@ -73,6 +73,26 @@ def _result(tool: str, payload: Any, *evidence: str) -> dict[str, Any]:
     return {"tool": tool, "result": payload, "evidence_refs": [{"evidence_id": e} for e in evidence]}
 
 
+#: The five people the demo is about, one per scenario.
+#:
+#: A ledger row reading «MEMBER_1» is correct — that is the masked reference an
+#: agent sees, and masking before a provider call is the point — but it made
+#: every case in the queue look like the same member, and nobody watching a
+#: demonstration can follow five applications from one person. Each scenario
+#: now names a member who exists in the core, with an account and an
+#: application behind them, so the queue reads like a queue.
+#:
+#: `member_ref` stays masked. What changes is which real member a case belongs
+#: to, not what the council is allowed to see.
+DEMO_MEMBERS: dict[str, str] = {
+    "case_S1CLEAN": "M-000028",
+    "case_S2INCOME": "M-000031",
+    "case_S3TAMPER": "M-000032",
+    "case_S4BREACH": "M-000035",
+    "case_S5RING": "M-000038",
+}
+
+
 def _snapshot(
     case_id: str,
     *,
@@ -96,6 +116,9 @@ def _snapshot(
         "model_versions": {"risk": "2026.09.1", "fraud": "fraud-rules/1.0"},
         "member": {
             "member_ref": "«MEMBER_1»",
+            # Who the case is actually about. Masked for the council, named for
+            # the ledger and the screens a person reads.
+            "member_id": DEMO_MEMBERS.get(case_id),
             "tenure_months": tenure,
             "branch_id": "BR-01",
             "employer_sector": "PUBLIC_ADMIN",

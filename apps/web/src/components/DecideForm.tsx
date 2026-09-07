@@ -34,6 +34,16 @@ const OPEN = ["REQUEST_INFO", "ESCALATE", "DEFER"] as const;
 
 type Action = (typeof COMMITTING)[number] | (typeof OPEN)[number];
 
+/** What the chosen action looks like once it is chosen. Approving and
+ *  declining are not the same weight of act and should not look alike. */
+const ACTION_ON: Record<string, string> = {
+  APPROVE: "border-pass bg-pass-soft text-pass-deep",
+  APPROVE_WITH_CONDITIONS: "border-pass-line bg-pass-soft text-pass-deep",
+  DECLINE: "border-fail bg-fail-soft text-fail-deep",
+  ESCALATE: "border-warn bg-warn-soft text-warn-deep",
+  DEFER: "border-warn-line bg-warn-soft text-warn-deep",
+};
+
 const LABELS: Record<Action, string> = {
   APPROVE: "Approve",
   APPROVE_WITH_CONDITIONS: "Approve with conditions",
@@ -119,7 +129,7 @@ export function DecideForm({
   });
 
   return (
-    <Card title="What you can do" testId="actions">
+    <Card title="What you can do" icon="scale" tone="accent" testId="actions">
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-2">
           {COMMITTING.map((value) => (
@@ -131,10 +141,10 @@ export function DecideForm({
               data-testid={`action-${value.toLowerCase()}`}
               title={blocked ?? undefined}
               onClick={() => setAction(value)}
-              className={`rounded border px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`rounded-xl border px-3.5 py-2 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 action === value
-                  ? "border-[--color-accent] bg-sky-50"
-                  : "border-[--color-line] hover:border-[--color-accent]"
+                  ? ACTION_ON[value] ?? "border-accent bg-accent-soft text-accent-deep"
+                  : "border-line bg-surface hover:border-accent-line hover:bg-raised"
               }`}
             >
               {LABELS[value]}
@@ -147,10 +157,10 @@ export function DecideForm({
               aria-pressed={action === value}
               data-testid={`action-${value.toLowerCase()}`}
               onClick={() => setAction(value)}
-              className={`rounded border px-3 py-1.5 text-sm ${
+              className={`rounded-xl border px-3.5 py-2 text-sm font-medium transition-all ${
                 action === value
-                  ? "border-[--color-accent] bg-sky-50"
-                  : "border-[--color-line] hover:border-[--color-accent]"
+                  ? ACTION_ON[value] ?? "border-accent bg-accent-soft text-accent-deep"
+                  : "border-line bg-surface hover:border-accent-line hover:bg-raised"
               }`}
             >
               {LABELS[value]}
@@ -159,7 +169,7 @@ export function DecideForm({
         </div>
 
         {blocked ? (
-          <p data-testid="authority-reason" className="text-xs text-[--color-warn]">
+          <p data-testid="authority-reason" className="text-xs text-warn">
             {blocked}
           </p>
         ) : null}
@@ -172,16 +182,16 @@ export function DecideForm({
               rows={3}
               value={conditions}
               onChange={(event) => setConditions(event.target.value)}
-              className="rounded border border-[--color-line] bg-[--color-surface] p-2 text-xs"
+              className="rounded border border-line bg-surface p-2 text-xs"
             />
           </label>
         ) : null}
 
         {departs ? (
-          <div className="flex flex-col gap-2 rounded border border-[--color-warn] p-3">
+          <div className="flex flex-col gap-2 rounded border border-warn p-3">
             <div className="flex items-center gap-2 text-xs">
               <Chip tone="warn">departs from the recommendation</Chip>
-              <span className="text-[--color-muted]">
+              <span className="text-muted">
                 recommended {record?.recommendation?.replaceAll("_", " ").toLowerCase()}
               </span>
             </div>
@@ -200,7 +210,7 @@ export function DecideForm({
                   data-testid="override-code"
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
-                  className="rounded border border-[--color-line] bg-[--color-surface] p-1 text-xs"
+                  className="rounded border border-line bg-surface p-1 text-xs"
                 >
                   {OVERRIDE_CODES.map((option) => (
                     <option key={option.code} value={option.code}>
@@ -214,10 +224,10 @@ export function DecideForm({
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
                   placeholder={`At least ${minimum} characters`}
-                  className="rounded border border-[--color-line] bg-[--color-surface] p-2 text-xs"
+                  className="rounded border border-line bg-surface p-2 text-xs"
                 />
                 {noteTooShort ? (
-                  <p data-testid="override-note-short" className="text-xs text-[--color-warn]">
+                  <p data-testid="override-note-short" className="text-xs text-warn">
                     {/* Said before the API refuses it, so the officer is not
                         told off after the fact for something the screen could
                         have told them while they typed. */}
@@ -231,7 +241,7 @@ export function DecideForm({
 
         {decide.error ? <Problem error={decide.error} /> : null}
         {decide.data ? (
-          <p data-testid="decision-recorded" className="text-xs text-[--color-pass]">
+          <p data-testid="decision-recorded" className="text-xs text-pass">
             Recorded as {decide.data.final_action.replaceAll("_", " ").toLowerCase()}.
           </p>
         ) : null}
@@ -248,11 +258,11 @@ export function DecideForm({
               noteTooShort
             }
             onClick={() => decide.mutate()}
-            className="rounded border border-[--color-accent] px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-accent px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
           >
             {decide.isPending ? "Recording" : "Record this decision"}
           </button>
-          <p className="text-xs text-[--color-muted]">
+          <p className="text-xs text-muted">
             Every decision is recorded against you with its reason, and the
             service checks your authority whatever this screen allowed.
           </p>

@@ -86,15 +86,15 @@ export function LoginPage() {
   const needsPassword = mode === "password";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[--color-canvas] p-6">
+    <div className="flex min-h-screen items-center justify-center bg-canvas p-6">
       <div className="w-full max-w-xl">
         <header className="mb-6 flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[--color-accent] text-white">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-white">
             <Icon.spark className="h-5 w-5" />
           </span>
           <div>
             <h1 className="text-lg font-semibold tracking-tight">Credit Intelligence OS</h1>
-            <p className="text-sm text-[--color-muted]">
+            <p className="text-sm text-muted">
               {needsPassword
                 ? "Choose who to sign in as, and give the demo password once."
                 : "Choose a role. This is a demonstration build: there are no accounts."}
@@ -102,14 +102,14 @@ export function LoginPage() {
           </div>
         </header>
 
-        <div className="rounded-xl border border-[--color-line] bg-[--color-surface] p-5 shadow-[0_1px_3px_rgba(20,23,31,0.06)]">
+        <div className="rounded-xl border border-line bg-surface p-5 shadow-[0_1px_3px_rgba(20,23,31,0.06)]">
           <div className="mb-4 flex items-center justify-between gap-3">
             <Chip tone="warn">SYNTHETIC DATA</Chip>
             {needsPassword ? (
               <button
                 type="button"
                 onClick={() => setByEmail((was) => !was)}
-                className="text-xs text-[--color-muted] underline decoration-dotted hover:text-[--color-accent]"
+                className="text-xs text-muted underline decoration-dotted hover:text-accent"
               >
                 {byEmail ? "Pick a role instead" : "Sign in with an email address"}
               </button>
@@ -131,7 +131,7 @@ export function LoginPage() {
                   autoComplete="username"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  className="w-full rounded-lg border border-[--color-line] bg-[--color-surface] px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                 />
               </Field>
               <Field label="Password">
@@ -141,7 +141,7 @@ export function LoginPage() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="w-full rounded-lg border border-[--color-line] bg-[--color-surface] px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                 />
               </Field>
               <Button
@@ -164,7 +164,7 @@ export function LoginPage() {
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder="Asked once. Every role below uses it."
-                    className="w-full rounded-lg border border-[--color-line] bg-[--color-surface] px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                   />
                 </Field>
               ) : (
@@ -174,13 +174,13 @@ export function LoginPage() {
                     value={memberId}
                     onChange={(event) => setMemberId(event.target.value)}
                     placeholder="Left blank, a member with a history is chosen"
-                    className="w-full rounded-lg border border-[--color-line] bg-[--color-surface] px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                   />
                 </Field>
               )}
 
               <div>
-                <p className="mb-2 text-xs font-medium text-[--color-muted]">Sign in as</p>
+                <p className="mb-2 text-xs font-medium text-muted">Sign in as</p>
                 <ul className="grid gap-2 sm:grid-cols-2">
                   {offered.map((role) => (
                     <li key={role}>
@@ -189,12 +189,12 @@ export function LoginPage() {
                         data-testid={`role-${role}`}
                         disabled={busy !== null || (needsPassword && !password)}
                         onClick={() => void choose(role)}
-                        className="flex w-full flex-col gap-0.5 rounded-lg border border-[--color-line] bg-[--color-surface] px-3 py-2.5 text-left transition hover:border-[--color-accent] hover:bg-[--color-accent-soft] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex w-full flex-col gap-0.5 rounded-lg border border-line bg-surface px-3 py-2.5 text-left transition hover:border-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <span className="text-sm font-medium">
                           {busy === role ? "Signing in…" : AUTHORITY[role].label}
                         </span>
-                        <span className="text-xs text-[--color-muted]">
+                        <span className="text-xs text-muted">
                           {AUTHORITY[role].approves === null
                             ? "Approves any amount"
                             : AUTHORITY[role].approves === 0
@@ -206,7 +206,7 @@ export function LoginPage() {
                   ))}
                 </ul>
                 {needsPassword && !password ? (
-                  <p className="mt-2 text-xs text-[--color-faint]">
+                  <p className="mt-2 text-xs text-faint">
                     Enter the password above to choose a role.
                   </p>
                 ) : null}
@@ -215,7 +215,7 @@ export function LoginPage() {
           )}
         </div>
 
-        <p className="mt-4 text-xs leading-relaxed text-[--color-faint]">
+        <p className="mt-4 text-xs leading-relaxed text-faint">
           {needsPassword ? (
             <>
               Every demo account shares one password, so a reader can move
@@ -240,7 +240,7 @@ export function LoginPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-[--color-muted]">{label}</span>
+      <span className="text-xs font-medium text-muted">{label}</span>
       {children}
     </label>
   );

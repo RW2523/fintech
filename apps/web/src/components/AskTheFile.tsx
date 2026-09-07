@@ -60,13 +60,13 @@ export function AskTheFile({
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
             placeholder="Which gates failed, and why was this routed here?"
-            className="flex-1 rounded border border-[--color-line] bg-[--color-surface] px-2 py-1 text-sm"
+            className="flex-1 rounded border border-line bg-surface px-2 py-1 text-sm"
           />
           <button
             type="submit"
             data-testid="ask-submit"
             disabled={ask.isPending || question.trim().length < 3}
-            className="rounded border border-[--color-accent] px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-accent px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
             {ask.isPending ? "Reading" : "Ask"}
           </button>
@@ -86,7 +86,7 @@ export function AskTheFile({
                 setQuestion(suggestion);
                 submit(suggestion);
               }}
-              className="rounded border border-[--color-line] px-2 py-0.5 text-xs text-[--color-muted] hover:border-[--color-accent]"
+              className="rounded border border-line px-2 py-0.5 text-xs text-muted hover:border-accent"
             >
               {suggestion}
             </button>
@@ -96,8 +96,8 @@ export function AskTheFile({
         {ask.error ? <Problem error={ask.error} /> : null}
 
         {ask.data ? (
-          <div className="rounded border border-[--color-line] p-3" data-testid="ask-answer">
-            <p className="text-xs text-[--color-muted]">{asked}</p>
+          <div className="rounded border border-line p-3" data-testid="ask-answer">
+            <p className="text-xs text-muted">{asked}</p>
 
             {ask.data.refusal ? (
               <div className="mt-2" data-testid="ask-refusal">
@@ -121,7 +121,7 @@ export function AskTheFile({
                       type="button"
                       onClick={() => onCitation?.(citation.ref)}
                       title={citation.what}
-                      className="rounded border border-[--color-line] px-2 py-0.5 font-mono hover:border-[--color-accent]"
+                      className="rounded border border-line px-2 py-0.5 font-mono hover:border-accent"
                     >
                       {citation.ref.slice(0, 20)}
                     </button>
@@ -130,7 +130,7 @@ export function AskTheFile({
               </ul>
             ) : null}
 
-            <p className="mt-2 text-[11px] text-[--color-muted]" data-testid="ask-provenance">
+            <p className="mt-2 text-[11px] text-muted" data-testid="ask-provenance">
               {/* What it read, and what it could not. An answer that silently
                   skipped the decision record is one the officer should weigh
                   differently. */}
@@ -143,7 +143,7 @@ export function AskTheFile({
           </div>
         ) : null}
 
-        <p className="text-xs text-[--color-muted]">
+        <p className="text-xs text-muted">
           Answers come from this case only, and cite what they rest on. The
           assistant does not predict outcomes and does not recommend decisions.
         </p>

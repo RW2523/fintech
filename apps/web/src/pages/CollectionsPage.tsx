@@ -50,8 +50,8 @@ export function CollectionsPage() {
     <div className="flex flex-col gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[26px] font-bold tracking-tight">Collections intelligence</h1>
-          <p className="text-sm text-[--color-muted]">
+          <h1 className="text-[34px] leading-tight font-extrabold tracking-tight">Collections intelligence</h1>
+          <p className="text-sm text-muted">
             Members whose behaviour changed, in the order acting on them is
             worth most.
           </p>
@@ -98,7 +98,7 @@ export function CollectionsPage() {
         padded={false}
         right={
           queue.data ? (
-            <span className="text-xs text-[--color-muted]">{queue.data.count} open</span>
+            <span className="text-xs text-muted">{queue.data.count} open</span>
           ) : null
         }
       >
@@ -140,7 +140,7 @@ export function CollectionsPage() {
                 {/* The line, not a signal list. An officer deciding which of
                     twenty-five members to call first reads this and nothing
                     else. */}
-                <Cell className="max-w-lg text-xs text-[--color-muted]">{alert.why_now}</Cell>
+                <Cell className="max-w-lg text-xs text-muted">{alert.why_now}</Cell>
               </Row>
             ))}
           </Table>
@@ -198,7 +198,7 @@ function MemberDrawer({ memberId }: { memberId: string }) {
               <Chip tone={STATE_TONE[watch.data.state] ?? "neutral"} testId="member-state">
                 {watch.data.state}
               </Chip>
-              <span className="text-xs text-[--color-muted]">
+              <span className="text-xs text-muted">
                 since {watch.data.since ?? "never changed"}
               </span>
             </div>
@@ -208,13 +208,13 @@ function MemberDrawer({ memberId }: { memberId: string }) {
               <ol className="flex flex-col gap-1 text-xs" data-testid="member-transitions">
                 {watch.data.transitions.map((move) => (
                   <li key={`${move.at}-${move.to_state}`} className="flex flex-wrap gap-2">
-                    <span className="text-[--color-muted]">{move.at}</span>
+                    <span className="text-muted">{move.at}</span>
                     <span>
                       {move.from_state} to {move.to_state}
                     </span>
                     {/* The reason travels with the move: a label on its own is
                         not an answer to "why is this member ELEVATED". */}
-                    <span className="text-[--color-muted]">{move.reason}</span>
+                    <span className="text-muted">{move.reason}</span>
                   </li>
                 ))}
               </ol>
@@ -228,7 +228,7 @@ function MemberDrawer({ memberId }: { memberId: string }) {
         {score.data ? (
           <div className="flex flex-col gap-3">
             {score.data.stale_days > 0 ? (
-              <p className="text-xs text-[--color-warn]" data-testid="score-stale">
+              <p className="text-xs text-warn" data-testid="score-stale">
                 {/* A score computed from a fortnight-old feature set is a score
                     about a fortnight ago. */}
                 Computed from features {score.data.stale_days} days old.
@@ -257,26 +257,26 @@ function HorizonBar({ score }: { score: HorizonScore }) {
           {(score.probability * 100).toFixed(1)}%
           {/* The interval is on the rate among members scored alike. Quoting the
               point estimate alone claims a precision the model does not have. */}
-          <span className="ml-2 text-[--color-muted]">
+          <span className="ml-2 text-muted">
             {(score.interval.lower * 100).toFixed(0)}–{(score.interval.upper * 100).toFixed(0)}%
           </span>
         </span>
       </div>
-      <div className="relative mt-1 h-2 w-full rounded bg-[--color-line]">
+      <div className="relative mt-1 h-2 w-full rounded bg-line">
         <div
-          className="absolute h-2 rounded bg-[--color-muted] opacity-40"
+          className="absolute h-2 rounded bg-muted opacity-40"
           style={{
             left: `${score.interval.lower * 100}%`,
             width: `${(score.interval.upper - score.interval.lower) * 100}%`,
           }}
         />
         <div
-          className="absolute h-2 w-0.5 bg-[--color-warn]"
+          className="absolute h-2 w-0.5 bg-warn"
           style={{ left: `${score.probability * 100}%` }}
         />
       </div>
       {score.calibration_warning ? (
-        <p className="mt-1 text-[11px] text-[--color-warn]" data-testid="calibration-warning">
+        <p className="mt-1 text-[11px] text-warn" data-testid="calibration-warning">
           {score.calibration_warning}
         </p>
       ) : null}
@@ -289,7 +289,7 @@ function Drivers({ scores }: { scores: HorizonScore[] }) {
   if (drivers.length === 0) return null;
   return (
     <div>
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-[--color-muted]">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
         What moved it
       </h3>
       <ul className="mt-1 flex flex-col gap-1 text-xs" data-testid="score-drivers">
@@ -297,7 +297,7 @@ function Drivers({ scores }: { scores: HorizonScore[] }) {
           <li key={driver.feature} className="flex items-center gap-2">
             <Chip tone={driver.direction === "raises" ? "warn" : "pass"}>{driver.direction}</Chip>
             <span className="font-mono">{driver.feature}</span>
-            <span className="text-[--color-muted]">{driver.value}</span>
+            <span className="text-muted">{driver.value}</span>
           </li>
         ))}
       </ul>
@@ -353,11 +353,11 @@ function Outreach({ memberId }: { memberId: string }) {
           rows={4}
           value={message}
           onChange={(event) => setMessage(event.target.value)}
-          className="rounded border border-[--color-line] bg-[--color-surface] p-2 text-xs"
+          className="rounded border border-line bg-surface p-2 text-xs"
         />
         {send.error ? <Problem error={send.error} /> : null}
         {send.data ? (
-          <p className="text-xs text-[--color-pass]" data-testid="outreach-sent">
+          <p className="text-xs text-pass" data-testid="outreach-sent">
             Sent, and it is in the member's inbox below.
           </p>
         ) : null}
@@ -367,11 +367,11 @@ function Outreach({ memberId }: { memberId: string }) {
             data-testid="outreach-send"
             disabled={send.isPending || message.trim().length < 10}
             onClick={() => send.mutate()}
-            className="rounded border border-[--color-accent] px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-accent px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
             {send.isPending ? "Sending" : "Approve and send"}
           </button>
-          <p className="text-xs text-[--color-muted]">
+          <p className="text-xs text-muted">
             {/* Said on the screen because it is the constraint that makes this
                 page safe: this member has not applied for anything. */}
             This member has not applied for anything. Nothing here changes their
@@ -404,20 +404,20 @@ function Inbox({ memberId }: { memberId: string }) {
           {inbox.data.messages.map((entry) => (
             <li
               key={entry.message_id}
-              className="rounded border border-[--color-line] px-2 py-1"
+              className="rounded border border-line px-2 py-1"
               data-testid={`inbox-${entry.state}`}
             >
               <div className="flex flex-wrap items-center gap-2">
                 <Chip tone={entry.state === "SENT" ? "pass" : "neutral"}>{entry.state}</Chip>
                 <span className="font-mono">{entry.template_id}</span>
-                <span className="text-[--color-muted]">{entry.language}</span>
-                <span className="ml-auto text-[--color-muted]">
+                <span className="text-muted">{entry.language}</span>
+                <span className="ml-auto text-muted">
                   {entry.sent_at ?? entry.scheduled_at ?? ""}
                 </span>
               </div>
               <p className="mt-1 whitespace-pre-line">{entry.body}</p>
               {entry.cancel_reason ? (
-                <p className="mt-1 text-[--color-muted]">
+                <p className="mt-1 text-muted">
                   Not sent: {entry.cancel_reason}
                 </p>
               ) : null}

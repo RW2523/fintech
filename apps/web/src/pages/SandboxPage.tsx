@@ -181,8 +181,8 @@ export function SandboxPage() {
   return (
     <div className="flex flex-col gap-5" data-testid="sandbox-page">
       <header>
-        <h1 className="text-[26px] font-bold tracking-tight">Policy sandbox</h1>
-        <p className="text-sm text-[--color-muted]">
+        <h1 className="text-[34px] leading-tight font-extrabold tracking-tight">Policy sandbox</h1>
+        <p className="text-sm text-muted">
           Change what the platform decides by, replay it over stored cases, and
           adopt it only when two people say so.
         </p>
@@ -194,7 +194,7 @@ export function SandboxPage() {
         ) : (
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-[--color-muted]">Product</span>
+              <span className="text-xs text-muted">Product</span>
               {(products.data?.products ?? [product]).map((code) => (
                 <button
                   key={code}
@@ -210,14 +210,14 @@ export function SandboxPage() {
                   }}
                   className={`rounded border px-2 py-0.5 text-xs ${
                     product === code
-                      ? "border-[--color-accent]"
-                      : "border-[--color-line] text-[--color-muted]"
+                      ? "border-accent"
+                      : "border-line text-muted"
                   }`}
                 >
                   {code}
                 </button>
               ))}
-              <span className="text-xs text-[--color-muted]" data-testid="in-force">
+              <span className="text-xs text-muted" data-testid="in-force">
                 in force: {pack.data?.policy_version}
               </span>
             </div>
@@ -225,7 +225,7 @@ export function SandboxPage() {
             <div className="flex flex-col gap-2">
               {FACTORS.map((factor) => (
                 <label key={factor} className="flex items-center gap-3 text-sm">
-                  <span className="w-28 text-xs text-[--color-muted]">{factor}</span>
+                  <span className="w-28 text-xs text-muted">{factor}</span>
                   <input
                     type="range"
                     min={0}
@@ -251,7 +251,7 @@ export function SandboxPage() {
                   that has moved two sliders needs to see which way it is out
                   rather than be told the run failed. */}
               <p
-                className={`text-xs ${balanced ? "text-[--color-muted]" : "text-[--color-fail]"}`}
+                className={`text-xs ${balanced ? "text-muted" : "text-fail"}`}
                 data-testid="weight-sum"
               >
                 weights sum to {sum}
@@ -261,35 +261,35 @@ export function SandboxPage() {
 
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2 text-sm">
-                <span className="text-xs text-[--color-muted]">approve at or above</span>
+                <span className="text-xs text-muted">approve at or above</span>
                 <input
                   type="number"
                   data-testid="threshold-approve"
                   value={editedApprove ?? 0}
                   onChange={(event) => setApprove(Number(event.target.value))}
-                  className="w-20 rounded border border-[--color-line] bg-[--color-surface] px-2 py-1 font-mono text-sm"
+                  className="w-20 rounded border border-line bg-surface px-2 py-1 font-mono text-sm"
                 />
               </label>
               <label className="flex items-center gap-2 text-sm">
-                <span className="text-xs text-[--color-muted]">decline below</span>
+                <span className="text-xs text-muted">decline below</span>
                 <input
                   type="number"
                   data-testid="threshold-decline"
                   value={editedDecline ?? 0}
                   onChange={(event) => setDecline(Number(event.target.value))}
-                  className="w-20 rounded border border-[--color-line] bg-[--color-surface] px-2 py-1 font-mono text-sm"
+                  className="w-20 rounded border border-line bg-surface px-2 py-1 font-mono text-sm"
                 />
               </label>
               <label className="flex items-center gap-2 text-sm">
-                <span className="text-xs text-[--color-muted]">replay the last</span>
+                <span className="text-xs text-muted">replay the last</span>
                 <input
                   type="number"
                   data-testid="replay-months"
                   value={months}
                   onChange={(event) => setMonths(Number(event.target.value))}
-                  className="w-16 rounded border border-[--color-line] bg-[--color-surface] px-2 py-1 font-mono text-sm"
+                  className="w-16 rounded border border-line bg-surface px-2 py-1 font-mono text-sm"
                 />
-                <span className="text-xs text-[--color-muted]">months</span>
+                <span className="text-xs text-muted">months</span>
               </label>
             </div>
 
@@ -299,12 +299,12 @@ export function SandboxPage() {
                 data-testid="sandbox-run"
                 disabled={!balanced || !changed || replay.isPending}
                 onClick={() => replay.mutate()}
-                className="rounded border border-[--color-accent] px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded border border-accent px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {replay.isPending ? "Replaying" : "Replay"}
               </button>
               {!changed ? (
-                <span className="ml-2 text-xs text-[--color-muted]" data-testid="sandbox-unchanged">
+                <span className="ml-2 text-xs text-muted" data-testid="sandbox-unchanged">
                   nothing has changed yet
                 </span>
               ) : null}
@@ -318,14 +318,14 @@ export function SandboxPage() {
       {replay.data ? (
         <>
           <Card title="Baseline against candidate" icon="chart" tone="accent" testId="sandbox-report">
-            <p className="mb-2 text-xs text-[--color-muted]" data-testid="cases-replayed">
+            <p className="mb-2 text-xs text-muted" data-testid="cases-replayed">
               {replay.data.cases_replayed} decided cases replayed under{" "}
               {replay.data.policy_version}. No model was called: stored opinions
               were reused and the code re-decided.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs" data-testid="report-table">
-                <thead className="text-[--color-muted]">
+                <thead className="text-muted">
                   <tr>
                     <th className="py-1 pr-3 font-normal" />
                     <th className="py-1 pr-3 font-normal">baseline</th>
@@ -335,8 +335,8 @@ export function SandboxPage() {
                 </thead>
                 <tbody className="font-mono">
                   {ROWS.map(({ key, label }) => (
-                    <tr key={key} className="border-t border-[--color-line]">
-                      <td className="py-1 pr-3 font-sans text-[--color-muted]">{label}</td>
+                    <tr key={key} className="border-t border-line">
+                      <td className="py-1 pr-3 font-sans text-muted">{label}</td>
                       <td className="py-1 pr-3" data-testid={`baseline-${key}`}>
                         {show(replay.data.baseline[key])}
                       </td>
@@ -368,7 +368,7 @@ export function SandboxPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs" data-testid="diff-table">
-                  <thead className="text-[--color-muted]">
+                  <thead className="text-muted">
                     <tr>
                       <th className="py-1 pr-3 font-normal">case</th>
                       <th className="py-1 pr-3 font-normal">before</th>
@@ -378,7 +378,7 @@ export function SandboxPage() {
                   </thead>
                   <tbody className="font-mono">
                     {replay.data.diffs.slice(0, 40).map((diff) => (
-                      <tr key={diff.snapshot_id} className="border-t border-[--color-line]">
+                      <tr key={diff.snapshot_id} className="border-t border-line">
                         <td className="py-1 pr-3">{(diff.case_id ?? diff.snapshot_id).slice(0, 18)}</td>
                         <td className="py-1 pr-3">{show(diff.before.recommendation)}</td>
                         <td className="py-1 pr-3">{show(diff.after.recommendation)}</td>
@@ -393,7 +393,7 @@ export function SandboxPage() {
 
           <Card title="Adopt as a new version" icon="shield" tone="pass" testId="sandbox-adopt">
             <div className="flex flex-col gap-3">
-              <p className="text-xs text-[--color-muted]">
+              <p className="text-xs text-muted">
                 Two named approvers, both heads, and they must be two people.
                 The new version is written from this replay, so a change nobody
                 replayed cannot be adopted.
@@ -401,7 +401,7 @@ export function SandboxPage() {
 
               {approvers.map((approver, index) => (
                 <label key={approver.role} className="flex items-center gap-2 text-sm">
-                  <span className="w-36 text-xs text-[--color-muted]">{approver.role}</span>
+                  <span className="w-36 text-xs text-muted">{approver.role}</span>
                   <input
                     data-testid={`approver-${index}`}
                     value={approver.actor_id}
@@ -413,7 +413,7 @@ export function SandboxPage() {
                       )
                     }
                     placeholder="who is approving"
-                    className="flex-1 rounded border border-[--color-line] bg-[--color-surface] px-2 py-1 text-sm"
+                    className="flex-1 rounded border border-line bg-surface px-2 py-1 text-sm"
                   />
                 </label>
               ))}
@@ -422,11 +422,11 @@ export function SandboxPage() {
 
               {adopt.data ? (
                 <div
-                  className="rounded border border-[--color-accent] p-3 text-sm"
+                  className="rounded border border-accent p-3 text-sm"
                   data-testid="adopted"
                 >
                   <Chip tone="pass">{adopt.data.policy_version}</Chip>
-                  <p className="mt-1 text-xs text-[--color-muted]">
+                  <p className="mt-1 text-xs text-muted">
                     Adopted from {replay.data.sandbox_id}, replacing{" "}
                     {adopt.data.previous_version}. Approved by{" "}
                     {adopt.data.approved_by.join(" and ")}. Every case decided
@@ -439,7 +439,7 @@ export function SandboxPage() {
                   data-testid="sandbox-adopt-submit"
                   disabled={!bothNamed || adopt.isPending}
                   onClick={() => adopt.mutate(replay.data.sandbox_id)}
-                  className="self-start rounded border border-[--color-accent] px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  className="self-start rounded border border-accent px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {adopt.isPending ? "Adopting" : "Adopt as new version"}
                 </button>

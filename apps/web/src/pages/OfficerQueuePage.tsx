@@ -3,8 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
 import { useApi } from "../api";
+import { useMemberNames } from "../api/members";
 import { Icon } from "../components/icons";
 import {
+  Avatar,
   Button,
   Card,
   Cell,
@@ -18,6 +20,7 @@ import {
   type Tone,
 } from "../components/primitives";
 import type { DecisionRecord, Queue, QueueEntry } from "../types";
+import { gateFamily, means, say } from "../vocabulary";
 
 /** How loudly a route reads. COMPLIANCE and ENHANCED are the two that mean
  *  "somebody must look at this now"; the rest are ordinary work. */
@@ -95,6 +98,7 @@ export function OfficerQueuePage() {
   });
 
   const all = useMemo(() => data?.decisions ?? [], [data]);
+  const names = useMemberNames(all.map((entry) => entry.member_id));
   const rows = useMemo(
     () => all.filter((entry) => inLane(entry, lane)),
     [all, lane],
@@ -126,10 +130,10 @@ export function OfficerQueuePage() {
     <div className="flex flex-col gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-[34px] leading-tight font-extrabold tracking-tight">
             Applications queue
           </h1>
-          <p className="text-sm text-[--color-muted]">
+          <p className="text-sm text-muted">
             Every case the platform has assessed, and what it is waiting for.
           </p>
         </div>
@@ -138,7 +142,7 @@ export function OfficerQueuePage() {
             data-testid="route-filter"
             value={route}
             onChange={(event) => setRoute(event.target.value)}
-            className="rounded-lg border border-[--color-line] bg-[--color-surface] px-3 py-2 text-sm"
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm"
           >
             <option value="">Every route</option>
             {(data?.routes ?? []).map((name) => (
@@ -198,27 +202,32 @@ export function OfficerQueuePage() {
                       <span className="flex flex-col">
                         <Link
                           to={`/officer/cases/${encodeURIComponent(caseId)}`}
-                          className="font-mono text-xs font-medium text-[--color-accent] underline decoration-dotted"
+                          className="font-mono text-xs font-medium text-accent underline decoration-dotted"
                         >
                           {caseId.slice(0, 20)}
                         </Link>
-                        <span className="text-[11px] text-[--color-faint]">
+                        <span className="text-[11px] text-faint">
                           {entry.tier ?? "tier unknown"}
                         </span>
                       </span>
                     </Cell>
-                    <Cell className="font-mono text-xs">
-                      {entry.member_id ?? "not recorded"}
+                    <Cell>
+                      {entry.member_id ? (
+                        <Avatar
+                          name={names.get(entry.member_id) ?? entry.member_id}
+                          id={entry.member_id}
+                        />
+                      ) : (
+                        <span className="text-xs text-faint">not recorded</span>
+                      )}
                     </Cell>
                     <Cell>
                       <Chip
                         dot
                         tone={ROUTE_TONE[entry.route ?? ""] ?? "neutral"}
-                        title={entry.route_reasons.join(", ")}
+                        title={means("route", entry.route) || entry.route_reasons.join(", ")}
                       >
-                        {(entry.route ?? "unrouted")
-                          .replaceAll("_", " ")
-                          .toLowerCase()}
+                        {say("route", entry.route)}
                       </Chip>
                     </Cell>
                     <Cell>
@@ -227,23 +236,24 @@ export function OfficerQueuePage() {
                           RECOMMENDATION_TONE[entry.recommendation ?? ""] ??
                           "neutral"
                         }
+                        title={means("recommendation", entry.recommendation)}
                       >
-                        {(entry.recommendation ?? "none")
-                          .replaceAll("_", " ")
-                          .toLowerCase()}
+                        {say("recommendation", entry.recommendation)}
                       </Chip>
                     </Cell>
                     <Cell className="w-28">
                       <Meter label="" value={entry.confidence} tone="accent" />
                     </Cell>
-                    <Cell className="text-xs text-[--color-muted]">
-                      {entry.required_authority ?? "not set"}
+                    <Cell className="text-xs text-muted">
+                      <span title={means("authority", entry.required_authority)}>
+                        {say("authority", entry.required_authority)}
+                      </span>
                     </Cell>
                     <Cell>
                       {entry.decided ? (
                         <Chip tone="pass">decided</Chip>
                       ) : (
-                        <Icon.arrowRight className="h-4 w-4 text-[--color-faint]" />
+                        <Icon.arrowRight className="h-4 w-4 text-faint" />
                       )}
                     </Cell>
                   </Row>
@@ -266,6 +276,7 @@ export function OfficerQueuePage() {
  *  that could disagree would be worse than one. */
 function QueueDetail({ entry }: { entry: QueueEntry | null }) {
   const request = useApi();
+  const names = useMemberNames([entry?.member_id]);
   const { data } = useQuery({
     queryKey: ["record", entry?.decision_record_id],
     enabled: Boolean(entry),
@@ -302,7 +313,7 @@ function QueueDetail({ entry }: { entry: QueueEntry | null }) {
     >
       <div className="flex flex-col gap-4">
         <div>
-          <p className="font-mono text-xs break-all text-[--color-muted]">
+          <p className="font-mono text-xs break-all text-muted">
             {caseId}
           </p>
           <p className="mt-1 text-sm">
@@ -312,7 +323,7 @@ function QueueDetail({ entry }: { entry: QueueEntry | null }) {
                 .toLowerCase()}
             </span>
             {entry.required_authority ? (
-              <span className="text-[--color-muted]">
+              <span className="text-muted">
                 {" "}
                 · needs{" "}
                 {entry.required_authority.replaceAll("_", " ").toLowerCase()}
@@ -322,8 +333,15 @@ function QueueDetail({ entry }: { entry: QueueEntry | null }) {
         </div>
 
         <dl className="grid grid-cols-2 gap-3">
-          <Fact label="Member" value={entry.member_id ?? "not recorded"} mono />
-          <Fact label="Tier" value={entry.tier ?? "unknown"} />
+          <Fact
+            label="Member"
+            value={
+              entry.member_id
+                ? (names.get(entry.member_id) ?? entry.member_id)
+                : "not recorded"
+            }
+          />
+          <Fact label="Deliberation" value={say("tier", entry.tier)} />
           <Fact
             label="Confidence"
             value={
@@ -348,19 +366,19 @@ function QueueDetail({ entry }: { entry: QueueEntry | null }) {
                 : entry.weighted_score.toFixed(1)
             }
           />
-          <Fact label="Deciding step" value={record?.deciding_step ?? "—"} />
+          <Fact label="Who decides" value={say("authority", entry.required_authority)} />
         </dl>
 
         {entry.route_reasons.length > 0 ? (
           <div>
-            <p className="mb-1.5 text-xs font-medium text-[--color-muted]">
+            <p className="mb-1.5 text-xs font-medium text-muted">
               Why it is routed here
             </p>
             <ul className="flex flex-col gap-1">
               {entry.route_reasons.map((reason) => (
                 <li
                   key={reason}
-                  className="font-mono text-xs text-[--color-ink]"
+                  className="font-mono text-xs text-ink"
                 >
                   {reason}
                 </li>
@@ -371,9 +389,9 @@ function QueueDetail({ entry }: { entry: QueueEntry | null }) {
 
         {gates.length > 0 ? (
           <div>
-            <p className="mb-1.5 text-xs font-medium text-[--color-muted]">
+            <p className="mb-1.5 text-xs font-medium text-muted">
               Hard gates
-              <span className="ml-1.5 text-[--color-faint]">
+              <span className="ml-1.5 text-faint">
                 {failed.length === 0 ? "all passed" : `${failed.length} failed`}
               </span>
             </p>
@@ -382,7 +400,7 @@ function QueueDetail({ entry }: { entry: QueueEntry | null }) {
                 <Chip
                   key={gate.rule_id}
                   tone={gate.result === "PASS" ? "pass" : "fail"}
-                  title={gate.reason_code ?? gate.result}
+                  title={`${gateFamily(gate.rule_id)} · ${gate.reason_code ?? gate.result}`}
                 >
                   {gate.rule_id}
                 </Chip>
@@ -415,7 +433,7 @@ function Fact({
 }) {
   return (
     <div>
-      <dt className="text-xs text-[--color-muted]">{label}</dt>
+      <dt className="text-xs text-muted">{label}</dt>
       <dd className={`text-sm font-medium ${mono ? "font-mono text-xs" : ""}`}>
         {value}
       </dd>

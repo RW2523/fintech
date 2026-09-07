@@ -1,5 +1,16 @@
-import { Card, Chip, Empty, Figure, Meter, type Tone } from "./primitives";
+import { Card, Chip, Empty, Figure, Glyph, Meter, type Tone } from "./primitives";
 import type { DecisionRecord, FactorScore } from "../types";
+import { gateFamily, means, say } from "../vocabulary";
+
+/** The banner's own surface. Softer than a chip, because it fills a panel. */
+const TONE_PANEL: Record<Tone, string> = {
+  neutral: "border-line bg-raised",
+  pass: "border-pass-line bg-pass-soft",
+  warn: "border-warn-line bg-warn-soft",
+  fail: "border-fail-line bg-fail-soft",
+  accent: "border-accent-line bg-accent-soft",
+  note: "border-note-line bg-note-soft",
+};
 
 const RECOMMENDATION_TONE: Record<string, Tone> = {
   APPROVE: "pass",
@@ -31,11 +42,63 @@ export function DecisionCard({ record }: { record: DecisionRecord }) {
           testId="recommendation-chip"
           tone={RECOMMENDATION_TONE[record.recommendation ?? ""] ?? "neutral"}
         >
-          {(record.recommendation ?? "no recommendation").replaceAll("_", " ").toLowerCase()}
+          {say("recommendation", record.recommendation)}
         </Chip>
       }
     >
       <div className="flex flex-col gap-4">
+        {/* The recommendation, said once and loudly. It was a chip in the
+            corner of the header, which is where a reader looks last. */}
+        <div
+          data-testid="recommendation-banner"
+          className={`flex flex-wrap items-center justify-between gap-4 rounded-xl border p-4 ${
+            TONE_PANEL[RECOMMENDATION_TONE[record.recommendation ?? ""] ?? "neutral"]
+          }`}
+        >
+          <div className="flex items-center gap-3.5">
+            <Glyph
+              icon={
+                record.recommendation === "APPROVE"
+                  ? "check"
+                  : record.recommendation === "DECLINE"
+                    ? "alert"
+                    : "scale"
+              }
+              tone={RECOMMENDATION_TONE[record.recommendation ?? ""] ?? "neutral"}
+              size="lg"
+            />
+            <div>
+              <p className="text-xs text-muted">The platform recommends</p>
+              <p className="text-2xl font-bold tracking-tight">
+                {say("recommendation", record.recommendation)}
+              </p>
+              <p className="mt-0.5 max-w-md text-xs text-muted">
+                {means("recommendation", record.recommendation)}
+              </p>
+            </div>
+          </div>
+          <dl className="flex items-center gap-7 text-right">
+            <div>
+              <dt className="text-xs text-muted">Confidence</dt>
+              <dd className="text-lg font-bold tabular-nums">
+                {record.confidence == null ? "—" : record.confidence.toFixed(2)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Disagreement</dt>
+              <dd className="text-lg font-bold tabular-nums">
+                {record.disagreement == null ? "—" : record.disagreement.toFixed(2)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Settled at</dt>
+              <dd className="text-sm font-semibold" title={means("step", record.deciding_step)}>
+                {say("step", record.deciding_step)}
+              </dd>
+            </div>
+          </dl>
+        </div>
+
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Figure
             label="Weighted score"
@@ -87,7 +150,7 @@ export function DecisionCard({ record }: { record: DecisionRecord }) {
             is the first question an officer asks, and the framework computes
             it rather than leaving it to be inferred from the longest bar. */}
         <div className="flex flex-col gap-2" data-testid="factor-bars">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[--color-muted]">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
             Decision factors
           </h3>
           {factors.length === 0 ? (
@@ -106,28 +169,34 @@ export function DecisionCard({ record }: { record: DecisionRecord }) {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[--color-muted]">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
               Hard gates
             </h3>
             {gates.length === 0 ? (
               <Empty>No gate was evaluated.</Empty>
             ) : (
-              <ul className="flex flex-col gap-1" data-testid="hard-gates">
-                {gates.map((gate) => (
-                  <li key={gate.rule_id} className="flex items-center gap-2 text-sm">
-                    <Chip tone={["FAIL", "BLOCK"].includes(gate.result) ? "fail" : "pass"}>
-                      {gate.result.toLowerCase()}
-                    </Chip>
-                    <span className="font-mono text-xs">{gate.rule_id}</span>
-                    {gate.clause_id ? (
-                      <span className="text-xs text-[--color-muted]">{gate.clause_id}</span>
-                    ) : null}
-                  </li>
-                ))}
+              <ul className="flex flex-wrap gap-1.5" data-testid="hard-gates">
+                {gates.map((gate) => {
+                  const failed = ["FAIL", "BLOCK"].includes(gate.result);
+                  return (
+                    <li key={gate.rule_id}>
+                      {/* One chip per gate rather than a row each. Twelve rows
+                          made this card taller than the viewport and pushed
+                          the officer's own actions off the bottom of it. */}
+                      <Chip
+                        dot
+                        tone={failed ? "fail" : "pass"}
+                        title={`${gateFamily(gate.rule_id)}: ${gate.result}${gate.clause_id ? ` · ${gate.clause_id}` : ""}`}
+                      >
+                        {gate.rule_id}
+                      </Chip>
+                    </li>
+                  );
+                })}
               </ul>
             )}
             {failing.length > 0 ? (
-              <p className="text-xs text-[--color-fail]">
+              <p className="text-xs text-fail">
                 {failing.length} gate{failing.length === 1 ? "" : "s"} failed, so the
                 case was not weighed.
               </p>
@@ -135,7 +204,7 @@ export function DecisionCard({ record }: { record: DecisionRecord }) {
           </div>
 
           <div className="flex flex-col gap-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[--color-muted]">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
               Would change the outcome
             </h3>
             {(record.would_change_outcome ?? []).length === 0 ? (
@@ -155,10 +224,10 @@ export function DecisionCard({ record }: { record: DecisionRecord }) {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-[--color-line] pt-3">
-          <span className="text-xs text-[--color-muted]">Routed to</span>
-          <Chip testId="route-chip" tone="accent">
-            {(record.route ?? "unrouted").replaceAll("_", " ").toLowerCase()}
+        <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
+          <span className="text-xs text-muted">Routed to</span>
+          <Chip testId="route-chip" tone="accent" title={means("route", record.route)}>
+            {say("route", record.route)}
           </Chip>
           {(record.route_reasons ?? []).map((reason) => (
             <Chip key={reason}>{reason.replaceAll("_", " ").toLowerCase()}</Chip>
@@ -188,25 +257,25 @@ function FactorBar({
     <div
       data-testid={`factor-${family}`}
       className={`rounded border px-3 py-2 ${
-        decisive ? "border-[--color-accent] bg-sky-50" : "border-[--color-line]"
+        decisive ? "border-accent bg-sky-50" : "border-line"
       }`}
     >
       <div className="flex items-baseline justify-between text-xs">
         <span className="font-medium">
           {family.toLowerCase()}
           {decisive ? (
-            <span className="ml-2 text-[--color-accent]">decided this case</span>
+            <span className="ml-2 text-accent">decided this case</span>
           ) : null}
         </span>
-        <span className="tabular-nums text-[--color-muted]">
+        <span className="tabular-nums text-muted">
           <span data-testid={`factor-${family}-score`}>{score.score}</span>
           {" × "}
           {score.weight} = <span className="font-semibold">{score.weighted}</span>
         </span>
       </div>
-      <div className="mt-1 h-1.5 w-full rounded bg-[--color-line]">
+      <div className="mt-1 h-1.5 w-full rounded bg-line">
         <div
-          className={`h-1.5 rounded ${decisive ? "bg-[--color-accent]" : "bg-[--color-muted]"}`}
+          className={`h-1.5 rounded ${decisive ? "bg-accent" : "bg-muted"}`}
           style={{ width: `${share * 100}%` }}
         />
       </div>

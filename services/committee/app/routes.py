@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 from functools import lru_cache
 from typing import Any
@@ -11,8 +13,9 @@ from fastapi import APIRouter, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app import repository
-from app.clients import Clients, HttpClients
+from app.clients import Clients, HttpClients, UpstreamError
 from app.db import session
+from app.narrate import NARRATIVE_SCHEMA, degraded_narrative, narrative_prompt
 from app.orchestrate import COUNCIL, run_committee
 from app.tiers import select_tier
 from cio_common.assets import policy_pack_root
@@ -21,6 +24,8 @@ from cio_common.errors import NotFound, ValidationFailed
 router = APIRouter(tags=["committee"])
 
 PACK_ROOT = policy_pack_root()
+
+log = logging.getLogger(__name__)
 
 #: Swapped for a fake in tests.
 _clients: Clients | None = None
@@ -149,6 +154,54 @@ async def create_run(body: RunRequest, response: Response) -> dict[str, Any]:
     payload["tier_reasons"] = list(decision.reasons)
     payload["decision_record"] = result.decision_record
     return payload
+
+
+class NarrateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    #: The record to describe. Whole, because the narrator reads the deciding
+    #: factor, the gates and the route out of it.
+    decision_record: dict[str, Any]
+
+
+@router.post("/committee/narrate", summary="Write the three narratives for a record")
+async def narrate(body: NarrateRequest) -> dict[str, Any]:
+    """docs/06 §8 — the structure decides, the narrative describes.
+
+    A separate endpoint because CLAUDE.md §8 says narratives are regenerated
+    rather than stored: the record is the truth, and prose about it is a view
+    that can be rebuilt whenever somebody needs it — for a different audience,
+    in a different language, or because it was never written in the first
+    place. A run that finished without one is a record nobody can read, and
+    before this the only way to get one was to deliberate the case again.
+
+    Falls back to the template and says DEGRADED when the model cannot be
+    reached. A plain narrative is better than none and much better than a
+    wrong one.
+    """
+    record = body.decision_record
+    if not record.get("decision_record_id"):
+        raise ValidationFailed("the decision record has no decision_record_id")
+
+    try:
+        answer = await asyncio.wait_for(
+            clients().narrate(
+                {
+                    "route": "reasoning",
+                    "messages": narrative_prompt(record),
+                    "json_schema": NARRATIVE_SCHEMA,
+                    "run_id": f"{record['decision_record_id']}:narrate",
+                }
+            ),
+            timeout=180.0,
+        )
+        narrative = dict(answer.get("json") or {})
+        narrative.setdefault("status", "OK")
+    except (TimeoutError, UpstreamError) as exc:
+        log.warning("narrating %s fell back to the template: %s", record["decision_record_id"], exc)
+        narrative = degraded_narrative(record)
+
+    return {"decision_record_id": record["decision_record_id"], "narrative": narrative}
 
 
 @router.get("/committee/runs/{run_id}", summary="One run and its opinions")

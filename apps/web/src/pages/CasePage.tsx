@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 
 import { useApi } from "../api";
+import { useMemberNames } from "../api/members";
 import { useAuth } from "../auth";
 import { AgentDiscussion } from "../components/AgentDiscussion";
 import { AskTheFile } from "../components/AskTheFile";
@@ -15,6 +16,7 @@ import {
   Copyable,
   Empty,
   FactStrip,
+  Glyph,
   Problem,
   Stat,
   Tabs,
@@ -22,6 +24,7 @@ import {
 } from "../components/primitives";
 import { NARRATIVE_AUDIENCES } from "../types";
 import type { Explanation, HeldRecord, Opinion, Queue } from "../types";
+import { means, say } from "../vocabulary";
 
 /** docs/09 §3 — the officer workbench.
  *
@@ -43,6 +46,7 @@ export function CasePage() {
   const { session } = useAuth();
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>("evidence");
+  const names = useMemberNames([]);
 
   // The queue carries the record id for a case. Reading it from there keeps
   // this page from needing a second lookup service just to find the record.
@@ -85,7 +89,7 @@ export function CasePage() {
   });
 
   if (queue.isPending) {
-    return <p className="text-sm text-[--color-muted]">Loading the case.</p>;
+    return <p className="text-sm text-muted">Loading the case.</p>;
   }
   if (queue.error) {
     return <Problem error={queue.error} />;
@@ -109,6 +113,7 @@ export function CasePage() {
     return passage?.text ? ([[audience, passage]] as const) : [];
   });
 
+  const named = names.get(entry.member_id ?? "") ?? entry.member_id ?? "member not recorded";
   const gates = decision?.hard_gates ?? [];
   const failedGates = gates.filter((gate) => gate.result === "FAIL");
   const gateTone: Tone = gates.length === 0 ? "neutral" : failedGates.length ? "fail" : "pass";
@@ -117,15 +122,15 @@ export function CasePage() {
     <div className="flex flex-col gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[26px] font-bold tracking-tight">Officer workbench</h1>
-          <p className="text-sm text-[--color-muted]">
+          <h1 className="text-[34px] leading-tight font-extrabold tracking-tight">Officer workbench</h1>
+          <p className="text-sm text-muted">
             Evidence-first decision support for one application.
           </p>
         </div>
         <Link
           to={`/ledger/${encodeURIComponent(caseId)}`}
           data-testid="reconstruct-link"
-          className="text-sm font-medium text-[--color-accent] underline decoration-dotted"
+          className="text-sm font-medium text-accent underline decoration-dotted"
         >
           Reconstruct from the ledger
         </Link>
@@ -133,19 +138,31 @@ export function CasePage() {
 
       <FactStrip
         testId="case-header"
-        initials={(entry.member_id ?? "??").replace(/[^A-Za-z0-9]/g, "").slice(-2)}
-        title={entry.member_id ?? "member not recorded"}
-        subtitle={<span className="font-mono text-[11px]">{caseId.slice(0, 26)}</span>}
+        initials={
+          /^[A-Za-z]/.test(named)
+            ? named.split(/\s+/).slice(0, 2).map((part) => part[0]!.toUpperCase()).join("")
+            : named.replace(/[^A-Za-z0-9]/g, "").slice(-2)
+        }
+        title={named}
+        subtitle={
+          <span className="font-mono text-[11px]">
+            {entry.member_id ?? "no member"} · {caseId.slice(0, 22)}
+          </span>
+        }
         facts={[
-          { label: "Tier", value: entry.tier ?? "unknown", icon: "scale" },
+          { label: "Deliberation", value: say("tier", entry.tier), icon: "scale" },
           {
-            label: "Route",
-            value: (entry.route ?? "unrouted").replaceAll("_", " ").toLowerCase(),
+            label: "Goes to",
+            value: <span title={means("route", entry.route)}>{say("route", entry.route)}</span>,
             icon: "route",
           },
           {
-            label: "Authority needed",
-            value: (entry.required_authority ?? "not set").replaceAll("_", " ").toLowerCase(),
+            label: "Who signs it off",
+            value: (
+              <span title={means("authority", entry.required_authority)}>
+                {say("authority", entry.required_authority)}
+              </span>
+            ),
             icon: "shield",
           },
           {
@@ -190,7 +207,7 @@ export function CasePage() {
           icon="chart"
           tone="accent"
           value={entry.confidence == null ? "not scored" : entry.confidence.toFixed(2)}
-          hint={decision?.deciding_step ? `settled at ${decision.deciding_step}` : undefined}
+          hint={decision?.deciding_step ? say("step", decision.deciding_step) : undefined}
         />
         <Stat
           label="Disagreement"
@@ -202,6 +219,35 @@ export function CasePage() {
           }
         />
       </div>
+
+      {/* One sentence saying what happened and what happens next, before any
+          of the detail. Somebody who has never seen this platform can read the
+          screen from here; somebody who has can skip it. */}
+      {decision ? (
+        <Card testId="what-happened" padded={false}>
+          <div className="flex items-start gap-3.5 p-5">
+            <Glyph icon="info" tone="accent" size="lg" />
+            <div>
+              <p className="text-sm">
+                The platform assessed this and recommends{" "}
+                <strong>{say("recommendation", decision.recommendation)}</strong>. It goes
+                to <strong>{say("route", decision.route)}</strong>, and{" "}
+                <strong>{say("authority", decision.required_authority)}</strong> signs it off.
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                {say("step", decision.deciding_step)}
+                {means("step", decision.deciding_step)
+                  ? ` — ${means("step", decision.deciding_step)}`
+                  : ""}
+              </p>
+              <p className="mt-1.5 text-xs text-muted">
+                Nothing here was decided by a model. The council argues; the policy
+                decides; a person signs.
+              </p>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       {record.error ? <Problem error={record.error} /> : null}
       {decision ? <DecisionCard record={decision} /> : null}
@@ -247,7 +293,7 @@ export function CasePage() {
             <dl className="flex flex-col gap-4 text-sm">
               {written.map(([audience, passage]) => (
                 <div key={audience}>
-                  <dt className="flex items-center gap-2 text-xs font-semibold tracking-wide text-[--color-muted] uppercase">
+                  <dt className="flex items-center gap-2 text-xs font-semibold tracking-wide text-muted uppercase">
                     {audience}
                     {/* The status belongs beside the passage, not above the
                         card: one audience can be written from the record while
@@ -285,7 +331,7 @@ export function CasePage() {
           case should not have to scroll back up to act on it, and one who has
           not read to the bottom should still be able to see what acting on it
           would mean. */}
-      <div className="sticky bottom-4 z-[8] rounded-2xl border border-[--color-line] bg-[--color-surface]/95 shadow-[var(--shadow-lift)] backdrop-blur-md">
+      <div className="sticky bottom-4 z-[8] rounded-2xl border border-line bg-surface/95 shadow-lift backdrop-blur-md">
         <DecideForm record={decision} caseId={caseId} role={session?.role ?? "officer"} />
       </div>
     </div>

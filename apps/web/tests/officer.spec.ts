@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { say } from "../src/vocabulary";
 import {
   authHeader,
   authMode,
@@ -111,12 +112,14 @@ test.describe("officer workbench", () => {
     await expect(page.getByTestId("required-authority")).toHaveText(
       record.required_authority,
     );
+    // The words the screen shows, checked against the same vocabulary the app
+    // renders from rather than against a literal. The screen says "Compliance
+    // review" where the record says COMPLIANCE_REVIEW, and what this test is
+    // for is that the two agree — not that either is spelled a certain way.
     await expect(page.getByTestId("recommendation-chip")).toHaveText(
-      record.recommendation.replaceAll("_", " ").toLowerCase(),
+      say("recommendation", record.recommendation),
     );
-    await expect(page.getByTestId("route-chip")).toHaveText(
-      record.route.replaceAll("_", " ").toLowerCase(),
-    );
+    await expect(page.getByTestId("route-chip")).toHaveText(say("route", record.route));
 
     // Every factor the record scored is shown, with the record's own number.
     const families = Object.keys(record.factor_scores ?? {});

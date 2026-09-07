@@ -142,8 +142,8 @@ export function ManagerPage() {
     <div className="flex flex-col gap-5" data-testid="manager-page">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Portfolio overview</h1>
-          <p className="text-sm text-[--color-muted]">
+          <h1 className="text-[34px] leading-tight font-extrabold tracking-tight">Portfolio overview</h1>
+          <p className="text-sm text-muted">
             What the platform decided, where the work went, and how the book is
             behaving.
           </p>
@@ -206,7 +206,7 @@ export function ManagerPage() {
           testId="flow-chart"
           right={
             applications?.series_means ? (
-              <span className="hidden text-xs text-[--color-muted] sm:block">
+              <span className="hidden text-xs text-muted sm:block">
                 {applications.series_means}
               </span>
             ) : null
@@ -258,7 +258,7 @@ export function ManagerPage() {
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
                 placeholder="Why did approvals fall this quarter?"
-                className="flex-1 rounded-lg border border-[--color-line] bg-[--color-surface] px-3 py-2 text-sm"
+                className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm"
               />
               <Button
                 type="submit"
@@ -274,10 +274,10 @@ export function ManagerPage() {
 
             {ask.data ? (
               <div
-                className="rounded-lg border border-[--color-line] bg-[--color-raised] p-3"
+                className="rounded-lg border border-line bg-raised p-3"
                 data-testid="portfolio-answer"
               >
-                <p className="text-xs text-[--color-muted]">{asked}</p>
+                <p className="text-xs text-muted">{asked}</p>
 
                 {ask.data.refusal ? (
                   <div className="mt-2" data-testid="portfolio-refusal">
@@ -303,14 +303,14 @@ export function ManagerPage() {
                 ) : null}
 
                 {ask.data.tools_unavailable.length > 0 ? (
-                  <p className="mt-2 text-[11px] text-[--color-muted]" data-testid="portfolio-gaps">
+                  <p className="mt-2 text-[11px] text-muted" data-testid="portfolio-gaps">
                     could not read {ask.data.tools_unavailable.join(", ")}
                   </p>
                 ) : null}
               </div>
             ) : null}
 
-            <p className="text-xs text-[--color-muted]" data-testid="portfolio-limits">
+            <p className="text-xs text-muted" data-testid="portfolio-limits">
               Answers use only the metrics on this page. The copilot reads
               aggregates and cannot see a member, a case or an account. It
               reports what happened and does not forecast.
@@ -337,7 +337,7 @@ export function ManagerPage() {
                   right={<Chip tone="neutral">{asPercent(num(row.share))}</Chip>}
                 />
               ))}
-              <p className="text-[11px] text-[--color-muted]">{routing.means}</p>
+              <p className="text-[11px] text-muted">{routing.means}</p>
             </div>
           ) : (
             <Empty>Nothing was routed in this window.</Empty>
@@ -346,7 +346,7 @@ export function ManagerPage() {
       </div>
 
       <div>
-        <h2 className="mb-3 text-sm font-semibold tracking-tight text-[--color-muted]">
+        <h2 className="mb-3 text-sm font-semibold tracking-tight text-muted">
           Every metric, exactly as the service returned it
         </h2>
         <div className="grid gap-4 xl:grid-cols-2">
@@ -377,7 +377,7 @@ function MetricTile({ metric, title, days }: { metric: string; title: string; da
             <dl className="flex flex-wrap gap-x-5 gap-y-2" data-testid={`totals-${metric}`}>
               {Object.entries(query.data.totals).map(([name, value]) => (
                 <div key={name} className="flex flex-col">
-                  <dt className="text-xs text-[--color-muted]">{name.replace(/_/g, " ")}</dt>
+                  <dt className="text-xs text-muted">{name.replace(/_/g, " ")}</dt>
                   <dd
                     className="font-mono text-sm font-semibold"
                     data-testid={`total-${metric}-${name}`}
@@ -392,8 +392,8 @@ function MetricTile({ metric, title, days }: { metric: string; title: string; da
           {query.data.rows.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs" data-testid={`rows-${metric}`}>
-                <thead className="text-[--color-muted]">
-                  <tr className="border-b border-[--color-line]">
+                <thead className="text-muted">
+                  <tr className="border-b border-line">
                     {Object.keys(query.data.rows[0]).map((key) => (
                       <th key={key} className="py-1.5 pr-3 font-medium whitespace-nowrap">
                         {key.replace(/_/g, " ")}
@@ -403,7 +403,7 @@ function MetricTile({ metric, title, days }: { metric: string; title: string; da
                 </thead>
                 <tbody className="font-mono">
                   {query.data.rows.slice(0, 12).map((row, index) => (
-                    <tr key={index} className="border-b border-[--color-line] last:border-0">
+                    <tr key={index} className="border-b border-line last:border-0">
                       {Object.entries(row).map(([key, value]) => (
                         <td
                           key={key}
@@ -425,7 +425,7 @@ function MetricTile({ metric, title, days }: { metric: string; title: string; da
           {/* The definition travels with the number. "Autonomous share 0.25"
               cannot be read without knowing whether it is of all decisions or
               of the ones eligible to be automatic. */}
-          <p className="text-[11px] text-[--color-muted]" data-testid={`means-${metric}`}>
+          <p className="text-[11px] text-muted" data-testid={`means-${metric}`}>
             {query.data.means} Read from {query.data.sources.join(", ")}.
           </p>
         </div>

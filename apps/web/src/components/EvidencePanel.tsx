@@ -37,18 +37,23 @@ export function EvidencePanel({
 
   return (
     <Card
-      title="Evidence"
+      title="Evidence & files"
+      icon="documents"
+      tone="accent"
       testId="evidence-panel"
       right={
-        selected ? (
-          <button
-            type="button"
-            className="text-xs underline decoration-dotted"
-            onClick={() => onSelect(null)}
-          >
-            clear
-          </button>
-        ) : null
+        <span className="flex items-center gap-3">
+          <span className="text-xs text-muted">{items.length} cited</span>
+          {selected ? (
+            <button
+              type="button"
+              className="text-xs underline decoration-dotted hover:text-accent"
+              onClick={() => onSelect(null)}
+            >
+              clear
+            </button>
+          ) : null}
+        </span>
       }
     >
       {items.length === 0 ? (
@@ -57,53 +62,119 @@ export function EvidencePanel({
           knowing: a claim without evidence should not have been accepted.
         </Empty>
       ) : (
-        <div className="flex flex-col gap-4">
-          {current ? <EvidenceDetail item={current} /> : null}
+        /* Two columns, because a case can cite hundreds of things. Rendering
+           them all in one flow made this page twelve thousand pixels tall and
+           the officer's actions unreachable: the list scrolls in its own
+           column and the thing being examined stays put beside it. */
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]">
+          <div className="flex max-h-[28rem] flex-col gap-4 overflow-y-auto pr-1">
+            {grouped.map(([type, entries]) => (
+              <EvidenceGroup
+                key={type}
+                type={type}
+                entries={entries}
+                selected={selected}
+                onSelect={onSelect}
+              />
+            ))}
+          </div>
 
-          {grouped.map(([type, entries]) => (
-            <div key={type} className="flex flex-col gap-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-[--color-muted]">
-                {type.replaceAll("_", " ").toLowerCase()}
-              </h3>
-              <ul className="flex flex-col gap-1">
-                {entries.map((item) => {
-                  const id = item.evidence_id ?? item.document_id ?? item.finding_id ?? "";
-                  const isSelected = id === selected;
-                  return (
-                    <li key={id}>
-                      <button
-                        type="button"
-                        data-testid={`evidence-${id}`}
-                        onClick={() => onSelect(isSelected ? null : id)}
-                        className={`w-full rounded border px-2 py-1 text-left text-xs ${
-                          isSelected
-                            ? "border-[--color-accent] bg-sky-50"
-                            : "border-[--color-line] hover:border-[--color-accent]"
-                        }`}
-                      >
-                        <span className="font-mono">{id.slice(0, 22)}</span>
-                        {item.code ? (
-                          <span className="ml-2">
-                            <Chip tone={item.severity === "HIGH" ? "fail" : "warn"}>
-                              {item.code}
-                            </Chip>
-                          </span>
-                        ) : null}
-                        {item.locator && "field_path" in item.locator ? (
-                          <span className="ml-2 text-[--color-muted]">
-                            {String(item.locator.field_path)}
-                          </span>
-                        ) : null}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+          <div className="min-w-0">
+            {current ? (
+              <EvidenceDetail item={current} />
+            ) : (
+              <div className="flex h-full min-h-[12rem] items-center justify-center rounded-xl border border-dashed border-line bg-raised p-6 text-center">
+                <p className="max-w-xs text-sm text-muted">
+                  Pick something on the left to see where it came from. A
+                  document field opens the page image with the box the value was
+                  read from drawn on it.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </Card>
+  );
+}
+
+/** One kind of evidence, collapsed to a readable number of rows.
+ *
+ *  A case can cite two hundred core fields. All of them at once is not a list
+ *  anybody reads; it is a wall that hides the four findings underneath it. */
+function EvidenceGroup({
+  type,
+  entries,
+  selected,
+  onSelect,
+}: {
+  type: string;
+  entries: Explanation["levels"]["provenance"];
+  selected: string | null;
+  onSelect: (evidenceId: string | null) => void;
+}) {
+  const FIRST = 8;
+  const [all, setAll] = useState(false);
+  // Whatever is selected is always rendered, or clicking a claim's citation
+  // would select a row the reader cannot see.
+  const holdsSelected = entries.some(
+    (item) => (item.evidence_id ?? item.document_id ?? item.finding_id) === selected,
+  );
+  const shown = all || holdsSelected ? entries : entries.slice(0, FIRST);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <h3 className="flex items-center justify-between text-xs font-semibold tracking-wide text-muted uppercase">
+        {type.replaceAll("_", " ").toLowerCase()}
+        <span className="rounded-full bg-sunken px-1.5 py-0.5 text-[10px] tabular-nums">
+          {entries.length}
+        </span>
+      </h3>
+      <ul className="flex flex-col gap-1">
+        {shown.map((item) => {
+          const id = item.evidence_id ?? item.document_id ?? item.finding_id ?? "";
+          const isSelected = id === selected;
+          const field = item.locator && "field_path" in item.locator
+            ? String(item.locator.field_path)
+            : null;
+          return (
+            <li key={id}>
+              <button
+                type="button"
+                data-testid={`evidence-${id}`}
+                onClick={() => onSelect(isSelected ? null : id)}
+                className={`w-full rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${
+                  isSelected
+                    ? "border-accent bg-accent-soft"
+                    : "border-line hover:border-accent-line hover:bg-raised"
+                }`}
+              >
+                {/* What it is, before what it is called. A row that leads with
+                    an opaque id makes a reader decode before they can choose. */}
+                <span className="flex items-center justify-between gap-2">
+                  <span className="truncate font-medium">{field ?? id.slice(0, 20)}</span>
+                  {item.code ? (
+                    <Chip tone={item.severity === "HIGH" ? "fail" : "warn"}>{item.code}</Chip>
+                  ) : null}
+                </span>
+                <span className="mt-0.5 block truncate font-mono text-[10px] text-faint">
+                  {id}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {!all && !holdsSelected && entries.length > FIRST ? (
+        <button
+          type="button"
+          onClick={() => setAll(true)}
+          className="self-start text-xs text-accent underline decoration-dotted"
+        >
+          show the other {entries.length - FIRST}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -115,11 +186,11 @@ function EvidenceDetail({ item }: { item: Explanation["levels"]["provenance"][nu
   return (
     <div
       data-testid="evidence-detail"
-      className="rounded border border-[--color-accent] bg-sky-50 p-3"
+      className="rise rounded-xl border border-accent-line bg-accent-soft p-4"
     >
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <Chip tone="accent">{item.type ?? "evidence"}</Chip>
-        <span className="text-[--color-muted]">from</span>
+        <span className="text-muted">from</span>
         <span className="font-mono">{item.source_system ?? "unknown"}</span>
         {item.source_record_id ? (
           <Copyable value={item.source_record_id} label="source record" />
@@ -131,7 +202,7 @@ function EvidenceDetail({ item }: { item: Explanation["levels"]["provenance"][nu
       ) : null}
 
       {item.captured_at ? (
-        <p className="mt-2 text-xs text-[--color-muted]">
+        <p className="mt-2 text-xs text-muted">
           Captured {item.captured_at}
         </p>
       ) : null}
@@ -180,7 +251,7 @@ function PageWithBox({
     return (
       <div className="mt-2">
         <Problem error={image.error} />
-        <p className="mt-1 text-xs text-[--color-muted]">
+        <p className="mt-1 text-xs text-muted">
           The value and its coordinates are recorded; only the rendered page is
           missing, so it cannot be checked against the paper here.
         </p>
@@ -190,7 +261,7 @@ function PageWithBox({
 
   return (
     <figure className="mt-2" data-testid="evidence-image">
-      <div className="relative inline-block border border-[--color-line] bg-white">
+      <div className="relative inline-block border border-line bg-white">
         {url ? (
           <img
             src={url}
@@ -198,14 +269,14 @@ function PageWithBox({
             className="block max-h-[420px] w-auto"
           />
         ) : (
-          <div className="flex h-40 w-64 items-center justify-center text-xs text-[--color-muted]">
+          <div className="flex h-40 w-64 items-center justify-center text-xs text-muted">
             Loading the page.
           </div>
         )}
         <span
           data-testid="evidence-bbox"
           data-bbox={bbox.join(",")}
-          className="pointer-events-none absolute border-2 border-[--color-fail]"
+          className="pointer-events-none absolute border-2 border-fail"
           style={{
             left: `${bbox[0] * 100}%`,
             top: `${bbox[1] * 100}%`,
@@ -214,7 +285,7 @@ function PageWithBox({
           }}
         />
       </div>
-      <figcaption className="mt-1 text-xs text-[--color-muted]">
+      <figcaption className="mt-1 text-xs text-muted">
         {documentId}, page {page}. The box is where the value was read from.
       </figcaption>
     </figure>

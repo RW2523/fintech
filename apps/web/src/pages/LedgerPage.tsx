@@ -33,8 +33,8 @@ export function LedgerPage() {
   return (
     <div className="flex flex-col gap-5">
       <header>
-        <h1 className="text-[26px] font-bold tracking-tight">Decision ledger</h1>
-        <p className="text-sm text-[--color-muted]">
+        <h1 className="text-[34px] leading-tight font-extrabold tracking-tight">Decision ledger</h1>
+        <p className="text-sm text-muted">
           One case, in the order it happened, with the hash of every entry and
           whether the chain still verifies.
         </p>
@@ -53,12 +53,12 @@ export function LedgerPage() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="case id"
-            className="w-96 rounded border border-[--color-line] bg-[--color-surface] px-2 py-1 font-mono text-xs"
+            className="w-96 rounded border border-line bg-surface px-2 py-1 font-mono text-xs"
           />
           <button
             type="submit"
             data-testid="ledger-search-submit"
-            className="rounded border border-[--color-line] px-3 py-1 text-sm hover:border-[--color-accent]"
+            className="rounded border border-line px-3 py-1 text-sm hover:border-accent"
           >
             Reconstruct
           </button>
@@ -81,7 +81,7 @@ export function LedgerPage() {
 
       {reconstruction.error ? <Problem error={reconstruction.error} /> : null}
       {reconstruction.isPending && caseId ? (
-        <p className="text-sm text-[--color-muted]">Reading the chain.</p>
+        <p className="text-sm text-muted">Reading the chain.</p>
       ) : null}
 
       {reconstruction.data ? (
@@ -112,7 +112,7 @@ function ChainBadge({ data }: { data: Reconstruction }) {
           {label}
         </Chip>
         {data.unavailable.length > 0 ? (
-          <span className="text-xs text-[--color-warn]" data-testid="chain-unavailable">
+          <span className="text-xs text-warn" data-testid="chain-unavailable">
             {/* Named rather than hidden: a gap the reader takes for an absence
                 of events is worse than no timeline at all. */}
             could not be read: {data.unavailable.join(", ")}
@@ -152,19 +152,19 @@ function TimelineRow({ event }: { event: TimelineEvent }) {
   const [open, setOpen] = useState(false);
   return (
     <li
-      className="rounded border border-[--color-line] px-3 py-2"
+      className="rounded border border-line px-3 py-2"
       data-testid={`timeline-${event.kind}`}
     >
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <Chip tone={SOURCE_TONE[event.source] ?? "neutral"}>{event.source}</Chip>
         <span className="font-medium">{event.kind.replaceAll("_", " ").toLowerCase()}</span>
-        {event.agent_id ? <span className="text-[--color-muted]">{event.agent_id}</span> : null}
+        {event.agent_id ? <span className="text-muted">{event.agent_id}</span> : null}
         {event.stance ? <Chip>{event.stance.replaceAll("_", " ").toLowerCase()}</Chip> : null}
-        <span className="ml-auto text-[--color-muted]">{event.at ?? "no timestamp"}</span>
+        <span className="ml-auto text-muted">{event.at ?? "no timestamp"}</span>
       </div>
 
       {event.hash ? (
-        <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[--color-muted]">
+        <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted">
           <span>
             hash <Copyable value={event.hash} label="hash" />
           </span>
@@ -184,7 +184,7 @@ function TimelineRow({ event }: { event: TimelineEvent }) {
       {open ? (
         <pre
           data-testid="timeline-payload"
-          className="mt-1 max-h-72 overflow-auto rounded bg-[--color-canvas] p-2 text-[11px]"
+          className="mt-1 max-h-72 overflow-auto rounded bg-canvas p-2 text-[11px]"
         >
           {JSON.stringify(event.payload, null, 2)}
         </pre>

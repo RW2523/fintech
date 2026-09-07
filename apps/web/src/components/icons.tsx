@@ -163,6 +163,12 @@ export const Icon = {
       <path d="m16 16 4.5 4.5" />
     </Svg>
   ),
+  lock: (p: Props) => (
+    <Svg {...p}>
+      <rect x="5" y="10.5" width="14" height="10" rx="2" />
+      <path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3" />
+    </Svg>
+  ),
   signOut: (p: Props) => (
     <Svg {...p}>
       <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" />

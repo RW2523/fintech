@@ -50,8 +50,8 @@ export function CompliancePage() {
   return (
     <div className="flex flex-col gap-5">
       <header>
-        <h1 className="text-[26px] font-bold tracking-tight">Compliance</h1>
-        <p className="text-sm text-[--color-muted]">
+        <h1 className="text-[34px] leading-tight font-extrabold tracking-tight">Compliance</h1>
+        <p className="text-sm text-muted">
           Where a person departed from the platform, and what is worth reading
           because of it.
         </p>
@@ -76,7 +76,7 @@ export function CompliancePage() {
             </div>
 
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-[--color-muted]">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
                 By reason
               </h3>
               <ul className="mt-1 flex flex-wrap gap-2 text-xs" data-testid="override-reasons">
@@ -90,7 +90,7 @@ export function CompliancePage() {
                     </li>
                   ))}
                 {Object.values(overrides.data.by_reason).every((count) => count === 0) ? (
-                  <li className="text-[--color-muted]">
+                  <li className="text-muted">
                     {/* Stated rather than shown as an empty chart: nobody has
                         overridden yet is a different fact from no data. */}
                     Nobody has overridden a recommendation in this window.
@@ -116,7 +116,7 @@ export function CompliancePage() {
                 <li
                   key={`${row.decision_record_id}-${row.why}-${index}`}
                   data-testid={`attention-${row.why}`}
-                  className="flex flex-wrap items-center gap-2 rounded border border-[--color-line] px-3 py-2 text-xs"
+                  className="flex flex-wrap items-center gap-2 rounded border border-line px-3 py-2 text-xs"
                 >
                   <Chip tone={WHY_TONE[row.why] ?? "neutral"}>
                     {row.why.replaceAll("_", " ").toLowerCase()}
@@ -124,7 +124,7 @@ export function CompliancePage() {
                   {row.case_id ? (
                     <Link
                       to={`/ledger/${encodeURIComponent(row.case_id)}`}
-                      className="font-mono text-[--color-accent] underline decoration-dotted"
+                      className="font-mono text-accent underline decoration-dotted"
                     >
                       {row.case_id.slice(0, 20)}
                     </Link>
@@ -134,15 +134,15 @@ export function CompliancePage() {
                   {/* The reason is on the row, not inferred from a column: a
                       list of case ids tells a compliance officer nothing about
                       which one to open first. */}
-                  <span className="text-[--color-muted]">{row.detail}</span>
-                  <span className="ml-auto text-[--color-muted]">{row.at ?? ""}</span>
+                  <span className="text-muted">{row.detail}</span>
+                  <span className="ml-auto text-muted">{row.at ?? ""}</span>
                 </li>
               ))}
             </ul>
           )
         ) : null}
         {attention.data && attention.data.unavailable.length > 0 ? (
-          <p className="mt-2 text-xs text-[--color-warn]" data-testid="attention-unavailable">
+          <p className="mt-2 text-xs text-warn" data-testid="attention-unavailable">
             could not be read: {attention.data.unavailable.join(", ")}
           </p>
         ) : null}
@@ -162,7 +162,7 @@ function Figure({
 }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-[--color-muted]">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
       <div className="text-lg font-semibold tabular-nums" data-testid={testId}>
         {value}
       </div>

@@ -16,9 +16,11 @@ import { Chip, Copyable } from "./primitives";
  *  they are signed in as, and the id of the last call the platform made on
  *  their behalf.
  *
- *  Destinations are filtered by role. A screen an officer's token cannot load
- *  is not a screen to offer them: the API would refuse it, and a link that
- *  leads to a refusal teaches a reader to distrust the navigation. */
+ *  Every destination is listed for everybody, and the ones the current role
+ *  cannot open say so. Hiding them was worse in both directions: a reader had
+ *  no idea the platform had a portfolio view until they happened to be signed
+ *  in as a manager, and the rail changed shape under them every time they
+ *  switched persona, which is the one thing a rail must not do. */
 
 type Destination = {
   to: string;
@@ -106,7 +108,7 @@ function GlobalSearch() {
 
   return (
     <form onSubmit={go} className="relative hidden min-w-0 flex-1 md:block md:max-w-md">
-      <Icon.search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-[--color-faint]" />
+      <Icon.search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-faint" />
       <input
         data-testid="global-search"
         value={term}
@@ -115,10 +117,10 @@ function GlobalSearch() {
           setMissed(false);
         }}
         placeholder="Search by case, snapshot or membership number…"
-        className="h-10 w-full rounded-xl border border-[--color-line] bg-[--color-raised] pr-3 pl-10 text-[13px] outline-none focus:border-[--color-accent-line] focus:bg-white"
+        className="h-10 w-full rounded-xl border border-line bg-raised pr-3 pl-10 text-[13px] outline-none focus:border-accent-line focus:bg-white"
       />
       {missed ? (
-        <p className="rise absolute top-11 left-0 z-20 rounded-lg border border-[--color-warn-line] bg-[--color-warn-soft] px-3 py-2 text-[11px] text-[--color-warn-deep] shadow-[var(--shadow-card)]">
+        <p className="rise absolute top-11 left-0 z-20 rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-[11px] text-warn-deep shadow-card">
           Not an id this platform issues. Try a case (case_…), a snapshot
           (snap_…), a decision (dr_…) or a membership number (M-…).
         </p>
@@ -130,8 +132,8 @@ function GlobalSearch() {
 function BrandMark() {
   return (
     <span className="relative grid h-[42px] w-[42px] shrink-0 place-items-center" aria-hidden="true">
-      <span className="absolute left-px h-6 w-6 rotate-45 rounded-[11px] border-[6px] border-[--color-accent]" />
-      <span className="absolute right-px h-6 w-6 rotate-45 rounded-[11px] border-[6px] border-[--color-accent] opacity-[.58]" />
+      <span className="absolute left-px h-6 w-6 rotate-45 rounded-[11px] border-[6px] border-accent" />
+      <span className="absolute right-px h-6 w-6 rotate-45 rounded-[11px] border-[6px] border-accent opacity-[.58]" />
     </span>
   );
 }
@@ -197,13 +199,13 @@ function WhoAmI() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
-        className="flex items-center gap-2 rounded-xl border border-[--color-line] bg-[--color-surface] px-2 py-1.5 transition-all hover:border-[--color-accent-line] hover:bg-[--color-accent-soft]"
+        className="flex items-center gap-2 rounded-xl border border-line bg-surface px-2 py-1.5 transition-all hover:border-accent-line hover:bg-accent-soft"
       >
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[--color-accent] to-[--color-note] text-[11px] font-semibold text-white">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-accent to-note text-[11px] font-semibold text-white">
           {(session.name || session.role).slice(0, 2).toUpperCase()}
         </span>
         <span className="hidden text-left sm:block">
-          <span className="block text-xs font-medium text-[--color-ink]">
+          <span className="block text-xs font-medium text-ink">
             {session.name || session.role}
           </span>
           <span className="block text-[11px]" data-testid="role-chip">
@@ -217,14 +219,14 @@ function WhoAmI() {
         <div
           role="menu"
           data-testid="role-switcher"
-          className="rise absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-[--color-line] bg-[--color-surface] p-2 shadow-[var(--shadow-pop)]"
+          className="rise absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-line bg-surface p-2 shadow-pop"
         >
-          <p className="px-2 py-1.5 text-xs font-medium text-[--color-muted]">
+          <p className="px-2 py-1.5 text-xs font-medium text-muted">
             {canSwitch ? "Switch role" : "Signed in as"}
           </p>
 
           {problem ? (
-            <p className="mx-2 mb-2 rounded-lg border border-[--color-fail-line] bg-[--color-fail-soft] p-2 text-xs text-[--color-fail]">
+            <p className="mx-2 mb-2 rounded-lg border border-fail-line bg-fail-soft p-2 text-xs text-fail">
               {problem}
             </p>
           ) : null}
@@ -243,13 +245,13 @@ function WhoAmI() {
                       onClick={() => void become(role)}
                       className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-sm transition disabled:cursor-default ${
                         here
-                          ? "bg-[--color-accent-soft] font-semibold text-[--color-accent]"
-                          : "hover:bg-[--color-canvas]"
+                          ? "bg-accent-soft font-semibold text-accent"
+                          : "hover:bg-canvas"
                       }`}
                     >
                       <span>
                         <span className="block">{AUTHORITY[role].label}</span>
-                        <span className="block text-xs font-normal text-[--color-muted]">
+                        <span className="block text-xs font-normal text-muted">
                           {AUTHORITY[role].approves === null
                             ? "Approves any amount"
                             : AUTHORITY[role].approves === 0
@@ -258,7 +260,7 @@ function WhoAmI() {
                         </span>
                       </span>
                       {busy === role ? (
-                        <span className="text-xs text-[--color-muted]">…</span>
+                        <span className="text-xs text-muted">…</span>
                       ) : here ? (
                         <Icon.check className="h-4 w-4 shrink-0" />
                       ) : null}
@@ -268,17 +270,17 @@ function WhoAmI() {
               })}
             </ul>
           ) : (
-            <p className="px-2 pb-2 text-xs text-[--color-muted]">
+            <p className="px-2 pb-2 text-xs text-muted">
               Switching needs the password this session signed in with, and a
               reload drops it. Sign in again to switch freely.
             </p>
           )}
 
-          <div className="mt-1 border-t border-[--color-line] pt-1">
+          <div className="mt-1 border-t border-line pt-1">
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-[--color-muted] transition hover:bg-[--color-canvas] hover:text-[--color-ink]"
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-muted transition hover:bg-canvas hover:text-ink"
               onClick={() => {
                 signOut();
                 navigate("/login", { replace: true });
@@ -308,20 +310,20 @@ export function Shell() {
     return null;
   }
 
-  const visible = DESTINATIONS.filter(
-    (destination) => !destination.roles || destination.roles.includes(session.role),
-  );
+  const visible = DESTINATIONS;
+  const permitted = (destination: Destination) =>
+    !destination.roles || destination.roles.includes(session.role);
 
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-[232px] shrink-0 flex-col border-r border-[--color-line] bg-[--color-surface]/95 px-4 pt-6 pb-4 lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-[232px] shrink-0 flex-col border-r border-line bg-surface/95 px-4 pt-6 pb-4 lg:flex">
         <div className="flex items-center gap-3 px-3 pb-7">
           <BrandMark />
-          <span className="text-[15px] leading-[1.05] font-extrabold tracking-tight text-[--color-ink]">
+          <span className="text-[15px] leading-[1.05] font-extrabold tracking-tight text-ink">
             Credit
             <br />
             Intelligence
-            <span className="mt-1.5 block text-[9px] font-semibold tracking-wide text-[--color-muted]">
+            <span className="mt-1.5 block text-[9px] font-semibold tracking-wide text-muted">
               GOVERNED CREDIT OS
             </span>
           </span>
@@ -330,16 +332,24 @@ export function Shell() {
         <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
           {visible.map((destination) => {
             const Drawn = Icon[destination.icon];
+            const allowed = permitted(destination);
             return (
               <NavLink
                 key={destination.to}
                 to={destination.to}
                 data-testid={destination.testId}
+                title={
+                  allowed
+                    ? undefined
+                    : `${destination.label} needs a different role. Switch from the menu at the top right.`
+                }
                 className={({ isActive }) =>
                   `group relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all ${
                     isActive
-                      ? "bg-[--color-accent-soft] text-[--color-accent]"
-                      : "text-[--color-muted] hover:bg-[--color-sunken] hover:text-[--color-ink]"
+                      ? "bg-accent-soft text-accent"
+                      : allowed
+                        ? "text-muted hover:bg-sunken hover:text-ink"
+                        : "text-faint hover:bg-sunken"
                   }`
                 }
               >
@@ -349,11 +359,14 @@ export function Shell() {
                         reader noticing which word went bold. */}
                     <span
                       className={`absolute top-2 bottom-2 -left-1 w-1 rounded-full transition-all ${
-                        isActive ? "bg-[--color-accent]" : "bg-transparent"
+                        isActive ? "bg-accent" : "bg-transparent"
                       }`}
                     />
                     <Drawn className="h-[18px] w-[18px]" />
-                    {destination.label}
+                    <span className="flex-1">{destination.label}</span>
+                    {/* Shown rather than hidden: an officer should know the
+                        platform has a policy sandbox and who can open it. */}
+                    {allowed ? null : <Icon.lock className="h-3.5 w-3.5 shrink-0" />}
                   </>
                 )}
               </NavLink>
@@ -364,11 +377,11 @@ export function Shell() {
         {/* Said quietly, at the bottom, where a reader will find it when they
             wonder what they are looking at rather than while they work. */}
         <div className="px-3 pt-4">
-          <p className="text-[13px] leading-snug text-[--color-muted]">
-            <strong className="block font-bold text-[--color-ink]">Stronger members.</strong>
+          <p className="text-[13px] leading-snug text-muted">
+            <strong className="block font-bold text-ink">Stronger members.</strong>
             Brighter tomorrows.
           </p>
-          <p className="mt-2 text-[10px] leading-relaxed text-[--color-faint]">
+          <p className="mt-2 text-[10px] leading-relaxed text-faint">
             Every member, document and decision in this build is generated.
             None of it is real.
           </p>
@@ -376,7 +389,7 @@ export function Shell() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-[72px] flex-wrap items-center gap-3 border-b border-[--color-line] bg-[--color-surface]/90 px-4 backdrop-blur-md lg:px-[26px]">
+        <header className="sticky top-0 z-10 flex h-[72px] flex-wrap items-center gap-3 border-b border-line bg-surface/90 px-4 backdrop-blur-md lg:px-[26px]">
           {/* On a narrow screen the rail is gone, so the product name comes
               back into the bar rather than disappearing entirely. */}
           <span className="text-sm font-bold tracking-tight lg:hidden">Credit Intelligence OS</span>
@@ -398,8 +411,8 @@ export function Shell() {
                 className={({ isActive }) =>
                   `rounded-md px-2 py-1 text-xs whitespace-nowrap ${
                     isActive
-                      ? "bg-[--color-accent-soft] font-semibold text-[--color-accent]"
-                      : "text-[--color-muted]"
+                      ? "bg-accent-soft font-semibold text-accent"
+                      : "text-muted"
                   }`
                 }
               >
@@ -408,7 +421,7 @@ export function Shell() {
             ))}
           </nav>
 
-          <div className="ml-auto flex items-center gap-2.5 text-xs text-[--color-muted]">
+          <div className="ml-auto flex items-center gap-2.5 text-xs text-muted">
             {/* The id of the last call this session made. It is here so that
                 when somebody asks "why did it say that", the answer starts
                 with a value they can paste into a query. */}
@@ -421,7 +434,7 @@ export function Shell() {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1510px] flex-1 px-4 py-6 lg:px-[26px] lg:pb-10">
+        <main className="mx-auto w-full max-w-[1510px] flex-1 px-4 py-6 pb-28 lg:px-[26px]">
           <Outlet />
         </main>
       </div>

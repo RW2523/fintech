@@ -12,23 +12,23 @@ import { Icon, type IconName } from "./icons";
  *  platform has exactly one (CLAUDE.md §2.1). */
 
 const TONE = {
-  neutral: "bg-[--color-raised] text-[--color-muted] border-[--color-line]",
-  pass: "bg-[--color-pass-soft] text-[--color-pass-deep] border-[--color-pass-line]",
-  warn: "bg-[--color-warn-soft] text-[--color-warn-deep] border-[--color-warn-line]",
-  fail: "bg-[--color-fail-soft] text-[--color-fail-deep] border-[--color-fail-line]",
-  accent: "bg-[--color-accent-soft] text-[--color-accent-deep] border-[--color-accent-line]",
-  note: "bg-[--color-note-soft] text-[--color-note-deep] border-[--color-note-line]",
+  neutral: "bg-raised text-muted border-line",
+  pass: "bg-pass-soft text-pass-deep border-pass-line",
+  warn: "bg-warn-soft text-warn-deep border-warn-line",
+  fail: "bg-fail-soft text-fail-deep border-fail-line",
+  accent: "bg-accent-soft text-accent-deep border-accent-line",
+  note: "bg-note-soft text-note-deep border-note-line",
 } as const;
 
 export type Tone = keyof typeof TONE;
 
 export const TONE_FILL: Record<Tone, string> = {
-  neutral: "bg-[--color-faint]",
-  pass: "bg-[--color-pass]",
-  warn: "bg-[--color-warn]",
-  fail: "bg-[--color-fail]",
-  accent: "bg-[--color-accent]",
-  note: "bg-[--color-note]",
+  neutral: "bg-faint",
+  pass: "bg-pass",
+  warn: "bg-warn",
+  fail: "bg-fail",
+  accent: "bg-accent",
+  note: "bg-note",
 };
 
 export const TONE_STROKE: Record<Tone, string> = {
@@ -110,10 +110,10 @@ export function Card({
   return (
     <section
       data-testid={testId}
-      className="rounded-2xl border border-[--color-line] bg-[--color-surface] shadow-[var(--shadow-card)] transition-shadow hover:shadow-[var(--shadow-lift)]"
+      className="rounded-2xl border border-line bg-surface shadow-card transition-shadow hover:shadow-lift"
     >
       {title ? (
-        <header className="flex items-center justify-between gap-3 border-b border-[--color-line] px-5 py-3.5">
+        <header className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
           <h2 className="flex items-center gap-2.5 text-[15px] font-semibold tracking-tight">
             {icon ? <Glyph icon={icon} tone={tone} size="sm" /> : null}
             {title}
@@ -141,11 +141,11 @@ export function Figure({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-[--color-muted]">{label}</span>
+      <span className="text-xs text-muted">{label}</span>
       <span data-testid={testId} className="text-sm font-semibold tabular-nums">
         {value}
       </span>
-      {hint ? <span className="text-xs text-[--color-muted]">{hint}</span> : null}
+      {hint ? <span className="text-xs text-muted">{hint}</span> : null}
     </div>
   );
 }
@@ -171,12 +171,12 @@ export function Meter({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-xs text-[--color-muted]">{label}</span>
+        <span className="text-xs text-muted">{label}</span>
         <span data-testid={testId} className="text-xs font-semibold tabular-nums">
           {value == null ? "not available" : (format ?? ((v: number) => v.toFixed(2)))(value)}
         </span>
       </div>
-      <div className="h-1.5 w-full rounded-full bg-[--color-line]">
+      <div className="h-1.5 w-full rounded-full bg-line">
         <div
           className={`h-1.5 rounded-full ${TONE_FILL[tone]}`}
           style={{ width: `${share * 100}%` }}
@@ -187,7 +187,7 @@ export function Meter({
 }
 
 export function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-[--color-muted]">{children}</p>;
+  return <p className="text-sm text-muted">{children}</p>;
 }
 
 export function Problem({ error }: { error: unknown }) {
@@ -196,7 +196,7 @@ export function Problem({ error }: { error: unknown }) {
     <div
       role="alert"
       data-testid="problem"
-      className="flex items-start gap-2 rounded-lg border border-[--color-fail-line] bg-[--color-fail-soft] p-3 text-sm text-[--color-fail]"
+      className="flex items-start gap-2 rounded-lg border border-fail-line bg-fail-soft p-3 text-sm text-fail"
     >
       <Icon.alert className="mt-0.5 h-4 w-4 shrink-0" />
       <span>{message}</span>
@@ -211,7 +211,7 @@ export function Copyable({ value, label }: { value: string; label?: string }) {
   return (
     <button
       type="button"
-      className="font-mono text-xs text-[--color-muted] underline decoration-dotted hover:text-[--color-accent]"
+      className="font-mono text-xs text-muted underline decoration-dotted hover:text-accent"
       onClick={() => {
         void navigator.clipboard?.writeText(value);
         setCopied(true);
@@ -248,7 +248,7 @@ export function Sparkline({
   testId?: string;
 }) {
   if (points.length < 2) {
-    return <span className="text-xs text-[--color-faint]">—</span>;
+    return <span className="text-xs text-faint">—</span>;
   }
   const low = Math.min(...points);
   const high = Math.max(...points);
@@ -307,11 +307,11 @@ export function Stat({
   const rising = delta?.trim().startsWith("+");
   const Arrow = delta ? (rising ? Icon.up : Icon.down) : null;
   return (
-    <section className="group rounded-2xl border border-[--color-line] bg-[--color-surface] p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]">
+    <section className="group rounded-2xl border border-line bg-surface p-5 shadow-card transition-all hover:-translate-y-0.5 hover:shadow-lift">
       <div className="flex items-start gap-3.5">
         {icon ? <Glyph icon={icon} tone={tone} size="lg" /> : null}
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-[--color-muted]">{label}</p>
+          <p className="text-xs text-muted">{label}</p>
           <div className="mt-1 flex items-end justify-between gap-2">
             <div className="flex items-baseline gap-2">
               <span
@@ -333,7 +333,7 @@ export function Stat({
             </div>
             {series ? <Sparkline points={series} tone={deltaTone ?? tone} /> : null}
           </div>
-          {hint ? <p className="mt-1 text-xs text-[--color-faint]">{hint}</p> : null}
+          {hint ? <p className="mt-1 text-xs text-faint">{hint}</p> : null}
         </div>
       </div>
     </section>
@@ -361,17 +361,17 @@ export function FactStrip({
   return (
     <section
       data-testid={testId}
-      className="flex flex-wrap items-center gap-x-9 gap-y-4 rounded-2xl border border-[--color-line] bg-[--color-surface] px-5 py-4 shadow-[var(--shadow-card)]"
+      className="flex flex-wrap items-center gap-x-9 gap-y-4 rounded-2xl border border-line bg-surface px-5 py-4 shadow-card"
     >
       <div className="flex items-center gap-3">
         {initials ? (
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[--color-accent] to-[--color-accent-deep] text-sm font-semibold text-white shadow-[var(--shadow-card)]">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-accent-deep text-sm font-semibold text-white shadow-card">
             {initials}
           </span>
         ) : null}
         <div>
           <p className="text-sm font-semibold tracking-tight">{title}</p>
-          {subtitle ? <p className="text-xs text-[--color-muted]">{subtitle}</p> : null}
+          {subtitle ? <p className="text-xs text-muted">{subtitle}</p> : null}
         </div>
       </div>
       {facts.map((fact) => {
@@ -379,7 +379,7 @@ export function FactStrip({
           <div key={fact.label} className="flex items-center gap-2.5">
             {fact.icon ? <Glyph icon={fact.icon} tone="accent" size="sm" /> : null}
             <div>
-              <p className="text-xs text-[--color-muted]">{fact.label}</p>
+              <p className="text-xs text-muted">{fact.label}</p>
               <div className="text-sm font-semibold tracking-tight">{fact.value}</div>
             </div>
           </div>
@@ -414,15 +414,15 @@ export function FilterChips<T extends string>({
             onClick={() => onChange(option.key)}
             className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all ${
               active
-                ? "border-[--color-accent-deep] bg-gradient-to-b from-[--color-accent] to-[--color-accent-deep] text-white shadow-[var(--shadow-card)]"
-                : "border-[--color-line] bg-[--color-surface] text-[--color-muted] hover:border-[--color-accent-line] hover:bg-[--color-accent-soft] hover:text-[--color-accent-deep]"
+                ? "border-accent-deep bg-gradient-to-b from-accent to-accent-deep text-white shadow-card"
+                : "border-line bg-surface text-muted hover:border-accent-line hover:bg-accent-soft hover:text-accent-deep"
             }`}
           >
             {option.label}
             {option.count == null ? null : (
               <span
                 className={`rounded-full px-1.5 text-[11px] tabular-nums ${
-                  active ? "bg-white/20" : (option.tone ? TONE[option.tone] : "bg-[--color-canvas]")
+                  active ? "bg-white/20" : (option.tone ? TONE[option.tone] : "bg-canvas")
                 }`}
               >
                 {option.count}
@@ -437,13 +437,13 @@ export function FilterChips<T extends string>({
 
 const BUTTON = {
   primary:
-    "bg-gradient-to-b from-[--color-accent] to-[--color-accent-deep] text-white border-[--color-accent-deep] shadow-[var(--shadow-card)] hover:brightness-110 hover:shadow-[var(--shadow-lift)] disabled:from-[--color-faint] disabled:to-[--color-faint] disabled:border-[--color-faint] disabled:shadow-none",
+    "bg-gradient-to-b from-accent to-accent-deep text-white border-accent-deep shadow-card hover:brightness-110 hover:shadow-lift disabled:from-faint disabled:to-faint disabled:border-faint disabled:shadow-none",
   quiet:
-    "bg-[--color-surface] text-[--color-ink] border-[--color-line] hover:border-[--color-accent-line] hover:bg-[--color-accent-soft] disabled:text-[--color-faint]",
+    "bg-surface text-ink border-line hover:border-accent-line hover:bg-accent-soft disabled:text-faint",
   danger:
-    "bg-[--color-surface] text-[--color-fail] border-[--color-fail-line] hover:bg-[--color-fail-soft] disabled:text-[--color-faint] disabled:border-[--color-line]",
+    "bg-surface text-fail border-fail-line hover:bg-fail-soft disabled:text-faint disabled:border-line",
   soft:
-    "bg-[--color-accent-soft] text-[--color-accent-deep] border-[--color-accent-line] hover:bg-white disabled:text-[--color-faint]",
+    "bg-accent-soft text-accent-deep border-accent-line hover:bg-white disabled:text-faint",
 } as const;
 
 export function Button({
@@ -538,16 +538,16 @@ export function Donut({
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-xl font-semibold tabular-nums">{total}</span>
-          <span className="text-xs text-[--color-muted]">{caption}</span>
+          <span className="text-xs text-muted">{caption}</span>
         </div>
       </div>
       <ul className="flex min-w-[10rem] flex-1 flex-col gap-2">
         {slices.map((slice) => (
           <li key={slice.label} className="flex items-center gap-2 text-sm">
             <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${TONE_FILL[slice.tone]}`} />
-            <span className="flex-1 text-[--color-muted]">{slice.label}</span>
+            <span className="flex-1 text-muted">{slice.label}</span>
             <span className="font-semibold tabular-nums">{slice.count}</span>
-            <span className="w-12 text-right text-xs text-[--color-faint] tabular-nums">
+            <span className="w-12 text-right text-xs text-faint tabular-nums">
               {(slice.share * 100).toFixed(0)}%
             </span>
           </li>
@@ -583,7 +583,7 @@ export function BarSeries({
                   className="flex w-full max-w-[1.4rem] flex-col items-center justify-end"
                   title={`${bars[index]?.label ?? ""}: ${value}`}
                 >
-                  <span className="text-[10px] text-[--color-faint] tabular-nums">
+                  <span className="text-[10px] text-faint tabular-nums">
                     {value || ""}
                   </span>
                   <div
@@ -593,13 +593,13 @@ export function BarSeries({
                 </div>
               ))}
             </div>
-            <span className="text-xs text-[--color-muted]">{row.label}</span>
+            <span className="text-xs text-muted">{row.label}</span>
           </div>
         ))}
       </div>
       <ul className="flex flex-wrap items-center gap-4">
         {bars.map((bar) => (
-          <li key={bar.label} className="flex items-center gap-1.5 text-xs text-[--color-muted]">
+          <li key={bar.label} className="flex items-center gap-1.5 text-xs text-muted">
             <span className={`h-2.5 w-2.5 rounded-sm ${TONE_FILL[bar.tone]}`} />
             {bar.label}
           </li>
@@ -628,11 +628,11 @@ export function Table({
     <div className="overflow-x-auto">
       <table data-testid={testId} className="w-full min-w-[40rem] border-collapse text-sm">
         <thead>
-          <tr className="border-b border-[--color-line] text-left">
+          <tr className="border-b border-line text-left">
             {head.map((cell, index) => (
               <th
                 key={index}
-                className="px-3 py-2 text-xs font-medium whitespace-nowrap text-[--color-muted]"
+                className="px-3 py-2 text-xs font-medium whitespace-nowrap text-muted"
               >
                 {cell}
               </th>
@@ -661,9 +661,9 @@ export function Row({
       data-testid={testId}
       onClick={onClick}
       aria-selected={selected}
-      className={`border-b border-[--color-line] last:border-0 ${
+      className={`border-b border-line last:border-0 ${
         onClick ? "cursor-pointer" : ""
-      } ${selected ? "bg-[--color-accent-soft]" : "hover:bg-[--color-raised]"}`}
+      } ${selected ? "bg-accent-soft" : "hover:bg-raised"}`}
     >
       {children}
     </tr>
@@ -682,20 +682,21 @@ export function Cell({
 
 /** The circle of initials that stands in for a member everywhere. */
 export function Avatar({ name, id }: { name: string; id?: string }) {
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
+  // A person's initials where there is a name, and the last two characters of
+  // an identifier where there is not — "M-004732" as "MM" would make every
+  // member in the queue look like the same one.
+  const words = name.split(/[\s]+/).filter(Boolean);
+  const initials = /^[A-Za-z]/.test(name) && words.length > 1
+    ? words.slice(0, 2).map((part) => part[0]!.toUpperCase()).join("")
+    : name.replace(/[^A-Za-z0-9]/g, "").slice(-2).toUpperCase();
   return (
     <span className="flex items-center gap-2.5">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[--color-accent] to-[--color-accent-deep] text-xs font-semibold text-white">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-deep text-xs font-semibold text-white">
         {initials || "?"}
       </span>
       <span className="min-w-0">
         <span className="block truncate text-sm font-medium">{name}</span>
-        {id ? <span className="block truncate text-xs text-[--color-muted]">{id}</span> : null}
+        {id ? <span className="block truncate text-xs text-muted">{id}</span> : null}
       </span>
     </span>
   );
@@ -724,7 +725,7 @@ export function Finding({
       {icon ? <Glyph icon={icon} tone={tone} size="sm" /> : null}
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium">{title}</span>
-        {detail ? <span className="block text-xs text-[--color-muted]">{detail}</span> : null}
+        {detail ? <span className="block text-xs text-muted">{detail}</span> : null}
       </span>
       {right}
     </>
@@ -734,14 +735,14 @@ export function Finding({
       type="button"
       data-testid={testId}
       onClick={onClick}
-      className="flex w-full items-start gap-3 rounded-xl border border-[--color-line] bg-[--color-surface] p-3.5 text-left transition-all hover:border-[--color-accent-line] hover:bg-[--color-accent-soft] hover:shadow-[var(--shadow-card)]"
+      className="flex w-full items-start gap-3 rounded-xl border border-line bg-surface p-3.5 text-left transition-all hover:border-accent-line hover:bg-accent-soft hover:shadow-card"
     >
       {body}
     </button>
   ) : (
     <div
       data-testid={testId}
-      className="flex items-start gap-3 rounded-xl border border-[--color-line] bg-[--color-surface] p-3.5"
+      className="flex items-start gap-3 rounded-xl border border-line bg-surface p-3.5"
     >
       {body}
     </div>
@@ -763,14 +764,14 @@ export function Path({
         <li key={step.label} className="flex items-center gap-2">
           <span
             className={`flex flex-col items-center rounded-lg border px-3 py-1.5 ${TONE[step.tone]} ${
-              step.current ? "ring-2 ring-offset-1 ring-[--color-accent-line]" : ""
+              step.current ? "ring-2 ring-offset-1 ring-accent-line" : ""
             }`}
           >
             <span className="text-xs font-semibold tracking-wide">{step.label}</span>
             {step.caption ? <span className="text-[11px] opacity-80">{step.caption}</span> : null}
           </span>
           {index < steps.length - 1 ? (
-            <Icon.arrowRight className="h-4 w-4 text-[--color-faint]" />
+            <Icon.arrowRight className="h-4 w-4 text-faint" />
           ) : null}
         </li>
       ))}
@@ -792,7 +793,7 @@ export function Tabs<T extends string>({
   testIdPrefix?: string;
 }) {
   return (
-    <div className="flex gap-1 overflow-x-auto border-b border-[--color-line]">
+    <div className="flex gap-1 overflow-x-auto border-b border-line">
       {tabs.map((tab) => {
         const active = tab.key === value;
         return (
@@ -805,13 +806,13 @@ export function Tabs<T extends string>({
             onClick={() => onChange(tab.key)}
             className={`-mb-px border-b-2 px-3 py-2 text-sm whitespace-nowrap transition ${
               active
-                ? "border-[--color-accent] font-semibold text-[--color-accent]"
-                : "border-transparent text-[--color-muted] hover:text-[--color-ink]"
+                ? "border-accent font-semibold text-accent"
+                : "border-transparent text-muted hover:text-ink"
             }`}
           >
             {tab.label}
             {tab.count == null ? null : (
-              <span className="ml-1.5 rounded-full bg-[--color-canvas] px-1.5 text-xs tabular-nums">
+              <span className="ml-1.5 rounded-full bg-canvas px-1.5 text-xs tabular-nums">
                 {tab.count}
               </span>
             )}
