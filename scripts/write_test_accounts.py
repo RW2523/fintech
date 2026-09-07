@@ -93,6 +93,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--store", default=str(ROOT / "docker" / "users.yaml"))
     parser.add_argument("--accounts", default=str(ROOT / "docker" / "test-accounts.json"))
     parser.add_argument("--print", action="store_true", help="Print the passwords.")
+    parser.add_argument(
+        "--shared-password",
+        action="store_true",
+        help=(
+            "One password for every demo account, so a reader can pick a role, "
+            "type it once and switch freely. A deliberate demo trade-off: it "
+            "means one leaked password is all of them."
+        ),
+    )
     args = parser.parse_args(argv)
 
     member_id = args.member_id or _a_member_with_history()
@@ -103,8 +112,9 @@ def main(argv: list[str] | None = None) -> int:
 
     accounts: list[dict[str, str]] = []
     plain: dict[str, dict[str, str]] = {}
+    shared = phrase() if args.shared_password else None
     for email, role, name in PEOPLE:
-        password = phrase()
+        password = shared or phrase()
         entry = {"email": email, "role": role, "name": name, "password_hash": hash_password(password)}
         if role == "member":
             entry["member_id"] = member_id
@@ -126,7 +136,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"\n  {len(accounts)} accounts in {store}")
     print(f"  passwords for the drills in {accounts_file}")
-    print(f"  the member account is {member_id}\n")
+    print(f"  the member account is {member_id}")
+    if shared:
+        print(f"  one password for every role: {shared}")
+    print()
     if args.print:
         for role, who in sorted(plain.items()):
             print(f"    {role:<16} {who['email']:<24} {who['password']}")

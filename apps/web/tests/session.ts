@@ -75,17 +75,18 @@ export async function authHeader(request: APIRequestContext, role: string) {
   return { authorization: `Bearer ${await mintToken(request, role)}` };
 }
 
-/** Sign in through the browser, and land where that role lands. */
+/** Sign in through the browser, and land where that role lands.
+ *
+ *  Both modes press the same button. The sign-in screen is a list of roles
+ *  either way; requiring a password adds a field above it rather than a
+ *  different screen, so a test says "sign in as the officer" and does not have
+ *  to know which. */
 export async function signIn(page: Page, request: APIRequestContext, role = "officer") {
   await page.goto("/login");
-  if ((await authMode(request)) === "dev") {
-    await page.getByTestId(`role-${role}`).click();
-  } else {
-    const account = accountFor(role);
-    await page.getByTestId("login-email").fill(account.email);
-    await page.getByTestId("login-password").fill(account.password);
-    await page.getByTestId("login-submit").click();
+  if ((await authMode(request)) === "password") {
+    await page.getByTestId("login-password").fill(accountFor(role).password);
   }
+  await page.getByTestId(`role-${role}`).click();
   await expect(page).toHaveURL(/\/(officer|collections|manager|member)$/);
 }
 
@@ -100,15 +101,12 @@ export async function memberSignIn(
   memberId: string,
 ): Promise<void> {
   await page.goto("/login");
-  if ((await authMode(request)) === "dev") {
-    await page.getByTestId("member-id").fill(memberId);
-    await page.getByTestId("role-member").click();
+  if ((await authMode(request)) === "password") {
+    await page.getByTestId("login-password").fill(accountFor("member").password);
   } else {
-    const account = accountFor("member");
-    await page.getByTestId("login-email").fill(account.email);
-    await page.getByTestId("login-password").fill(account.password);
-    await page.getByTestId("login-submit").click();
+    await page.getByTestId("member-id").fill(memberId);
   }
+  await page.getByTestId("role-member").click();
   await expect(page).toHaveURL(/\/member$/);
 }
 
@@ -124,6 +122,6 @@ export async function memberOfAccount(request: APIRequestContext): Promise<strin
 /** The sign-in screen, whichever one this deployment shows. */
 export async function expectLoginScreen(page: Page, request: APIRequestContext) {
   await expect(page).toHaveURL(/\/login$/);
-  const testId = (await authMode(request)) === "dev" ? "role-officer" : "login-email";
-  await expect(page.getByTestId(testId)).toBeVisible();
+  // The same screen in both modes: a list of roles to sign in as.
+  await expect(page.getByTestId("role-officer")).toBeVisible();
 }

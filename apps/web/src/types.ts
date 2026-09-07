@@ -58,6 +58,8 @@ export type Opinion = {
 };
 
 export type DecisionRecord = {
+  /** Which rung of the synthesis hierarchy settled it (docs/05 §6). */
+  deciding_step?: string | null;
   decision_record_id: string;
   snapshot_id: string;
   committee_run_id?: string | null;

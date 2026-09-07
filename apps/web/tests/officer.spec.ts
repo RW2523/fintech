@@ -205,6 +205,37 @@ test.describe("officer workbench", () => {
   });
 });
 
+test.describe("switching role", () => {
+  test("one sign-in, then any role from the top right", async ({ page, request }) => {
+    // A demonstration is a sequence of "and here is what the manager sees".
+    // Doing that through the sign-in screen meant signing out and signing in
+    // again for each one, in front of an audience.
+    await signIn(page, request, "officer");
+    await expect(page.getByTestId("role-chip")).toHaveText("Credit Officer");
+
+    await page.getByTestId("who-am-i").click();
+    await expect(page.getByTestId("role-switcher")).toBeVisible();
+    await page.getByTestId("switch-manager").click();
+    await expect(page.getByTestId("role-chip")).toHaveText("Manager");
+
+    // Including to a member, who lands on their own screen rather than on a
+    // queue their token cannot load.
+    await page.getByTestId("who-am-i").click();
+    await page.getByTestId("switch-member").click();
+    await expect(page).toHaveURL(/\/member$/);
+    await expect(page.getByTestId("role-chip")).toHaveText("Member");
+  });
+
+  test("a reload drops what the switcher replays, and it says so", async ({ page, request }) => {
+    // The password is held in memory beside the token, so a reload loses both.
+    // The menu must say that rather than silently offering a switch that
+    // cannot work.
+    await signIn(page, request, "officer");
+    await page.reload();
+    await expectLoginScreen(page, request);
+  });
+});
+
 test.describe("ledger viewer", () => {
   test("reconstructs a case with its chain badge", async ({ page, request }) => {
     const { entry } = await fetchRecord(request);

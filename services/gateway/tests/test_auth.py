@@ -12,6 +12,7 @@ that replaces it.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -277,3 +278,59 @@ async def test_wrong_passwords_run_out(hardened: None, client: AsyncClient, limi
         limiter.clear()
         ok = await http.post("/api/auth/login", json={"email": "alice@example.com", "password": PASSWORD})
     assert ok.status_code == 200
+
+
+async def test_signing_in_as_a_role_finds_the_account(hardened: None, client: AsyncClient) -> None:
+    """The demo's way in: pick a role, give the password.
+
+    A demonstration is a sequence of "and here is what the manager sees", and
+    a screen that made somebody recall an email address for each of those was
+    asking them to prove something the password already proved.
+    """
+    async with client as http:
+        response = await http.post("/api/auth/login", json={"role": "officer", "password": PASSWORD})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["role"] == "officer"
+
+
+async def test_a_role_two_accounts_share_is_refused(
+    hardened: None, client: AsyncClient, store: Path
+) -> None:
+    """Ambiguous means no.
+
+    Resolving "sign in as the officer" by taking the first match is how
+    somebody ends up signed in as a colleague.
+    """
+    accounts = yaml.safe_load(store.read_text())
+    accounts["accounts"].append(
+        {
+            "email": "bob@example.com",
+            "role": "officer",
+            "password_hash": hash_password(PASSWORD),
+        }
+    )
+    store.write_text(yaml.safe_dump(accounts))
+    load_accounts.cache_clear()
+
+    async with client as http:
+        response = await http.post("/api/auth/login", json={"role": "officer", "password": PASSWORD})
+
+    assert response.status_code == 403
+
+
+async def test_the_sign_in_screen_is_offered_roles_and_never_addresses(
+    hardened: None, client: AsyncClient
+) -> None:
+    """The picker needs to know what to offer, and nothing more.
+
+    `/api/auth/login` deliberately will not say whether an account exists, so
+    publishing the addresses from the endpoint next to it would give away from
+    one hand what the other is protecting.
+    """
+    async with client as http:
+        body = (await http.get("/api/auth/mode")).json()
+
+    roles = body["roles"]
+    assert {entry["role"] for entry in roles} == {"officer", "member"}
+    assert "example.com" not in json.dumps(body)

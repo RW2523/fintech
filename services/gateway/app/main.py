@@ -103,9 +103,22 @@ async def auth_mode() -> dict[str, Any]:
     app that decided this for itself would be a second place to get it wrong.
     """
     config = settings()
+    roles: list[dict[str, str]] = []
+    if config.passwords_required:
+        # Which roles somebody could sign in as, so the screen can offer them
+        # to pick from rather than asking them to remember an address. Roles,
+        # never addresses: `/api/auth/login` deliberately will not say whether
+        # an account exists, and publishing the list of emails here would give
+        # that away from the next endpoint along.
+        try:
+            for account in load_accounts(config.user_store).values():
+                roles.append({"role": account.role, "name": account.name or account.role})
+        except UserStoreError:  # pragma: no cover - reported by /login instead
+            roles = []
     return {
         "mode": "password" if config.passwords_required else "dev",
         "environment": config.cio_env,
+        "roles": sorted(roles, key=lambda entry: entry["role"]),
     }
 
 
@@ -122,7 +135,11 @@ class LoginRequest(BaseModel):
     #: `admin@cio.internal` is told their own address is invalid. What this
     #: needs is an identifier that matches the store, and a name nobody has an
     #: account under fails at the next line anyway.
-    email: str = Field(min_length=3, max_length=254)
+    email: str | None = Field(default=None, min_length=3, max_length=254)
+    #: An alternative to `email`, for the demo's role picker: sign in as
+    #: whichever account holds this role. Only ever resolves when exactly one
+    #: account does, so it cannot become a way to guess at a shared inbox.
+    role: str | None = Field(default=None, min_length=2, max_length=40)
     password: str = Field(min_length=1, max_length=256)
 
 
@@ -150,7 +167,6 @@ async def login(body: LoginRequest, request: Request) -> dict[str, Any]:
     await _spend(f"login:{caller}", config.login_requests_per_minute)
     await _check(f"loginfail:{caller}", config.login_attempts_per_minute)
 
-    email = body.email.strip().lower()
     try:
         accounts = load_accounts(config.user_store)
     except UserStoreError as exc:
@@ -158,7 +174,16 @@ async def login(body: LoginRequest, request: Request) -> dict[str, Any]:
         log.error("the user store could not be read: %s", exc)
         raise Forbidden("sign-in is unavailable") from exc
 
-    account = accounts.get(email)
+    if body.email:
+        account = accounts.get(body.email.strip().lower())
+    elif body.role:
+        # The role picker. One account or none: two accounts sharing a role
+        # would make "sign in as the manager" ambiguous, and resolving it by
+        # picking the first is how somebody ends up signed in as a colleague.
+        matches = [a for a in accounts.values() if a.role == body.role.strip().lower()]
+        account = matches[0] if len(matches) == 1 else None
+    else:
+        raise ValidationFailed("give an email or a role to sign in as")
     # Verified even when the account is missing, against a throwaway hash, so
     # the time this takes does not say whether the address exists.
     if account is None or not verify(account, body.password):

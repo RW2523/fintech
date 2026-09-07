@@ -1,23 +1,61 @@
 @import "tailwindcss";
 
-/* One place for the few colours the workbench uses. A decision screen should
-   be quiet: colour is reserved for the things that change what an officer
-   does, which is the route, the severity of a finding and whether a gate
-   passed. Everything else is grey. */
+/* The workbench's colours, in one place.
+ *
+ * The rule this build has always followed is that colour means something: it
+ * is reserved for the things that change what an officer does — a gate that
+ * failed, a route that needs a person, a risk band, whether a document is
+ * verified. Everything structural is grey. The palette below is wider than it
+ * was, because the screens now show more kinds of state, but the rule is the
+ * same one: if a colour is not carrying a meaning, it is grey.
+ *
+ * Bands are paired: a `-bg` to sit behind, a `-line` to edge it, and the base
+ * for text and fills, so a chip, a bar and a dot for the same state cannot
+ * drift apart. */
 @theme {
+  /* --- structure ------------------------------------------------------- */
   --color-ink: #14171f;
   --color-muted: #5b6472;
+  --color-faint: #8a93a2;
   --color-line: #e2e6ec;
   --color-surface: #ffffff;
-  --color-canvas: #f6f7f9;
+  --color-canvas: #f5f7fa;
+  --color-raised: #fbfcfe;
+
+  /* --- meaning --------------------------------------------------------- */
   --color-pass: #17724a;
+  --color-pass-bg: #ecfdf3;
+  --color-pass-line: #b6e7cc;
+
   --color-warn: #8a5a00;
+  --color-warn-bg: #fffaeb;
+  --color-warn-line: #f3dda0;
+
   --color-fail: #a32020;
+  --color-fail-bg: #fef3f2;
+  --color-fail-line: #f4c4c0;
+
   --color-accent: #1f4e79;
+  --color-accent-bg: #eff6fc;
+  --color-accent-line: #bcd8ef;
+
+  /* The council's sixth voice. Distinct from the four above so a challenge
+     never reads as a failure: a challenger doing its job is the system
+     working, not the case going wrong. */
+  --color-note: #5b3fa8;
+  --color-note-bg: #f5f2ff;
+  --color-note-line: #d6cbf5;
 }
 
 body {
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numbers line up in a column whether or not the font would have let them.
+   An officer comparing two amounts should not have to read the digits. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
